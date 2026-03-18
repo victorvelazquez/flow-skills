@@ -12,6 +12,7 @@
 
 import { execSync, spawnSync, spawn } from "child_process";
 import { run, runSafe, parseArgs, exists, readJsonFile } from "./lib/helpers.mjs";
+import { detectTooling } from "./lib/detect-tooling.mjs";
 import process from "process";
 import path from "path";
 import fs from "fs";
@@ -42,104 +43,40 @@ function detect() {
     ...(pkg && pkg.devDependencies),
   };
 
-  // ── Test runner detection ──────────────────────────────────────────────────
-  let testRunner = null;
+  // Delegate name detection to shared module
+  const tooling = detectTooling(cwd);
+
+  // ── Derive commands from detected names ────────────────────────────────────
+  // Test runner commands
   let testCommand = null;
-
-  if (
-    deps["vitest"] ||
-    exists("vitest.config.ts") ||
-    exists("vitest.config.js") ||
-    exists("vitest.config.mjs")
-  ) {
-    testRunner = "vitest";
-    testCommand = scripts["test"] || "npx vitest run";
-  } else if (
-    deps["jest"] ||
-    exists("jest.config.js") ||
-    exists("jest.config.ts") ||
-    exists("jest.config.mjs")
-  ) {
-    testRunner = "jest";
-    testCommand = scripts["test"] || "npx jest --passWithNoTests";
-  } else if (deps["mocha"]) {
-    testRunner = "mocha";
-    testCommand = scripts["test"] || "npx mocha";
-  } else if (deps["jasmine"]) {
-    testRunner = "jasmine";
-    testCommand = scripts["test"] || "npx jasmine";
-  } else if (deps["ava"]) {
-    testRunner = "ava";
-    testCommand = scripts["test"] || "npx ava";
-  } else if (exists("Cargo.toml")) {
-    testRunner = "cargo-test";
-    testCommand = "cargo test";
-  } else if (exists("go.mod")) {
-    testRunner = "go-test";
-    testCommand = "go test ./...";
-  } else if (
-    exists("requirements.txt") ||
-    exists("pyproject.toml") ||
-    exists("setup.py")
-  ) {
-    testRunner = "pytest";
-    testCommand = "pytest";
-  } else if (exists("Gemfile") || exists(".rspec")) {
-    testRunner = "rspec";
-    testCommand = "bundle exec rspec";
-  } else if (scripts["test"]) {
-    testRunner = "npm-test";
-    testCommand = "npm test";
+  switch (tooling.testRunner) {
+    case "vitest":   testCommand = scripts["test"] || "npx vitest run"; break;
+    case "jest":     testCommand = scripts["test"] || "npx jest --passWithNoTests"; break;
+    case "mocha":    testCommand = scripts["test"] || "npx mocha"; break;
+    case "jasmine":  testCommand = scripts["test"] || "npx jasmine"; break;
+    case "ava":      testCommand = scripts["test"] || "npx ava"; break;
+    case "cargo-test": testCommand = "cargo test"; break;
+    case "go-test":  testCommand = "go test ./..."; break;
+    case "pytest":   testCommand = "pytest"; break;
+    case "rspec":    testCommand = "bundle exec rspec"; break;
+    case "npm-test": testCommand = "npm test"; break;
   }
 
-  // ── Linter detection ──────────────────────────────────────────────────────
-  let linter = null;
+  // Linter commands
   let lintCommand = null;
-
-  if (
-    exists("eslint.config.js") ||
-    exists("eslint.config.ts") ||
-    exists("eslint.config.mjs") ||
-    exists(".eslintrc") ||
-    exists(".eslintrc.js") ||
-    exists(".eslintrc.ts") ||
-    exists(".eslintrc.json") ||
-    exists(".eslintrc.cjs") ||
-    deps["eslint"]
-  ) {
-    linter = "eslint";
-    lintCommand = scripts["lint"] || "npx eslint .";
-  } else if (exists("biome.json") || deps["@biomejs/biome"]) {
-    linter = "biome";
-    lintCommand = scripts["lint"] || "npx biome lint .";
-  } else if (deps["oxlint"]) {
-    linter = "oxlint";
-    lintCommand = scripts["lint"] || "npx oxlint .";
-  } else if (exists(".rubocop.yml")) {
-    linter = "rubocop";
-    lintCommand = "bundle exec rubocop";
-  } else if (exists(".golangci.yml") || exists(".golangci.yaml")) {
-    linter = "golangci-lint";
-    lintCommand = "golangci-lint run";
-  } else if (exists("Cargo.toml")) {
-    linter = "clippy";
-    lintCommand = "cargo clippy -- -D warnings";
-  } else if (exists("requirements.txt") || exists("pyproject.toml")) {
-    // Prefer ruff over pylint/flake8
-    const hasRuff = runSafe("ruff --version").ok;
-    if (hasRuff) {
-      linter = "ruff";
-      lintCommand = "ruff check .";
-    } else {
-      linter = "flake8";
-      lintCommand = "flake8 .";
-    }
-  } else if (scripts["lint"]) {
-    linter = "npm-lint";
-    lintCommand = "npm run lint";
+  switch (tooling.linter) {
+    case "eslint":        lintCommand = scripts["lint"] || "npx eslint ."; break;
+    case "biome":         lintCommand = scripts["lint"] || "npx biome lint ."; break;
+    case "oxlint":        lintCommand = scripts["lint"] || "npx oxlint ."; break;
+    case "rubocop":       lintCommand = "bundle exec rubocop"; break;
+    case "golangci-lint": lintCommand = "golangci-lint run"; break;
+    case "clippy":        lintCommand = "cargo clippy -- -D warnings"; break;
+    case "ruff":          lintCommand = "ruff check ."; break;
+    case "flake8":        lintCommand = "flake8 ."; break;
+    case "npm-lint":      lintCommand = "npm run lint"; break;
   }
 
-  // ── Type checker detection ─────────────────────────────────────────────────
+  // Type checker detection (not in detectTooling — kept inline as it's audit-specific)
   let typeChecker = null;
   let typeCommand = null;
 
@@ -160,7 +97,6 @@ function detect() {
     typeChecker = "pyright";
     typeCommand = "pyright";
   } else if (exists("Cargo.toml")) {
-    // Rust compiler does type checking via cargo check
     typeChecker = "cargo-check";
     typeCommand = "cargo check";
   } else if (exists("go.mod")) {
@@ -168,213 +104,91 @@ function detect() {
     typeCommand = "go build ./...";
   }
 
-  // ── Package manager detection ──────────────────────────────────────────────
-  let packageManager = null;
-
-  if (exists("bun.lockb") || exists("bun.lock")) {
-    packageManager = "bun";
-  } else if (exists("pnpm-lock.yaml")) {
-    packageManager = "pnpm";
-  } else if (exists("yarn.lock")) {
-    packageManager = "yarn";
-  } else if (exists("package-lock.json") || exists("package.json")) {
-    packageManager = "npm";
-  } else if (exists("Cargo.toml")) {
-    packageManager = "cargo";
-  } else if (exists("go.mod")) {
-    packageManager = "go-mod";
-  } else if (exists("Gemfile.lock") || exists("Gemfile")) {
-    packageManager = "bundler";
-  } else if (exists("requirements.txt") || exists("pyproject.toml")) {
-    packageManager = "pip";
-  } else if (exists("composer.json")) {
-    packageManager = "composer";
-  }
-
-  // ── Formatter detection ───────────────────────────────────────────────────
-  let formatter = null;
+  // Formatter commands
   let formatCommand = null;
-
-  if (
-    deps["prettier"] ||
-    exists(".prettierrc") ||
-    exists(".prettierrc.js") ||
-    exists(".prettierrc.json") ||
-    exists(".prettierrc.yaml") ||
-    exists(".prettierrc.yml") ||
-    exists("prettier.config.js") ||
-    exists("prettier.config.ts")
-  ) {
-    formatter = "prettier";
-    // Prefer a dedicated check script; fall back to generic prettier --check
-    formatCommand =
-      scripts["format:check"] ||
-      scripts["lint:format"] ||
-      scripts["check:format"] ||
-      "npx prettier --check .";
-  } else if (deps["@biomejs/biome"] || exists("biome.json")) {
-    formatter = "biome-format";
-    formatCommand = scripts["format:check"] || "npx biome format .";
-  } else if (
-    exists("rustfmt.toml") ||
-    exists(".rustfmt.toml") ||
-    exists("Cargo.toml")
-  ) {
-    formatter = "rustfmt";
-    formatCommand = "cargo fmt -- --check";
-  } else if (exists("go.mod")) {
-    formatter = "gofmt";
-    formatCommand = "gofmt -l .";
-  } else if (scripts["format:check"] || scripts["check:format"]) {
-    formatter = "npm-format";
-    formatCommand = scripts["format:check"] || scripts["check:format"];
+  switch (tooling.formatter) {
+    case "prettier":
+      formatCommand =
+        scripts["format:check"] ||
+        scripts["lint:format"] ||
+        scripts["check:format"] ||
+        "npx prettier --check .";
+      break;
+    case "biome-format":
+      formatCommand = scripts["format:check"] || "npx biome format .";
+      break;
+    case "rustfmt":
+      formatCommand = "cargo fmt -- --check";
+      break;
+    case "gofmt":
+      formatCommand = "gofmt -l .";
+      break;
+    case "npm-format":
+      formatCommand = scripts["format:check"] || scripts["check:format"];
+      break;
   }
 
-  // ── Coverage detection ────────────────────────────────────────────────────
-  let coverage = null;
+  // Coverage commands
   let coverageCommand = null;
-
-  if (
-    deps["vitest"] ||
-    exists("vitest.config.ts") ||
-    exists("vitest.config.js")
-  ) {
-    coverage = "vitest-coverage";
-    coverageCommand =
-      scripts["test:coverage"] ||
-      scripts["coverage"] ||
-      scripts["test:cov"] ||
-      "npx vitest run --coverage";
-  } else if (
-    deps["jest"] ||
-    exists("jest.config.js") ||
-    exists("jest.config.ts")
-  ) {
-    coverage = "jest-coverage";
-    coverageCommand =
-      scripts["test:coverage"] ||
-      scripts["coverage"] ||
-      "npx jest --coverage --passWithNoTests";
-  } else if (exists("go.mod")) {
-    coverage = "go-coverage";
-    coverageCommand = "go test -cover ./...";
-  } else if (exists("requirements.txt") || exists("pyproject.toml")) {
-    coverage = "pytest-coverage";
-    coverageCommand = "pytest --cov";
-  } else if (scripts["test:coverage"] || scripts["coverage"]) {
-    coverage = "npm-coverage";
-    coverageCommand = scripts["test:coverage"] || scripts["coverage"];
+  switch (tooling.coverage) {
+    case "vitest-coverage":
+      coverageCommand =
+        scripts["test:coverage"] ||
+        scripts["coverage"] ||
+        scripts["test:cov"] ||
+        "npx vitest run --coverage";
+      break;
+    case "jest-coverage":
+      coverageCommand =
+        scripts["test:coverage"] ||
+        scripts["coverage"] ||
+        "npx jest --coverage --passWithNoTests";
+      break;
+    case "go-coverage":
+      coverageCommand = "go test -cover ./...";
+      break;
+    case "pytest-coverage":
+      coverageCommand = "pytest --cov";
+      break;
+    case "npm-coverage":
+      coverageCommand = scripts["test:coverage"] || scripts["coverage"];
+      break;
   }
 
-  // ── Security detection ────────────────────────────────────────────────────
-  let security = null;
+  // Security commands
   let securityCommand = null;
-
-  if (
-    exists("package.json") &&
-    (packageManager === "npm" ||
-      packageManager === "yarn" ||
-      packageManager === "pnpm" ||
-      packageManager === "bun")
-  ) {
-    security = "npm-audit";
-    // npm audit --json lets us parse counts; other PMs have similar flags
-    if (packageManager === "yarn") {
+  if (tooling.security === "npm-audit") {
+    if (tooling.packageManager === "yarn") {
       securityCommand = scripts["audit"] || "yarn audit --level moderate";
-    } else if (packageManager === "pnpm") {
+    } else if (tooling.packageManager === "pnpm") {
       securityCommand = scripts["audit"] || "pnpm audit --audit-level moderate";
     } else {
-      // npm / bun
       securityCommand = scripts["audit"] || "npm audit --audit-level=moderate";
     }
-  } else if (exists("Cargo.toml")) {
-    security = "cargo-audit";
-    securityCommand = "cargo audit";
-  } else if (exists("requirements.txt") || exists("pyproject.toml")) {
-    security = "pip-audit";
-    securityCommand = "pip-audit";
-  } else if (exists("go.mod")) {
-    security = "govulncheck";
-    securityCommand = "govulncheck ./...";
-  } else if (exists("Gemfile")) {
-    security = "bundler-audit";
-    securityCommand = "bundle exec bundler-audit check";
-  } else if (scripts["audit"] || scripts["security"]) {
-    security = "npm-audit";
-    securityCommand = scripts["audit"] || scripts["security"];
-  }
-
-  // ── Framework detection ────────────────────────────────────────────────────
-  let framework = null;
-  if (deps) {
-    if (deps["next"]) framework = "next";
-    else if (deps["nuxt"] || deps["nuxt3"]) framework = "nuxt";
-    else if (deps["@remix-run/react"]) framework = "remix";
-    else if (deps["@sveltejs/kit"]) framework = "sveltekit";
-    else if (deps["svelte"]) framework = "svelte";
-    else if (deps["@angular/core"]) framework = "angular";
-    else if (deps["qwik"] || deps["@builder.io/qwik"]) framework = "qwik";
-    else if (deps["solid-js"]) framework = "solid";
-    else if (deps["react"]) framework = "react";
-    else if (deps["vue"]) framework = "vue";
-    else if (deps["express"]) framework = "express";
-    else if (deps["fastify"]) framework = "fastify";
-    else if (deps["hono"]) framework = "hono";
-  }
-
-  if (!framework) {
-    if (exists("go.mod")) {
-      // Try to detect gin or axum from go.mod
-      try {
-        const goMod = fs.readFileSync(path.join(cwd, "go.mod"), "utf8");
-        if (goMod.includes("gin-gonic/gin")) framework = "gin";
-        else framework = "go";
-      } catch {
-        framework = "go";
-      }
-    } else if (exists("Cargo.toml")) {
-      try {
-        const cargo = fs.readFileSync(path.join(cwd, "Cargo.toml"), "utf8");
-        if (cargo.includes("axum")) framework = "axum";
-        else if (cargo.includes("actix-web")) framework = "actix";
-        else framework = "rust";
-      } catch {
-        framework = "rust";
-      }
-    } else if (exists("requirements.txt") || exists("pyproject.toml")) {
-      try {
-        const reqs = exists("requirements.txt")
-          ? fs.readFileSync(path.join(cwd, "requirements.txt"), "utf8")
-          : fs.readFileSync(path.join(cwd, "pyproject.toml"), "utf8");
-        if (reqs.includes("fastapi")) framework = "fastapi";
-        else if (reqs.includes("django")) framework = "django";
-        else if (reqs.includes("flask")) framework = "flask";
-        else framework = "python";
-      } catch {
-        framework = "python";
-      }
-    } else if (exists("Gemfile")) {
-      try {
-        const gemfile = fs.readFileSync(path.join(cwd, "Gemfile"), "utf8");
-        if (gemfile.includes("rails")) framework = "rails";
-        else framework = "ruby";
-      } catch {
-        framework = "ruby";
-      }
+  } else {
+    switch (tooling.security) {
+      case "cargo-audit":   securityCommand = "cargo audit"; break;
+      case "pip-audit":     securityCommand = "pip-audit"; break;
+      case "govulncheck":   securityCommand = "govulncheck ./..."; break;
+      case "bundler-audit": securityCommand = "bundle exec bundler-audit check"; break;
+      default:
+        if (tooling.security === "npm-audit") {
+          securityCommand = scripts["audit"] || scripts["security"];
+        }
     }
   }
 
   const result = {
-    testRunner: testRunner ? { name: testRunner, command: testCommand } : null,
-    linter: linter ? { name: linter, command: lintCommand } : null,
+    testRunner: tooling.testRunner ? { name: tooling.testRunner, command: testCommand } : null,
+    linter: tooling.linter ? { name: tooling.linter, command: lintCommand } : null,
     typeChecker: typeChecker
       ? { name: typeChecker, command: typeCommand }
       : null,
-    formatter: formatter ? { name: formatter, command: formatCommand } : null,
-    coverage: coverage ? { name: coverage, command: coverageCommand } : null,
-    security: security ? { name: security, command: securityCommand } : null,
-    packageManager,
-    framework,
+    formatter: tooling.formatter ? { name: tooling.formatter, command: formatCommand } : null,
+    coverage: tooling.coverage ? { name: tooling.coverage, command: coverageCommand } : null,
+    security: tooling.security ? { name: tooling.security, command: securityCommand } : null,
+    packageManager: tooling.packageManager,
+    framework: tooling.framework,
     monorepo:
       exists("pnpm-workspace.yaml") ||
       exists("turbo.json") ||

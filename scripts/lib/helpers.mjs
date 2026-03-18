@@ -83,6 +83,69 @@ export function exists(file) {
 }
 
 /**
+ * Unified set of directory names to skip during recursive file traversal.
+ * @type {Set<string>}
+ */
+export const WALK_SKIP_DIRS = new Set([
+  "node_modules",
+  ".git",
+  "dist",
+  "build",
+  "coverage",
+  ".next",
+  ".nuxt",
+  ".turbo",
+  "__pycache__",
+  "target",
+  "vendor",
+  ".ai-flow",
+  "docs",
+  "specs",
+  "planning",
+]);
+
+/**
+ * Recursively walk `dir`, returning absolute paths of all files (not directories).
+ * Skips any directory whose basename is in `skipDirs`.
+ * Does NOT follow symlinks to directories (uses lstatSync).
+ * All returned paths use forward slashes (cross-platform safe).
+ *
+ * @param {string} dir — absolute path to start from
+ * @param {Set<string>} skipDirs — set of directory basenames to skip
+ * @returns {string[]} absolute file paths, forward-slash normalized
+ */
+export function walkDir(dir, skipDirs) {
+  const results = [];
+  try {
+    const entries = fs.readdirSync(dir);
+    for (const entry of entries) {
+      const full = path.join(dir, entry);
+      let stat;
+      try {
+        stat = fs.lstatSync(full);
+      } catch {
+        continue; // skip entries we can't stat
+      }
+      if (stat.isSymbolicLink()) {
+        continue; // never follow symlinks
+      }
+      if (stat.isDirectory()) {
+        if (skipDirs && skipDirs.has(entry)) {
+          continue; // skip excluded dirs
+        }
+        const sub = walkDir(full, skipDirs);
+        for (const f of sub) results.push(f);
+      } else if (stat.isFile()) {
+        results.push(full.replace(/\\/g, "/"));
+      }
+    }
+  } catch {
+    /* ignore permission errors */
+  }
+  return results;
+}
+
+/**
  * Read + JSON.parse a file relative to process.cwd().
  * Returns null on any error.
  * @param {string} file — relative path

@@ -13,7 +13,17 @@ Define the project's core purpose, business rules, and high-level requirements t
 
 ## 🔍 Pre-Flight Check (Smart Skip Logic)
 
-> 📎 **Reference:** See [prompts/shared/smart-skip-preflight.md](../../.ai-flow/prompts/shared/smart-skip-preflight.md) for the complete smart skip logic.
+Run the smart-skip script to determine how to proceed with this phase:
+
+```
+node "$SCRIPT" --smart-skip --phase 1
+```
+
+Read `phases.phase1.recommendation` from the JSON output:
+
+- **`SKIP`** — `project-brief.md` is up-to-date; skip this phase entirely and move to Phase 2.
+- **`HYBRID`** — `project-brief.md` exists but has gaps; regenerate only the sections listed in `phases.phase1.gaps`.
+- **`FULL`** — `project-brief.md` is missing or stale; run the full phase below.
 
 **Execute Pre-Flight Check for Phase 1:**
 

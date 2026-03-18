@@ -18,6 +18,18 @@
 
 ## 🔍 Pre-Flight Check (Smart Skip Logic)
 
+Run the smart-skip script to determine how to proceed with this phase:
+
+```
+node "$SCRIPT" --smart-skip --phase 2
+```
+
+Read `phases.phase2.recommendation` from the JSON output:
+
+- **`SKIP`** — phase output doc is up-to-date; skip this phase entirely and move to Phase 3.
+- **`HYBRID`** — phase output doc exists but has gaps; regenerate only the sections listed in `phases.phase2.gaps`.
+- **`FULL`** — phase output doc is missing or stale; run the full phase below.
+
 **Execute Pre-Flight Check for Phase 2:**
 
 - **Target File (backend/fullstack)**: `docs/data-model.md`

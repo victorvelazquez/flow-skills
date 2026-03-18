@@ -16,7 +16,17 @@ Establish code quality rules, naming conventions, and development practices.
 
 ## 🔍 Pre-Flight Check (Smart Skip Logic)
 
-> 📎 **Reference:** See [prompts/shared/smart-skip-preflight.md](../../.ai-flow/prompts/shared/smart-skip-preflight.md) for the complete smart skip logic.
+Run the smart-skip script to determine how to proceed with this phase:
+
+```
+node "$SCRIPT" --smart-skip --phase 5
+```
+
+Read `phases.phase5.recommendation` from the JSON output:
+
+- **`SKIP`** — `docs/code-standards.md` is up-to-date; skip this phase entirely and move to Phase 6.
+- **`HYBRID`** — `docs/code-standards.md` exists but has gaps; regenerate only the sections listed in `phases.phase5.gaps`.
+- **`FULL`** — `docs/code-standards.md` is missing or stale; run the full phase below.
 
 **Execute Pre-Flight Check for Phase 5:**
 

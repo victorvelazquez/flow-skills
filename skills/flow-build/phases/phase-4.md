@@ -16,7 +16,17 @@ Define security policies, authentication, authorization, and compliance requirem
 
 ## 🔍 Pre-Flight Check (Smart Skip Logic)
 
-> 📎 **Reference:** See [prompts/shared/smart-skip-preflight.md](../../.ai-flow/prompts/shared/smart-skip-preflight.md) for the complete smart skip logic.
+Run the smart-skip script to determine how to proceed with this phase:
+
+```
+node "$SCRIPT" --smart-skip --phase 4
+```
+
+Read `phases.phase4.recommendation` from the JSON output:
+
+- **`SKIP`** — `specs/security.md` is up-to-date; skip this phase entirely and move to Phase 5.
+- **`HYBRID`** — `specs/security.md` exists but has gaps; regenerate only the sections listed in `phases.phase4.gaps`.
+- **`FULL`** — `specs/security.md` is missing or stale; run the full phase below.
 
 **Execute Pre-Flight Check for Phase 4:**
 

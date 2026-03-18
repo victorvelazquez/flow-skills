@@ -20,6 +20,18 @@ Define the technical stack, architecture patterns, and system design.
 
 ## 🔍 Pre-Flight Check (Smart Skip Logic)
 
+Run the smart-skip script to determine how to proceed with this phase:
+
+```
+node "$SCRIPT" --smart-skip --phase 3
+```
+
+Read `phases.phase3.recommendation` from the JSON output:
+
+- **`SKIP`** — `docs/architecture.md` is up-to-date; skip this phase entirely and move to Phase 4.
+- **`HYBRID`** — `docs/architecture.md` exists but has gaps; regenerate only the sections listed in `phases.phase3.gaps`.
+- **`FULL`** — `docs/architecture.md` is missing or stale; run the full phase below.
+
 **Execute Pre-Flight Check for Phase 3:**
 
 - **Target File**: `docs/architecture.md`

@@ -16,7 +16,17 @@ Define deployment, monitoring, and operational practices.
 
 ## 🔍 Pre-Flight Check (Smart Skip Logic)
 
-> 📎 **Reference:** See [prompts/shared/smart-skip-preflight.md](../../.ai-flow/prompts/shared/smart-skip-preflight.md) for the complete smart skip logic.
+Run the smart-skip script to determine how to proceed with this phase:
+
+```
+node "$SCRIPT" --smart-skip --phase 7
+```
+
+Read `phases.phase7.recommendation` from the JSON output:
+
+- **`SKIP`** — `docs/deployment.md` is up-to-date; skip this phase entirely and move to Phase 8.
+- **`HYBRID`** — `docs/deployment.md` exists but has gaps; regenerate only the sections listed in `phases.phase7.gaps`.
+- **`FULL`** — `docs/deployment.md` is missing or stale; run the full phase below.
 
 **Execute Pre-Flight Check for Phase 7:**
 

@@ -58,88 +58,15 @@ Proceed to Layer 1.
 
 ### 0.1.1 Universal Tech Stack Detection
 
-**Action:** Use your internal knowledge to detect the language and framework by scanning the root configuration files (package.json, pyproject.toml, etc.).
+**Action:** Use the `--context` output from Stage 1 (already captured as JSON). The following fields are available directly — do NOT re-read config files manually:
 
-**Detect (but don't be limited to):**
+- `projectType`, `framework`, `language` — tech stack classification
+- `orm`, `ormSchemaFile` — detected ORM and schema file path
+- `testRunner`, `linter`, `formatter`, `packageManager` — toolchain
+- `hasDocker`, `hasCIConfig`, `aiConfigFiles` — infrastructure and AI configs
+- `directoryStructure.topLevelDirs`, `directoryStructure.srcDirs` — directory layout
 
-- **Node.js:** NestJS, Express, Fastify, etc.
-- **Python:** FastAPI, Django, Flask, etc.
-- **PHP:** Laravel, Symfony, etc.
-- **Java/Kotlin:** Spring Boot, Micronaut, Ktor, NetBeans (Ant), Eclipse (Maven/Gradle), etc.
-- **Go:** Gin, Echo, Fiber, etc.
-- **C#/.NET, Ruby, Rust, Elixir.**
-
-**NetBeans Project Detection (Java):**
-
-Check for NetBeans-specific markers:
-
-- `nbproject/project.xml` - NetBeans project descriptor
-- `build.xml` - Ant build configuration
-- `manifest.mf` - JAR manifest file
-- `src/` with Java source files
-- `lib/` for dependencies (optional)
-
-**Eclipse Project Detection (Java):**
-
-Check for Eclipse-specific markers:
-
-- `.project` - Eclipse project descriptor
-- `.classpath` - Classpath configuration
-- `.settings/` - IDE settings directory
-- `pom.xml` (Maven) or `build.gradle` (Gradle)
-- `src/main/java/` or `src/` for source code
-
-**Project Type Classification:**
-
-1. **NetBeans Web Application:**
-   - Has `web/` or `WebContent/` directory
-   - Contains `web.xml` in `web/WEB-INF/`
-   - Servlets/JSP files present
-   - Build.xml with web-related targets
-
-2. **NetBeans Desktop Application:**
-   - Has Swing `.form` files in `src/`
-   - JavaFX `.fxml` files
-   - Main class with GUI initialization (JFrame/Application)
-   - No web/ directory
-
-3. **Eclipse Desktop Application (Swing/JavaFX):**
-   - Has `.project` file
-   - Maven/Gradle with JavaFX or Swing dependencies
-   - Main class with GUI initialization
-   - No web facets
-
-4. **Eclipse Desktop Application (SWT):**
-   - Has `.project` file
-   - Dependencies: `org.eclipse.swt.*`, `org.eclipse.jface.*`
-   - Main class extends `ApplicationWorkbenchAdvisor` or uses `Display`
-   - May have `.product` file (RCP)
-
-5. **Enterprise Application (NetBeans/Eclipse):**
-   - EJB configurations
-   - persistence.xml (JPA)
-   - ejb-jar.xml
-   - Enterprise modules
-
-**Build System Detection:**
-
-NetBeans:
-
-- Default: Apache Ant (build.xml)
-- Modern: Maven (pom.xml) or Gradle (build.gradle)
-- Hybrid: Ant + Ivy
-
-Eclipse:
-
-- Default: Maven (pom.xml) or Gradle (build.gradle)
-- Legacy: Ant with Eclipse compiler
-- PDE: Eclipse Plugin Development
-
-**Version Detection:**
-
-- NetBeans: Check `nbproject/project.properties` for version
-- Eclipse: Check `.project` XML for `<buildSpec>` and `<nature>` tags
-- Java version: Check build config (Maven/Gradle) or project properties
+If `--context` output is not available (Stage 1 was skipped), fall back to reading `package.json`, `pyproject.toml`, `go.mod`, etc. manually.
 
 ### 0.1.2 Find AI & Documentation
 
@@ -158,9 +85,19 @@ Show a summary of detected Name, Language, Framework, ORM, and Documentation fil
 
 ### 0.2.1 Pattern Detection
 
-1. **Identify Pattern:** Feature-based, Layer-based, Modular Monolith, or Hybrid.
-2. **Entity Detection:** Scan for Schema/Entity files based on the detected ORM (Prisma, TypeORM, Django Models, etc.).
-3. **Maturity Check:** Assess documentation and test coverage ratio.
+Run the entity scan script to get structural hints (best-effort — may contain false positives):
+
+```
+node "$SCRIPT" --entity-scan
+```
+
+Use the returned JSON fields:
+- `entities` / `entityCount` — detected models/entities (Prisma, TypeORM, Django)
+- `architecturePattern` — `"feature-based"`, `"layer-based"`, or `"unknown"`
+- `controllers`, `services`, `modules` — count and file list
+- `testToSourceRatio` — ratio of test files to source files
+
+> ⚠️ **Best-effort hints only.** Verify detected patterns against the actual source structure before accepting them as ground truth.
 
 ### Layer 2 Output
 
@@ -481,15 +418,22 @@ Ask for confirmation to proceed to Phase 1.
 
 ### 💾 Cache & Pre-populate
 
-**Create directory structure (if not exists):**
+**Write analysis cache using the script (atomic write, creates directories if needed):**
 
-```bash
-mkdir -p .ai-flow/cache .ai-flow/work .ai-flow/archive
+```
+node "$SCRIPT" --write-cache
 ```
 
-1. **Export code analysis:** `.ai-flow/cache/docs-analysis.json`
-2. **Export audit data:** `.ai-flow/cache/audit-data.json` (if Layer 4 executed)
-3. **Pre-populate:** Fill answers for Phases 1-7 based on detected data
+This writes `.ai-flow/cache/docs-analysis.json` with the full context + entity scan results.
+
+If you need to write specific data instead of running fresh detection, use `--data`:
+
+```
+node "$SCRIPT" --write-cache --data '<json>'
+```
+
+1. **Export audit data:** `.ai-flow/cache/audit-data.json` (if Layer 4 executed — write manually)
+2. **Pre-populate:** Fill answers for Phases 1-7 based on detected data
 
 ### 🎯 Set Flags for Phase 8
 

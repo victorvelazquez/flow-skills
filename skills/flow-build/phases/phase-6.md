@@ -22,7 +22,17 @@ Define testing approach, tools, and quality gates.
 
 ## 🔍 Pre-Flight Check (Smart Skip Logic)
 
-> 📎 **Reference:** See [prompts/shared/smart-skip-preflight.md](../../.ai-flow/prompts/shared/smart-skip-preflight.md) for the complete smart skip logic.
+Run the smart-skip script to determine how to proceed with this phase:
+
+```
+node "$SCRIPT" --smart-skip --phase 6
+```
+
+Read `phases.phase6.recommendation` from the JSON output:
+
+- **`SKIP`** — `docs/testing.md` is up-to-date; skip this phase entirely and move to Phase 7.
+- **`HYBRID`** — `docs/testing.md` exists but has gaps; regenerate only the sections listed in `phases.phase6.gaps`.
+- **`FULL`** — `docs/testing.md` is missing or stale; run the full phase below.
 
 **Execute Pre-Flight Check for Phase 6:**
 

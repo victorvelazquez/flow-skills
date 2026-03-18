@@ -33,10 +33,10 @@ Store result as `$PHASES`.
 ## Stage 1 — Detect Project (Script)
 
 ```
-node "$SCRIPT" --detect
+node "$SCRIPT" --context
 ```
 
-Parse JSON: `{ projectType, framework, language, cacheExists, isExistingProject, existingDocs, suggestedScope }`.
+Parse JSON: `{ projectType, framework, language, cacheExists, isExistingProject, existingDocs, suggestedScope, orm, ormSchemaFile, testRunner, linter, formatter, packageManager, hasDocker, hasCIConfig, aiConfigFiles, directoryStructure, auditData, cacheFile }`.
 
 Store `PROJECT_TYPE` = `projectType`.
 
