@@ -6,6 +6,22 @@ Format: [Conventional Commits](https://www.conventionalcommits.org/) — `feat`,
 
 ---
 
+## [0.0.1] — 2026-03-18
+
+### Changed
+- Extracted shared helpers module (`scripts/lib/helpers.mjs`) and synced `PROTECTED_BRANCHES` across all scripts
+- Removed hardcoded Windows absolute paths from `skills/flow-skills/SKILL.md`, replaced with `git rev-parse --show-toplevel`
+- Fixed `install.mjs` to recursively copy `scripts/lib/` subdirectory via `collectFiles()`
+- Fixed `RELEASE_BRANCHES` in `flow-release.mjs`: `"develop"` → `"development"`
+- Fixed `runSafe` in `flow-finish.mjs` and `flow-docs-sync.mjs` to delegate to `run()` instead of calling `execSync` directly
+- Fixed perspective count in `commands/flow-audit.md`: `5-perspective` → `8-perspective`
+- Aligned `develop` branch in `skills/flow-commit/SKILL.md` protected branch lists
+- Clarified `phases/` directory status in `skills/flow-build/SKILL.md`
+- Added Windows device file exclusions to `.gitignore` (nul, con, prn, aux, com1-9, lpt1-9)
+- Added `.atl/` to `.gitignore`
+
+---
+
 ## [1.0.0] — 2026-03-18
 
 ### Added
