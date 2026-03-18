@@ -612,13 +612,19 @@ function modeSmartSkip(flags) {
   let cacheExists = false;
 
   const cachePath = path.join(cwd, ".ai-flow", "cache", "audit-data.json");
+  let rawCache = null;
   try {
-    const raw = fs.readFileSync(cachePath, "utf8");
-    cacheData = JSON.parse(raw);
-    cacheExists = true;
-  } catch (err) {
-    cacheExists = false;
-    cacheData = null;
+    rawCache = fs.readFileSync(cachePath, "utf8");
+    cacheExists = true; // file exists and is readable
+  } catch {
+    cacheExists = false; // file not found or unreadable
+  }
+  if (rawCache !== null) {
+    try {
+      cacheData = JSON.parse(rawCache);
+    } catch {
+      cacheData = null; // file exists but JSON is malformed
+    }
   }
 
   const phaseNums = phaseFilter ? [phaseFilter] : [1, 2, 3, 4, 5, 6, 7];
