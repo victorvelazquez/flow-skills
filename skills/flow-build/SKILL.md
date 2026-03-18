@@ -22,6 +22,12 @@ node -e "const os=require('os'),path=require('path');console.log(path.join(os.ho
 
 Store result as `$PHASES`.
 
+> **Note**: The `phases/` directory contains 11 static phase template files (`phase-01.md`
+> through `phase-11.md`). These files are **static workflow templates shipped with the repo**,
+> NOT generated at runtime. They are installed by `node install.mjs` and will be present at
+> `$PHASES` after installation. If `$PHASES` does not exist, re-run `node install.mjs` from
+> the flow-skills repository root.
+
 ---
 
 ## Stage 1 — Detect Project (Script)

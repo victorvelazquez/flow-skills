@@ -25,7 +25,7 @@ Parse the JSON output. Note `stack`, `branch.isProtected`, and all changes with 
 **Always-protected branches (hardcoded — NEVER commit directly, regardless of git config):**
 
 ```
-main, master, dev, development, staging, release
+main, master, dev, develop, development, staging, release
 ```
 
 If the current branch matches any name in the list above OR `branch.isProtected: true` from the analysis:
@@ -72,7 +72,7 @@ where N = number of commits created in this session.
 
 ## Restrictions
 
-- **NEVER commit directly to protected branches: `main`, `master`, `dev`, `development`, `staging`, `release` — this is non-negotiable and cannot be overridden by the user**
+- **NEVER commit directly to protected branches: `main`, `master`, `dev`, `develop`, `development`, `staging`, `release` — this is non-negotiable and cannot be overridden by the user**
 - **NEVER suggest or execute `git push`**
 - Never commit unrelated files in the same commit
 - Include ALL changed files (staged + unstaged + untracked) — ask user which to include if ambiguous
