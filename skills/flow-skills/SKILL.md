@@ -17,7 +17,8 @@ When the user invokes `/flow-skills` or asks to publish, update, or install flow
 Check the current state of the repo:
 
 ```bash
-cd C:/Users/victor/Developer/Tools/flow-skills
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo ".")
+cd "$REPO_ROOT"
 git status --short
 ```
 
@@ -41,7 +42,8 @@ Export, review, commit, push.
 **Step A1 — Export from opencode → repo:**
 
 ```bash
-cd C:/Users/victor/Developer/Tools/flow-skills
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo ".")
+cd "$REPO_ROOT"
 node install.mjs --export
 ```
 
@@ -98,7 +100,8 @@ Pull latest and reinstall.
 **Step B1 — Pull:**
 
 ```bash
-cd C:/Users/victor/Developer/Tools/flow-skills
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo ".")
+cd "$REPO_ROOT"
 git pull
 ```
 
@@ -128,7 +131,7 @@ Adapt the clone path to the user's OS if needed.
 
 ## Notes
 
-- The repo lives at `C:/Users/victor/Developer/Tools/flow-skills/` on Victor's machine.
+- The repo lives wherever you cloned it. The canonical remote is `https://github.com/victorvelazquez/flow-skills.git`.
 - Remote: `https://github.com/victorvelazquez/flow-skills.git`
 - Always run `node install.mjs --dry-run` first if the user wants to preview changes before installing.
 - After installing, restart OpenCode for the skills to take effect.
