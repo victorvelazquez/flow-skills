@@ -24,18 +24,18 @@ node "$SCRIPT" --smart-skip --phase 7
 
 Read `phases.phase7.recommendation` from the JSON output:
 
-- **`SKIP`** — `docs/deployment.md` is up-to-date; skip this phase entirely and move to Phase 8.
-- **`HYBRID`** — `docs/deployment.md` exists but has gaps; regenerate only the sections listed in `phases.phase7.gaps`.
-- **`FULL`** — `docs/deployment.md` is missing or stale; run the full phase below.
+- **`SKIP`** — `docs/operations.md` is up-to-date; skip this phase entirely and move to Phase 8.
+- **`HYBRID`** — `docs/operations.md` exists but has gaps; regenerate only the sections listed in `phases.phase7.gaps`.
+- **`FULL`** — `docs/operations.md` is missing or stale; run the full phase below.
 
 **Execute Pre-Flight Check for Phase 7:**
 
-- **Target File**: `docs/deployment.md`
+- **Target File**: `docs/operations.md`
 - **Phase Name**: "OPERATIONS & DEPLOYMENT"
 - **Key Items**: CI/CD pipeline, deployment platform, monitoring, logging
 - **Typical Gaps**: Incident runbooks, disaster recovery, scaling strategy
 
-**Proceed with appropriate scenario based on audit data from `.ai-flow/cache/audit-data.json`**
+**Proceed with appropriate scenario based on audit data from `.flow-skills/cache/audit-data.json`**
 
 ---
 
@@ -938,13 +938,10 @@ Is this correct? (Yes/No)
 
 **1. `docs/operations.md`**
 
-- Use template: `.ai-flow/templates/docs/operations.template.md`
 - Fill with deployment, monitoring, alerting, backup, scaling
-- Write to: `docs/operations.md`
 
 **2. `specs/configuration.md`**
 
-- Use template: `.ai-flow/templates/specs/configuration.template.md`
 - Fill with environment variables, secrets management, feature flags
 - Write to: `specs/configuration.md`
 
@@ -995,7 +992,7 @@ Generated documents:
 After Phase 7, generate/update:
 
 - `docs/operations.md` - Operations and deployment guide
-- `specs/configuration.md` - Configuration specification  
+- `specs/configuration.md` - Configuration specification
 - `.env.example` - Environment variables template
 
 ---

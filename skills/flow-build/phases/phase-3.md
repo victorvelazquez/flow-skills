@@ -39,7 +39,7 @@ Read `phases.phase3.recommendation` from the JSON output:
 - **Key Items**: Framework, architecture pattern, API style, database, caching, background jobs, integrations
 - **Typical Gaps**: API versioning, rate limiting, caching strategy
 
-**Proceed with appropriate scenario based on audit data from `.ai-flow/cache/audit-data.json`**
+**Proceed with appropriate scenario based on audit data from `.flow-skills/cache/audit-data.json`**
 
 ---
 
@@ -48,8 +48,6 @@ Read `phases.phase3.recommendation` from the JSON output:
 ---
 
 #### 🎨 MERMAID ARCHITECTURE DIAGRAM FORMAT - CRITICAL
-
-> 📎 **Reference:** See [prompts/shared/mermaid-guidelines.md](../../.ai-flow/prompts/shared/mermaid-guidelines.md) for architecture diagram syntax, node shapes, and styling.
 
 **Example Architecture Diagram:**
 
@@ -572,12 +570,10 @@ Is this correct? (Yes/No)
 
 **1. `docs/architecture.md`**
 
-- Use template: `.ai-flow/templates/docs/architecture.template.md`
 - Include architecture diagram (mermaid format)
 
 **2. `ai-instructions.md`**
 
-- Use template: `.ai-flow/templates/ai-instructions.template.md`
 - Include tech stack, framework, language, key dependencies
 - Generate idiomatic code examples following the selected architecture pattern
 

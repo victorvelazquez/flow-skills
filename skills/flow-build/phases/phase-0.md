@@ -17,8 +17,8 @@ Efficiently analyze existing projects using a **layered, incremental approach**.
 
 To avoid false-positive detections, **IGNORE** the following folders and files during all detection steps:
 
-- `.ai-flow/work/` (contains active development tasks)
-- `.ai-flow/archive/` (contains completed tasks)
+- `.flow-skills/work/` (contains active development tasks)
+- `.flow-skills/archive/` (contains completed tasks)
 - `.agent/` (contains AI workflows)
 - `docs/` and `specs/` (if they contain AI Flow generated documentation)
 - `planning/` (if it contains AI Flow generated roadmap and user stories)
@@ -30,7 +30,7 @@ To avoid false-positive detections, **IGNORE** the following folders and files d
 
 ## 0.0 Check for Existing Analysis (Layer 0)
 
-Check if `.ai-flow/cache/docs-analysis.json` exists and is fresh.
+Check if `.flow-skills/cache/docs-analysis.json` exists and is fresh.
 
 **If found:**
 Ask user to use cached analysis or re-analyze.
@@ -92,6 +92,7 @@ node "$SCRIPT" --entity-scan
 ```
 
 Use the returned JSON fields:
+
 - `entities` / `entityCount` — detected models/entities (Prisma, TypeORM, Django)
 - `architecturePattern` — `"feature-based"`, `"layer-based"`, or `"unknown"`
 - `controllers`, `services`, `modules` — count and file list
@@ -132,10 +133,10 @@ Show the final "🔍 PROJECT STACK DETECTED" report and ask for confirmation.
 **Create directory structure (if not exists):**
 
 ```bash
-mkdir -p .ai-flow/cache
+mkdir -p .flow-skills/cache
 ```
 
-1. **Export:** Save results to `.ai-flow/cache/docs-analysis.json`.
+1. **Export:** Save results to `.flow-skills/cache/docs-analysis.json`.
 2. **Pre-populate:** Fill answers for Phases 1-7 based on detected data.
 
 ---
@@ -286,7 +287,7 @@ C) Cancel /flow-build (fix manually first)
 >
 > **For existing projects**, focus on Phases 1-8 (documentation sync) instead.
 
-**Save to:** `.ai-flow/cache/audit-data.json`
+**Save to:** `.flow-skills/cache/audit-data.json`
 
 ```json
 {
@@ -424,7 +425,7 @@ Ask for confirmation to proceed to Phase 1.
 node "$SCRIPT" --write-cache
 ```
 
-This writes `.ai-flow/cache/docs-analysis.json` with the full context + entity scan results.
+This writes `.flow-skills/cache/docs-analysis.json` with the full context + entity scan results.
 
 If you need to write specific data instead of running fresh detection, use `--data`:
 
@@ -432,7 +433,7 @@ If you need to write specific data instead of running fresh detection, use `--da
 node "$SCRIPT" --write-cache --data '<json>'
 ```
 
-1. **Export audit data:** `.ai-flow/cache/audit-data.json` (if Layer 4 executed — write manually)
+1. **Export audit data:** `.flow-skills/cache/audit-data.json` (if Layer 4 executed — write manually)
 2. **Pre-populate:** Fill answers for Phases 1-7 based on detected data
 
 ### 🎯 Set Flags for Phase 8
@@ -455,7 +456,7 @@ If documentation audit was performed:
 
 - Pre-populated detected tech stack values.
 - Architectural patterns identified.
-- Context cached in `.ai-flow/cache/docs-analysis.json`.
+- Context cached in `.flow-skills/cache/docs-analysis.json`.
 - **Documentation audit completed** (if existing docs found).
 - **Inconsistencies flagged** for Phase 8 resolution.
 

@@ -79,7 +79,7 @@ where N = number of commits created in this session.
 
 ## status.json integration
 
-If `.ai-flow/work/status.json` exists in the project after all commits, update:
+If `.flow-skills/work/status.json` exists in the project after all commits, update:
 
 - `git.uncommittedChanges: false`
 - `finalChecklist.committed: true`

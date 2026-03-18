@@ -11,7 +11,13 @@
  */
 
 import { execSync, spawnSync, spawn } from "child_process";
-import { run, runSafe, parseArgs, exists, readJsonFile } from "./lib/helpers.mjs";
+import {
+  run,
+  runSafe,
+  parseArgs,
+  exists,
+  readJsonFile,
+} from "./lib/helpers.mjs";
 import { detectTooling } from "./lib/detect-tooling.mjs";
 import process from "process";
 import path from "path";
@@ -50,30 +56,68 @@ function detect() {
   // Test runner commands
   let testCommand = null;
   switch (tooling.testRunner) {
-    case "vitest":   testCommand = scripts["test"] || "npx vitest run"; break;
-    case "jest":     testCommand = scripts["test"] || "npx jest --passWithNoTests"; break;
-    case "mocha":    testCommand = scripts["test"] || "npx mocha"; break;
-    case "jasmine":  testCommand = scripts["test"] || "npx jasmine"; break;
-    case "ava":      testCommand = scripts["test"] || "npx ava"; break;
-    case "cargo-test": testCommand = "cargo test"; break;
-    case "go-test":  testCommand = "go test ./..."; break;
-    case "pytest":   testCommand = "pytest"; break;
-    case "rspec":    testCommand = "bundle exec rspec"; break;
-    case "npm-test": testCommand = "npm test"; break;
+    case "vitest":
+      testCommand = scripts["test"] || "npx vitest run";
+      break;
+    case "jest":
+      testCommand = scripts["test"] || "npx jest --passWithNoTests";
+      break;
+    case "mocha":
+      testCommand = scripts["test"] || "npx mocha";
+      break;
+    case "jasmine":
+      testCommand = scripts["test"] || "npx jasmine";
+      break;
+    case "ava":
+      testCommand = scripts["test"] || "npx ava";
+      break;
+    case "cargo-test":
+      testCommand = "cargo test";
+      break;
+    case "go-test":
+      testCommand = "go test ./...";
+      break;
+    case "pytest":
+      testCommand = "pytest";
+      break;
+    case "rspec":
+      testCommand = "bundle exec rspec";
+      break;
+    case "npm-test":
+      testCommand = "npm test";
+      break;
   }
 
   // Linter commands
   let lintCommand = null;
   switch (tooling.linter) {
-    case "eslint":        lintCommand = scripts["lint"] || "npx eslint ."; break;
-    case "biome":         lintCommand = scripts["lint"] || "npx biome lint ."; break;
-    case "oxlint":        lintCommand = scripts["lint"] || "npx oxlint ."; break;
-    case "rubocop":       lintCommand = "bundle exec rubocop"; break;
-    case "golangci-lint": lintCommand = "golangci-lint run"; break;
-    case "clippy":        lintCommand = "cargo clippy -- -D warnings"; break;
-    case "ruff":          lintCommand = "ruff check ."; break;
-    case "flake8":        lintCommand = "flake8 ."; break;
-    case "npm-lint":      lintCommand = "npm run lint"; break;
+    case "eslint":
+      lintCommand = scripts["lint"] || "npx eslint .";
+      break;
+    case "biome":
+      lintCommand = scripts["lint"] || "npx biome lint .";
+      break;
+    case "oxlint":
+      lintCommand = scripts["lint"] || "npx oxlint .";
+      break;
+    case "rubocop":
+      lintCommand = "bundle exec rubocop";
+      break;
+    case "golangci-lint":
+      lintCommand = "golangci-lint run";
+      break;
+    case "clippy":
+      lintCommand = "cargo clippy -- -D warnings";
+      break;
+    case "ruff":
+      lintCommand = "ruff check .";
+      break;
+    case "flake8":
+      lintCommand = "flake8 .";
+      break;
+    case "npm-lint":
+      lintCommand = "npm run lint";
+      break;
   }
 
   // Type checker detection (not in detectTooling — kept inline as it's audit-specific)
@@ -167,10 +211,18 @@ function detect() {
     }
   } else {
     switch (tooling.security) {
-      case "cargo-audit":   securityCommand = "cargo audit"; break;
-      case "pip-audit":     securityCommand = "pip-audit"; break;
-      case "govulncheck":   securityCommand = "govulncheck ./..."; break;
-      case "bundler-audit": securityCommand = "bundle exec bundler-audit check"; break;
+      case "cargo-audit":
+        securityCommand = "cargo audit";
+        break;
+      case "pip-audit":
+        securityCommand = "pip-audit";
+        break;
+      case "govulncheck":
+        securityCommand = "govulncheck ./...";
+        break;
+      case "bundler-audit":
+        securityCommand = "bundle exec bundler-audit check";
+        break;
       default:
         if (tooling.security === "npm-audit") {
           securityCommand = scripts["audit"] || scripts["security"];
@@ -179,14 +231,24 @@ function detect() {
   }
 
   const result = {
-    testRunner: tooling.testRunner ? { name: tooling.testRunner, command: testCommand } : null,
-    linter: tooling.linter ? { name: tooling.linter, command: lintCommand } : null,
+    testRunner: tooling.testRunner
+      ? { name: tooling.testRunner, command: testCommand }
+      : null,
+    linter: tooling.linter
+      ? { name: tooling.linter, command: lintCommand }
+      : null,
     typeChecker: typeChecker
       ? { name: typeChecker, command: typeCommand }
       : null,
-    formatter: tooling.formatter ? { name: tooling.formatter, command: formatCommand } : null,
-    coverage: tooling.coverage ? { name: tooling.coverage, command: coverageCommand } : null,
-    security: tooling.security ? { name: tooling.security, command: securityCommand } : null,
+    formatter: tooling.formatter
+      ? { name: tooling.formatter, command: formatCommand }
+      : null,
+    coverage: tooling.coverage
+      ? { name: tooling.coverage, command: coverageCommand }
+      : null,
+    security: tooling.security
+      ? { name: tooling.security, command: securityCommand }
+      : null,
     packageManager: tooling.packageManager,
     framework: tooling.framework,
     monorepo:
@@ -615,10 +677,10 @@ function report() {
 
   process.stdout.write(JSON.stringify(result, null, 2) + "\n");
 
-  // Auto-update .ai-flow/work/status.json if it exists in the project
+  // Auto-update .flow-skills/work/status.json if it exists in the project
   const statusJsonPath = path.join(
     process.cwd(),
-    ".ai-flow",
+    ".flow-skills",
     "work",
     "status.json",
   );

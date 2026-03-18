@@ -33,7 +33,7 @@ This final phase will:
 **⚠️ CRITICAL: Ignore AI Flow documentation and Meta files during detection:**
 
 - Files: `project-brief.md`, `ai-instructions.md`, `AGENT.md`, `.env.example`, `.cursorrules`, `.clauderules`, `.geminirules`
-- Directories: `.ai-flow/`, `.agent/`, `docs/`, `specs/`
+- Directories: `.flow-skills/`, `.agent/`, `docs/`, `specs/`
 
 **Auto-detect Checklist:**
 
@@ -96,7 +96,7 @@ B) ⏭️  Skip for now (manual setup later)
 📦 Preparing for framework initialization...
 
 Creating backup of AI Flow documentation:
-→ Moving project root docs to .ai-flow/temp-backup/
+→ Moving project root docs to .flow-skills/temp-backup/
 
 Files to backup:
 ✅ project-brief.md
@@ -211,7 +211,7 @@ dotnet new webapi -n [ProjectName] -o .
 ```
 📥 Restoring AI Flow documentation...
 
-Moving files from .ai-flow/temp-backup/ back to .ai-flow/
+Moving files from .flow-skills/temp-backup/ back to .flow-skills/
 
 ✅ All AI Flow docs restored!
 ```
@@ -270,7 +270,6 @@ Now adding only essential files that framework doesn't include...
 **Copy `.env.example` template to project root:**
 
 ```bash
-# Copy from .ai-flow/templates/.env.example.template to .env.example
 ```
 
 **Template content (adapt based on framework and database):**
@@ -319,7 +318,7 @@ SMTP_PASS=""
 
 ```yaml
 # Copy from templates/docker-compose/postgres.template.yml
-version: '3.8'
+version: "3.8"
 
 services:
   postgres:
@@ -330,11 +329,11 @@ services:
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
     ports:
-      - '${DB_PORT:-5432}:5432'
+      - "${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -347,7 +346,7 @@ volumes:
 
 ```yaml
 # Copy from templates/docker-compose/mysql.template.yml
-version: '3.8'
+version: "3.8"
 
 services:
   mysql:
@@ -357,7 +356,7 @@ services:
       MYSQL_DATABASE: ${DB_NAME:-myapp_dev}
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-password}
     ports:
-      - '${DB_PORT:-3306}:3306'
+      - "${DB_PORT:-3306}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
 
@@ -369,7 +368,7 @@ volumes:
 
 ```yaml
 # Copy from templates/docker-compose/mongodb.template.yml
-version: '3.8'
+version: "3.8"
 
 services:
   mongodb:
@@ -380,7 +379,7 @@ services:
       MONGO_INITDB_ROOT_USERNAME: ${DB_USER:-root}
       MONGO_INITDB_ROOT_PASSWORD: ${DB_PASSWORD:-password}
     ports:
-      - '${DB_PORT:-27017}:27017'
+      - "${DB_PORT:-27017}:27017"
     volumes:
       - mongodb_data:/data/db
 
@@ -553,12 +552,12 @@ prisma/*.db
 # AI Flow - Workspace Management
 # ============================================================
 # Ignore temporary cache (regenerable)
-.ai-flow/cache/
+.flow-skills/cache/
 
 # Ignore work-in-progress state (personal, deleted on completion)
-.ai-flow/work/
+.flow-skills/work/
 
-# COMMIT .ai-flow/archive/ by default (contains team metrics)
+# COMMIT .flow-skills/archive/ by default (contains team metrics)
 # ============================================================
 ```
 
@@ -604,12 +603,12 @@ staticfiles/
 # AI Flow - Workspace Management
 # ============================================================
 # Ignore temporary cache (regenerable)
-.ai-flow/cache/
+.flow-skills/cache/
 
 # Ignore work-in-progress state (personal, deleted on completion)
-.ai-flow/work/
+.flow-skills/work/
 
-# COMMIT .ai-flow/archive/ by default (contains team metrics)
+# COMMIT .flow-skills/archive/ by default (contains team metrics)
 # ============================================================
 ```
 
@@ -644,12 +643,12 @@ go.work
 # AI Flow - Workspace Management
 # ============================================================
 # Ignore temporary cache (regenerable)
-.ai-flow/cache/
+.flow-skills/cache/
 
 # Ignore work-in-progress state (personal, deleted on completion)
-.ai-flow/work/
+.flow-skills/work/
 
-# COMMIT .ai-flow/archive/ by default (contains team metrics)
+# COMMIT .flow-skills/archive/ by default (contains team metrics)
 # ============================================================
 ```
 
@@ -682,7 +681,7 @@ fi
 - If Go/Gin → Use Go patterns
 - If Prisma detected in Phase 3 → Add Prisma patterns
 - If Docker selected in Phase 7 → Add Docker patterns
-- **Always include AI Flow rules** (.ai-flow/cache/, .ai-flow/work/)
+- **Always include AI Flow rules** (.flow-skills/cache/, .flow-skills/work/)
 
 **Step 3: Merge or Create**
 
@@ -690,7 +689,7 @@ fi
 
 ```bash
 # Check if AI Flow rules already present
-if grep -q ".ai-flow/cache/" .gitignore; then
+if grep -q ".flow-skills/cache/" .gitignore; then
   echo "✅ AI Flow rules already configured"
 else
   echo "" >> .gitignore
@@ -698,12 +697,12 @@ else
   echo "# AI Flow - Workspace Management" >> .gitignore
   echo "# ============================================================" >> .gitignore
   echo "# Ignore temporary cache (regenerable)" >> .gitignore
-  echo ".ai-flow/cache/" >> .gitignore
+  echo ".flow-skills/cache/" >> .gitignore
   echo "" >> .gitignore
   echo "# Ignore work-in-progress state (personal, deleted on completion)" >> .gitignore
-  echo ".ai-flow/work/" >> .gitignore
+  echo ".flow-skills/work/" >> .gitignore
   echo "" >> .gitignore
-  echo "# COMMIT .ai-flow/archive/ by default (contains team metrics)" >> .gitignore
+  echo "# COMMIT .flow-skills/archive/ by default (contains team metrics)" >> .gitignore
   echo "# ============================================================" >> .gitignore
 
   echo "✅ Added AI Flow rules to existing .gitignore"
@@ -727,7 +726,7 @@ echo "✅ Created new .gitignore"
 ✅ .gitignore configured successfully!
    Base patterns: [Node.js | Python | Go]
    Additional: [Prisma] [Docker]
-   AI Flow rules: ✅ Added (.ai-flow/cache/, .ai-flow/work/)
+   AI Flow rules: ✅ Added (.flow-skills/cache/, .flow-skills/work/)
    Status: [Created new | Updated existing]
 ```
 
@@ -764,8 +763,7 @@ Generating...
 
 ### 8.3.1: Generate docs/business-flows.md
 
-- **Template:** `.ai-flow/templates/docs/business-flows.template.md`
-- **Content from:** Phase 1 (questions 1.3, 1.4, 1.5)
+- **Content from:** Phase 1 (question 1.10 — Main Business Flows)
 - **Requirements:**
   - List all business flows from Phase 1
   - Generate mermaid sequence/flow diagram for EACH flow
@@ -804,7 +802,6 @@ Generating...
 
 ### 8.3.2: Generate docs/api.md
 
-- **Template:** `.ai-flow/templates/docs/api.template.md`
 - **Content from:** Phase 2 (entities) + Phase 3 (question 3.5 - API conventions)
 - **Requirements:**
   - Auto-generate CRUD endpoints for each entity from data-model.md
@@ -849,7 +846,6 @@ Generating...
 
 ### 8.3.3: Generate docs/contributing.md
 
-- **Template:** `.ai-flow/templates/docs/contributing.template.md`
 - **Content from:** Phase 5 (questions 5.1-5.5) + Phase 7 (setup)
 - **Requirements:**
   - Git workflow from Phase 5
@@ -888,7 +884,6 @@ We use [workflow from Phase 5]
 
 ## 8.4: Generate AGENT.md (Master Index)
 
-- **Template:** `.ai-flow/templates/AGENT.template.md`
 - **Content from:** ALL phases (this is the aggregator)
 - **Requirements:**
   - **CRITICAL:** Re-read ALL 10 previously generated documents before filling
@@ -951,7 +946,6 @@ We use [workflow from Phase 5]
 
 ## 8.5: Generate README.md (Intelligent Merge)
 
-- **Template:** `.ai-flow/templates/README.template.md`
 - **Content from:** ALL phases (most comprehensive document)
 - **Requirements:**
   - **CRITICAL:** Re-read ALL documents before generating
@@ -1069,10 +1063,10 @@ The API will be available at `http://localhost:3000`
 
 Now generate AGENT.md with complete information from all documents.
 
-**📝 Action:** Write the complete file to `.ai-flow/AGENT.md`
+**📝 Action:** Write the complete file to `.flow-skills/AGENT.md`
 
 ```
-✅ Generated: .ai-flow/AGENT.md (Master Index)
+✅ Generated: .flow-skills/AGENT.md (Master Index)
 ```
 ---
 ## 8.7: Create Tool-Specific Configs
@@ -1090,12 +1084,12 @@ This project uses AI Flow documentation structure.
 
 ## Primary Reference
 
-Read `.ai-flow/AGENT.md` first for complete documentation index.
+Read `.flow-skills/AGENT.md` first for complete documentation index.
 
 ## Key Documents
 
-- Project overview: `.ai-flow/project-brief.md`
-- AI instructions: `.ai-flow/ai-instructions.md`
+- Project overview: `.flow-skills/project-brief.md`
+- AI instructions: `.flow-skills/ai-instructions.md`
 - Architecture: `docs/architecture.md`
 - API reference: `docs/api.md`
 - Code standards: `docs/code-standards.md`
@@ -1121,11 +1115,11 @@ When writing code:
 ```markdown
 # Cursor AI Configuration
 
-Project uses AI Flow documentation in `.ai-flow/` directory.
+Project uses AI Flow documentation in `.flow-skills/` directory.
 
 ## Documentation Index
 
-See `.ai-flow/AGENT.md` for complete document list.
+See `.flow-skills/AGENT.md` for complete document list.
 
 ## Quick Reference
 
@@ -1156,9 +1150,9 @@ See `.ai-flow/AGENT.md` for complete document list.
 
 ## Documentation Structure
 
-This project uses AI Flow. All documentation is in `.ai-flow/` directory.
+This project uses AI Flow. All documentation is in `.flow-skills/` directory.
 
-Master index: `.ai-flow/AGENT.md`
+Master index: `.flow-skills/AGENT.md`
 
 ## Key References
 
@@ -1188,11 +1182,11 @@ Master index: `.ai-flow/AGENT.md`
 ```markdown
 # Antigravity AI Configuration
 
-Project uses AI Flow documentation in `.ai-flow/` directory.
+Project uses AI Flow documentation in `.flow-skills/` directory.
 
 ## Documentation Index
 
-See `.ai-flow/AGENT.md` for complete document list.
+See `.flow-skills/AGENT.md` for complete document list.
 
 ## Quick Reference
 
@@ -1295,7 +1289,7 @@ Tool-specific configs:
 ```
 
 your-project/
-├── .ai-flow/ # AI Flow documentation
+├── .flow-skills/ # AI Flow documentation
 │ ├── project-brief.md
 │ ├── AGENT.md ⭐ Start here!
 │ ├── ai-instructions.md
@@ -1324,7 +1318,7 @@ your-project/
 
 Next steps:
 
-1. ⭐ **Read `.ai-flow/AGENT.md`** - Master index of all documentation
+1. ⭐ **Read `.flow-skills/AGENT.md`** - Master index of all documentation
 2. 📖 **Review generated documents** - Customize as needed
 3. 🔧 **Set up environment** - Copy `.env.example` to `.env` and configure
    [If NOT initialized:]
@@ -1373,9 +1367,9 @@ When executing Phase 8:
 
 - [ ] Ask user if they want to initialize framework
 - [ ] If yes:
-  - [ ] Backup .ai-flow/ docs to temp-backup/
+  - [ ] Backup .flow-skills/ docs to temp-backup/
   - [ ] Execute appropriate framework CLI command
-  - [ ] Restore .ai-flow/ docs from temp-backup/
+  - [ ] Restore .flow-skills/ docs from temp-backup/
   - [ ] Handle README.md conflict if framework created one
 - [ ] If no: Show manual command and continue
 - [ ] Generate .gitignore (ALWAYS - step 8.2.7, runs for all projects)
@@ -1498,7 +1492,7 @@ Your project is fully documented and initialized! 🎉
 
 📖 Next steps:
 
-1. Review your documentation in .ai-flow/
+1. Review your documentation in .flow-skills/
 2. Start implementing features with /feature command
 3. Generate roadmap anytime by asking "Continue to Phase 9"
 

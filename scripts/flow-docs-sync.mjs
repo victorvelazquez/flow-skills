@@ -5,8 +5,8 @@
  *
  * Modes:
  *   --snapshot       Scan codebase and emit state snapshot → JSON
- *   --diff           Compare snapshot to .ai-flow/cache/docs-analysis.json → JSON
- *   --update-cache   Write current snapshot to .ai-flow/cache/docs-analysis.json
+ *   --diff           Compare snapshot to .flow-skills/cache/docs-analysis.json → JSON
+ *   --update-cache   Write current snapshot to .flow-skills/cache/docs-analysis.json
  */
 
 import { runSafe, parseArgs, exists, readJsonFile } from "./lib/helpers.mjs";
@@ -32,7 +32,7 @@ function walkDir(absDir, base, maxFiles = 2000) {
     "__pycache__",
     "target",
     "vendor",
-    ".ai-flow",
+    ".flow-skills",
   ]);
   const results = [];
   function recurse(dir) {
@@ -271,7 +271,7 @@ function snapshot() {
 function diff() {
   const cachePath = path.join(
     process.cwd(),
-    ".ai-flow",
+    ".flow-skills",
     "cache",
     "docs-analysis.json",
   );
@@ -545,7 +545,7 @@ function updateCache() {
   const cwd = process.cwd();
   const snap = buildSnapshot();
 
-  const cacheDir = path.join(cwd, ".ai-flow", "cache");
+  const cacheDir = path.join(cwd, ".flow-skills", "cache");
   fs.mkdirSync(cacheDir, { recursive: true });
 
   const cachePath = path.join(cacheDir, "docs-analysis.json");
@@ -553,7 +553,7 @@ function updateCache() {
 
   const result = {
     ok: true,
-    written: ".ai-flow/cache/docs-analysis.json",
+    written: ".flow-skills/cache/docs-analysis.json",
     components: snap.components.length,
     stores: snap.stores.length,
     routes: snap.routes.length,

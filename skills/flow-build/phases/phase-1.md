@@ -3,10 +3,12 @@
 > **Order for this phase:** 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 1.6 → 1.7 → 1.8 → 1.9 → 1.10
 
 > **📌 Scope-based behavior:**
+>
 > - **MVP/Basic Scope:** Focus only on core requirements. Skip advanced business logic questions.
 > - **Production-Ready Scope:** In-depth exploration of compliance, scalability, and long-term business goals.
 
 ### Objective
+
 Define the project's core purpose, business rules, and high-level requirements to ensure the foundation is solid before technical design begins.
 
 ---
@@ -32,7 +34,7 @@ Read `phases.phase1.recommendation` from the JSON output:
 - **Key Items**: Project name, description, users, objectives, system type, features, scope, constraints, metrics, business flows
 - **Typical Gaps**: Business objectives, success metrics, constraints
 
-**Proceed with appropriate scenario based on audit data from `.ai-flow/cache/audit-data.json`**
+**Proceed with appropriate scenario based on audit data from `.flow-skills/cache/audit-data.json`**
 
 ---
 
@@ -65,15 +67,16 @@ Example: "A backend for managing gym memberships"
 
 After receiving the description, silently analyze for these criteria:
 
-| Criterion | Check For | Score +1 if present |
-|-----------|-----------|---------------------|
-| **WHO** | Specific user type mentioned (not just "users") | "gym members", "restaurant owners" |
-| **WHAT** | Specific action/function (not just "manage") | "track workouts", "process payments" |
-| **WHY** | Purpose or value mentioned | "to replace spreadsheets", "to launch app" |
-| **DOMAIN** | Industry/vertical indicated | "fitness", "fintech", "healthcare" |
-| **DETAIL** | Description has 10+ meaningful words | Not counting articles |
+| Criterion  | Check For                                       | Score +1 if present                        |
+| ---------- | ----------------------------------------------- | ------------------------------------------ |
+| **WHO**    | Specific user type mentioned (not just "users") | "gym members", "restaurant owners"         |
+| **WHAT**   | Specific action/function (not just "manage")    | "track workouts", "process payments"       |
+| **WHY**    | Purpose or value mentioned                      | "to replace spreadsheets", "to launch app" |
+| **DOMAIN** | Industry/vertical indicated                     | "fitness", "fintech", "healthcare"         |
+| **DETAIL** | Description has 10+ meaningful words            | Not counting articles                      |
 
 **Scoring Rules:**
+
 - Score 4-5: ✅ Accept immediately → Proceed to 1.2
 - Score 0-3: ⚠️ Enter refinement loop → Ask ONLY missing criteria
 
@@ -591,7 +594,6 @@ If corrections needed, specify which section.
 
 **Generate `project-brief.md` automatically:**
 
-- Use template: `.ai-flow/templates/project-brief.template.md`
 - Fill with all Phase 1 information
 - Write to project root: `project-brief.md`
 
@@ -625,12 +627,3 @@ Next: read phase-2.md from this phases/ directory
 
 **Last Updated:** 2025-12-20
 **Version:** 2.1.8
-
----
-
-## PHASE 2: Data Architecture (15-20 min)
-
-````
-
-
-

@@ -41,7 +41,7 @@ Read `phases.phase6.recommendation` from the JSON output:
 - **Key Items**: Test framework, coverage targets, test types, CI/CD integration
 - **Typical Gaps**: E2E strategy, load testing, performance testing
 
-**Proceed with appropriate scenario based on audit data from `.ai-flow/cache/audit-data.json`**
+**Proceed with appropriate scenario based on audit data from `.flow-skills/cache/audit-data.json`**
 
 ---
 
@@ -486,7 +486,6 @@ Is this correct? (Yes/No)
 
 **Generate `docs/testing.md` automatically:**
 
-- Use template: `.ai-flow/templates/docs/testing.template.md`
 - **If MVP scope:** Fill with basic testing strategy: framework selection, smoke tests on critical paths, coverage 15-25%, basic CI setup. Mark advanced sections as "Not implemented yet - expand when moving to Production-Ready"
 - **If Production-Ready:** Fill with comprehensive testing strategy: framework, unit/integration/e2e tests, 60-80% coverage, test data management, mocking, full CI/CD
 - **If Enterprise:** Fill with exhaustive testing strategy: all Production-Ready items + contract tests, load tests, security tests, 80-95% coverage, performance benchmarks
@@ -526,9 +525,3 @@ Next: read phase-7.md from this phases/ directory
 
 **Last Updated:** 2025-12-20
 **Version:** 2.1.8
-
----
-
-## PHASE 7: Operations & Deployment (10-15 min)
-
-````

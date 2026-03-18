@@ -142,6 +142,6 @@ If `success: false`: show `error` + suggest `git pull origin <branch> --rebase` 
 
 - NEVER push without explicit user confirmation
 - NEVER run tests — use /flow-audit for that
-- NEVER touch `analytics.jsonl` or `.ai-flow/` state files
+- NEVER touch `analytics.jsonl` or `.flow-skills/` state files
 - NEVER commit any changes
 - Check Engram for recent /flow-audit run (informational only, not blocking)

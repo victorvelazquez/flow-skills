@@ -9,10 +9,16 @@
  *   --context       Superset of --detect + toolchain + docker/CI/AI config detection → JSON
  *   --entity-scan   Scan for ORM entities and architecture patterns → JSON
  *   --smart-skip    Read audit-data.json and compute per-phase SKIP/HYBRID/FULL → JSON
- *   --write-cache   Run context detection and write to .ai-flow/cache/docs-analysis.json → JSON
+ *   --write-cache   Run context detection and write to .flow-skills/cache/docs-analysis.json → JSON
  */
 
-import { parseArgs, exists, readJsonFile, walkDir, WALK_SKIP_DIRS } from "./lib/helpers.mjs";
+import {
+  parseArgs,
+  exists,
+  readJsonFile,
+  walkDir,
+  WALK_SKIP_DIRS,
+} from "./lib/helpers.mjs";
 import { detectTooling } from "./lib/detect-tooling.mjs";
 import process from "process";
 import path from "path";
@@ -157,7 +163,7 @@ function detectExistingDocs() {
     "specs/security.md",
     "docs/code-standards.md",
     "docs/testing.md",
-    "docs/deployment.md",
+    "docs/operations.md",
     "AGENT.md",
     "ai-instructions.md",
     "planning/roadmap.md",
@@ -172,8 +178,8 @@ function modeDetect() {
   const projectType = detectProjectType();
   const framework = detectFramework();
   const language = detectLanguage();
-  const cacheExists = exists(".ai-flow/cache/docs-analysis.json");
-  const aiFlowExists = exists(".ai-flow");
+  const cacheExists = exists(".flow-skills/cache/docs-analysis.json");
+  const aiFlowExists = exists(".flow-skills");
   const existingDocs = detectExistingDocs();
   const isExistingProject =
     existingDocs.found >= 2 || exists("src") || exists("app") || exists("lib");
@@ -227,13 +233,17 @@ function buildContextResult(cwd) {
   const projectType = detectProjectType();
   const framework = detectFramework();
   const language = detectLanguage();
-  const cacheExists = exists(".ai-flow/cache/docs-analysis.json");
-  const aiFlowExists = exists(".ai-flow");
+  const cacheExists = exists(".flow-skills/cache/docs-analysis.json");
+  const aiFlowExists = exists(".flow-skills");
   const existingDocs = detectExistingDocs();
   const isExistingProject =
     existingDocs.found >= 2 || exists("src") || exists("app") || exists("lib");
   const suggestedScope =
-    existingDocs.found >= 6 ? "production" : existingDocs.found >= 3 ? "mvp" : "new";
+    existingDocs.found >= 6
+      ? "production"
+      : existingDocs.found >= 3
+        ? "mvp"
+        : "new";
 
   // Toolchain (from shared module)
   const tooling = detectTooling(cwd);
@@ -255,7 +265,9 @@ function buildContextResult(cwd) {
 
   if (exists("prisma/schema.prisma") || exists("schema.prisma")) {
     orm = "prisma";
-    ormSchemaFile = exists("prisma/schema.prisma") ? "prisma/schema.prisma" : "schema.prisma";
+    ormSchemaFile = exists("prisma/schema.prisma")
+      ? "prisma/schema.prisma"
+      : "schema.prisma";
   } else if ("typeorm" in deps || "@typeorm/core" in deps) {
     orm = "typeorm";
   } else if ("sequelize" in deps) {
@@ -280,7 +292,12 @@ function buildContextResult(cwd) {
   }
 
   // Docker
-  const dockerCandidates = ["Dockerfile", "docker-compose.yml", "docker-compose.yaml", ".dockerignore"];
+  const dockerCandidates = [
+    "Dockerfile",
+    "docker-compose.yml",
+    "docker-compose.yaml",
+    ".dockerignore",
+  ];
   const dockerFiles = dockerCandidates.filter((f) => exists(f));
   const hasDocker = dockerFiles.length > 0;
 
@@ -310,7 +327,15 @@ function buildContextResult(cwd) {
   }
 
   // AI config files
-  const aiConfigCandidates = ["AGENT.md", ".cursorrules", ".clauderules", ".geminirules", "GEMINI.md", "CLAUDE.md", "opencode.json"];
+  const aiConfigCandidates = [
+    "AGENT.md",
+    ".cursorrules",
+    ".clauderules",
+    ".geminirules",
+    "GEMINI.md",
+    "CLAUDE.md",
+    "opencode.json",
+  ];
   const aiConfigFiles = aiConfigCandidates.filter((f) => exists(f));
 
   // Directory structure
@@ -354,14 +379,16 @@ function buildContextResult(cwd) {
   }
 
   // Audit data
-  const auditDataPath = ".ai-flow/cache/audit-data.json";
+  const auditDataPath = ".flow-skills/cache/audit-data.json";
   const auditDataExists = exists(auditDataPath);
   const auditData = {
     exists: auditDataExists,
     path: auditDataExists ? auditDataPath : null,
   };
 
-  const cacheFile = cacheExists ? ".ai-flow/cache/docs-analysis.json" : null;
+  const cacheFile = cacheExists
+    ? ".flow-skills/cache/docs-analysis.json"
+    : null;
 
   return {
     // Original --detect fields (frozen shape)
@@ -480,11 +507,17 @@ function modeEntityScan(flags) {
   }
 
   // Controllers, services, modules
-  const controllerFiles = allFiles.filter((f) =>
-    f.endsWith(".controller.ts") || f.endsWith("_controller.py") || f.endsWith("controller.go"),
+  const controllerFiles = allFiles.filter(
+    (f) =>
+      f.endsWith(".controller.ts") ||
+      f.endsWith("_controller.py") ||
+      f.endsWith("controller.go"),
   );
-  const serviceFiles = allFiles.filter((f) =>
-    f.endsWith(".service.ts") || f.endsWith("_service.py") || f.endsWith("service.go"),
+  const serviceFiles = allFiles.filter(
+    (f) =>
+      f.endsWith(".service.ts") ||
+      f.endsWith("_service.py") ||
+      f.endsWith("service.go"),
   );
   const moduleFiles = allFiles.filter((f) => f.endsWith(".module.ts"));
 
@@ -548,7 +581,9 @@ function modeEntityScan(flags) {
   // Test-to-source ratio
   const sourceFiles = allFiles.filter((f) => {
     const ext = path.extname(f);
-    return [".ts", ".js", ".mjs", ".py", ".go", ".rb", ".java", ".cs"].includes(ext);
+    return [".ts", ".js", ".mjs", ".py", ".go", ".rb", ".java", ".cs"].includes(
+      ext,
+    );
   });
   const testFiles = sourceFiles.filter(
     (f) =>
@@ -600,18 +635,21 @@ const PHASE_DOC_FILES = {
   4: "specs/security.md",
   5: "docs/code-standards.md",
   6: "docs/testing.md",
-  7: "docs/deployment.md",
+  7: "docs/operations.md",
 };
 
 function modeSmartSkip(flags) {
   const cwd = process.cwd();
-  const phaseFilter = flags["phase"] !== true && flags["phase"] ? parseInt(flags["phase"], 10) : null;
+  const phaseFilter =
+    flags["phase"] !== true && flags["phase"]
+      ? parseInt(flags["phase"], 10)
+      : null;
 
   // Attempt to read audit-data.json
   let cacheData = null;
   let cacheExists = false;
 
-  const cachePath = path.join(cwd, ".ai-flow", "cache", "audit-data.json");
+  const cachePath = path.join(cwd, ".flow-skills", "cache", "audit-data.json");
   let rawCache = null;
   try {
     rawCache = fs.readFileSync(cachePath, "utf8");
@@ -702,8 +740,8 @@ function modeSmartSkip(flags) {
 function modeWriteCache(flags) {
   const cwd = process.cwd();
   const norm = (p) => p.replace(/\\/g, "/");
-  const outPath = path.join(cwd, ".ai-flow", "cache", "docs-analysis.json");
-  const relOut = ".ai-flow/cache/docs-analysis.json";
+  const outPath = path.join(cwd, ".flow-skills", "cache", "docs-analysis.json");
+  const relOut = ".flow-skills/cache/docs-analysis.json";
 
   try {
     // Determine content to write
@@ -717,7 +755,7 @@ function modeWriteCache(flags) {
     }
 
     // Create directory recursively if needed
-    fs.mkdirSync(path.join(cwd, ".ai-flow", "cache"), { recursive: true });
+    fs.mkdirSync(path.join(cwd, ".flow-skills", "cache"), { recursive: true });
 
     // Atomic write: write to temp, then rename
     const tmpPath = outPath + ".tmp";
@@ -726,7 +764,9 @@ function modeWriteCache(flags) {
 
     process.stdout.write(JSON.stringify({ ok: true, path: relOut }, null, 2));
   } catch (err) {
-    process.stdout.write(JSON.stringify({ ok: false, error: err.message }, null, 2));
+    process.stdout.write(
+      JSON.stringify({ ok: false, error: err.message }, null, 2),
+    );
     process.exit(1);
   }
 }
@@ -748,6 +788,8 @@ if (flags.detect) {
 } else if (flags["write-cache"]) {
   modeWriteCache(flags);
 } else {
-  process.stderr.write("Usage: node flow-build.mjs --detect | --phase-files | --context | --entity-scan | --smart-skip [--phase N] | --write-cache [--data '<json>']\n");
+  process.stderr.write(
+    "Usage: node flow-build.mjs --detect | --phase-files | --context | --entity-scan | --smart-skip [--phase N] | --write-cache [--data '<json>']\n",
+  );
   process.exit(1);
 }

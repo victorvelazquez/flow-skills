@@ -35,7 +35,7 @@ Read `phases.phase4.recommendation` from the JSON output:
 - **Key Items**: Auth strategy, encryption, security patterns, compliance
 - **Typical Gaps**: Compliance requirements, audit logging, security policies
 
-**Proceed with appropriate scenario based on audit data from `.ai-flow/cache/audit-data.json`**
+**Proceed with appropriate scenario based on audit data from `.flow-skills/cache/audit-data.json`**
 
 ---
 
@@ -490,7 +490,9 @@ Input Validation: [strategy + sanitization rules + size limits + file upload val
 
 Is this correct? (Yes/No)
 ```
+
 ---
+
 ### 📄 Generate Phase 4 Documents
 
 **Before starting generation:**
@@ -507,7 +509,6 @@ Is this correct? (Yes/No)
 
 **1. `specs/security.md`**
 
-- Use template: `.ai-flow/templates/specs/security.template.md`
 - Fill with all security policies, authentication, authorization
 - Write to: `specs/security.md`
 
@@ -530,11 +531,15 @@ Documents have been created with all Phase 4 information.
 
 **If user edits files:**
 Re-read files to refresh context before continuing.
+
 ---
+
 **Proceed to Phase 5 only after documents are validated.**
 
 > ⚠️ **CRITICAL:** DO NOT generate README.md in this phase. README.md is ONLY generated in Phase 8 (step 8.5) after framework initialization.
+
 ---
+
 ---
 
 ---
@@ -542,6 +547,7 @@ Re-read files to refresh context before continuing.
 ## 📝 Generated Documents
 
 After Phase 4, generate/update:
+
 - `specs/security.md` - Security policies and authentication details
 
 ---
@@ -554,11 +560,3 @@ Next: read phase-5.md from this phases/ directory
 
 **Last Updated:** 2025-12-20
 **Version:** 2.1.8
-
----
-
-## PHASE 5: Development Standards (15-20 min)
-
-
-
-

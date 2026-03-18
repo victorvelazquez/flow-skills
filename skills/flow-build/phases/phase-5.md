@@ -35,7 +35,7 @@ Read `phases.phase5.recommendation` from the JSON output:
 - **Key Items**: Linters, formatters, naming conventions, code review process
 - **Typical Gaps**: Team-specific conventions, code review workflow
 
-**Proceed with appropriate scenario based on audit data from `.ai-flow/cache/audit-data.json`**
+**Proceed with appropriate scenario based on audit data from `.flow-skills/cache/audit-data.json`**
 
 ---
 
@@ -285,7 +285,7 @@ src/
     utils/
   infrastructure/
     database/
-    .ai-flow/cache/
+    .flow-skills/cache/
 
 Your choice: __
 Why?
@@ -659,7 +659,6 @@ Is this correct? (Yes/No)
 
 **1. `docs/code-standards.md`**
 
-- Use template: `.ai-flow/templates/docs/code-standards.template.md`
 - Fill with all code quality rules, naming conventions, formatting
 - Write to: `docs/code-standards.md`
 
@@ -694,6 +693,7 @@ Re-read files to refresh context before continuing.
 ## 📝 Generated Documents
 
 After Phase 5, generate/update:
+
 - `docs/code-standards.md` - Development practices and quality rules
 
 ---
@@ -706,8 +706,3 @@ Next: read phase-6.md from this phases/ directory
 
 **Last Updated:** 2025-12-20
 **Version:** 2.1.8
-
----
-
-## PHASE 6: Testing Strategy (15-20 min)
-

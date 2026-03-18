@@ -98,7 +98,7 @@ export const WALK_SKIP_DIRS = new Set([
   "__pycache__",
   "target",
   "vendor",
-  ".ai-flow",
+  ".flow-skills",
   "docs",
   "specs",
   "planning",

@@ -85,7 +85,7 @@ node "$SCRIPT" --report --file <tempfile>
 
 Parse: `{ passed, failed, errored, skipped, overallStatus, summary }`.
 
-Note: `--report` auto-writes to `.ai-flow/work/status.json` if that file exists in the project.
+Note: `--report` auto-writes to `.flow-skills/work/status.json` if that file exists in the project.
 
 ---
 
@@ -213,4 +213,4 @@ After running `--fix`, re-run `--run-all` to confirm the overall status improved
 
 - **NEVER suggest or execute `git commit` or `git push`**
 - Automated checks are read-only unless `--fix` is explicitly requested
-- If status.json exists at `.ai-flow/work/status.json`, it is updated automatically by `--report` — no manual merge needed
+- If status.json exists at `.flow-skills/work/status.json`, it is updated automatically by `--report` — no manual merge needed

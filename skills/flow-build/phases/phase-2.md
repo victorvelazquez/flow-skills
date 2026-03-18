@@ -36,7 +36,7 @@ Read `phases.phase2.recommendation` from the JSON output:
 - **Target File (frontend/mobile)**: `docs/api-contracts.md`
 - **Phase Name**: "DATA ARCHITECTURE / API CONTRACTS"
 
-**Proceed with appropriate scenario based on audit data from `.ai-flow/cache/audit-data.json`**
+**Proceed with appropriate scenario based on audit data from `.flow-skills/cache/audit-data.json`**
 
 ---
 
@@ -197,7 +197,6 @@ Schema Migrations: [tool + strategy]
 
 Generate `docs/data-model.md`:
 
-- Use template: `.ai-flow/templates/docs/data-model.template.md`
 - Include entity catalog, relationships, data patterns
 - Include Mermaid ER diagram showing all entities and relationships
 
