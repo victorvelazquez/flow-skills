@@ -228,6 +228,8 @@ function exportToRepo(dryRun = false) {
           fs.readFileSync(destFile).toString();
       if (isNew || isDiff) {
         copyFile(srcFile, destFile, dryRun);
+        const relPath = path.relative(REPO_DIR, destFile).replace(/\\/g, '/');
+        if (!dryRun) console.log(`  exported: ${relPath}`);
         changed++;
         changedFiles++;
       }
@@ -258,6 +260,8 @@ function exportToRepo(dryRun = false) {
       if (isNew || isDiff) {
         copyFile(src, dest, dryRun);
         ok(`${cmdFile} — ${dryRun ? "would update" : "updated"}`);
+        const relPath = path.relative(REPO_DIR, dest).replace(/\\/g, '/');
+        if (!dryRun) console.log(`  exported: ${relPath}`);
         changedFiles++;
       } else {
         info(`${cmdFile} — no changes`);
@@ -281,6 +285,8 @@ function exportToRepo(dryRun = false) {
       if (isNew || isDiff) {
         copyFile(srcFile, dest, dryRun);
         ok(`${rel} — ${dryRun ? "would update" : "updated"}`);
+        const relPath = path.relative(REPO_DIR, dest).replace(/\\/g, '/');
+        if (!dryRun) console.log(`  exported: ${relPath}`);
         changedFiles++;
       } else {
         info(`${rel} — no changes`);
