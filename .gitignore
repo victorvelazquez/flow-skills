@@ -29,3 +29,6 @@ lpt6
 lpt7
 lpt8
 lpt9
+
+# flow-build cache (generated at runtime — not for version control)
+.flow-skills/cache/

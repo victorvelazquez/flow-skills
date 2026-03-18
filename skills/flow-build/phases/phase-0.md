@@ -351,7 +351,7 @@ C) Cancel /flow-build (fix manually first)
       "reason": "Testing strategy documented"
     },
     "phase7": {
-      "file": "docs/deployment.md",
+      "file": "docs/operations.md",
       "exists": true,
       "consistencyScore": 82,
       "recommendation": "HYBRID",
