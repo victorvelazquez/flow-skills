@@ -12,26 +12,35 @@ When the user invokes `/flow-skills` or asks to publish, update, or install flow
 
 ## Workflow
 
-### Step 1 — Detect context
-
-Check the current state of the repo:
+**Script paths — resolve once before starting:**
 
 ```bash
-REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo ".")
-cd "$REPO_ROOT"
-git status --short
+SCRIPT=$(node -e "const os=require('os'),path=require('path');console.log(path.join(os.homedir(),'.config','opencode','scripts','flow-release.mjs'))")
+FS_SCRIPT=$(node -e "const os=require('os'),path=require('path');console.log(path.join(os.homedir(),'.config','opencode','scripts','flow-skills.mjs'))")
 ```
 
-Based on the output, determine which mode applies:
+`$SCRIPT` is used in Mode A for versioning and release. `$FS_SCRIPT` is used in Steps 1, Mode A (A1–A2), and Mode B.
 
-| Situation                          | Recommended mode                  |
-| ---------------------------------- | --------------------------------- |
-| Local opencode skills have changed | **Publish**                       |
-| Remote has new commits             | **Update**                        |
-| First time on this machine         | **Install from scratch**          |
-| All in sync                        | Report "everything is up to date" |
+### Step 1 — Detect context
 
-Ask the user which mode they want if context is ambiguous.
+Run:
+
+```bash
+node "$FS_SCRIPT" --context
+```
+
+Store the full JSON output as `CONTEXT_JSON`. Read the `mode` field:
+
+| `mode` value | Action |
+|---|---|
+| `"publish"` | Proceed to Mode A |
+| `"update"` | Proceed to Mode B |
+| `"install"` | Proceed to Mode C |
+| `"synced"` | Report "✅ Everything is up to date. No action needed." and stop |
+
+If the user explicitly requests a different mode than detected, honor their request.
+
+**`CONTEXT_JSON` is available throughout Mode A** — do not call `--context` again.
 
 ---
 
@@ -39,66 +48,63 @@ Ask the user which mode they want if context is ambiguous.
 
 Export, version bump, CHANGELOG, release branch, PR.
 
-**Script path — resolve once and store as `$SCRIPT`:**
-
-```bash
-SCRIPT=$(node -e "const os=require('os'),path=require('path');console.log(path.join(os.homedir(),'.config','opencode','scripts','flow-release.mjs'))")
-```
-
 **Step A1 — Export from opencode → repo:**
 
+> ⚠️ Write operation — call EXACTLY ONCE. Do not call `--run-export` again in this workflow.
+
 ```bash
-REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo ".")
-cd "$REPO_ROOT"
-node install.mjs --export
+node "$FS_SCRIPT" --run-export
 ```
 
-Show the output.
+Show the `count` and `files` from the JSON result.
 
 **Step A2 — Collect changed files:**
 
-Collect all lines from the export output that start with `  exported: ` (two spaces then `exported: `).
-Strip the prefix to get bare file paths. Store as `EXPORT_FILES` (list of paths).
+Read `json.files` from the `--run-export` response. Store as `EXPORT_FILES` (array of relative repo paths).
 
-If `EXPORT_FILES` is empty → **abort**:
+If `json.nothing === true` → **abort**:
 > ❌ Nothing to publish. No skill files have changed since the last export.
 >    Make changes in OpenCode first, then re-run /flow-skills → Publish.
 
-**Step A3 — Gather context:**
+For subsequent references to changed files (e.g. in the confirmation panel), use `git diff --name-only` — do NOT call `--run-export` again.
 
-```bash
-node "$SCRIPT" --context
-```
+**Step A3 — Read release context (from Step 1 CONTEXT_JSON):**
 
-Parse the JSON output. Extract:
-- `git.branch` — current branch
-- `git.hasOrigin` — remote configured?
-- `git.remoteUrl` — origin remote URL (for PR link)
+Context was already gathered in Step 1. Read these fields from `CONTEXT_JSON`:
+- `git.branch` — current branch name
+- `git.hasOrigin` — remote configured? (boolean)
+- `git.remoteUrl` — origin remote URL (for reference)
 - `version.current` — e.g. `"0.0.1"`
 - `version.lastTag` — e.g. `"v0.0.1"`
-- `commits.log` — commit list since last tag
+- `version.commitsSinceTag` — array of commit messages since last tag
 
 **Pre-flight checks — abort if:**
 
 - `git.branch !== 'main'` → abort:
-  > ❌ Publish must run from main. Current branch: {branch}.
+  > ❌ Publish must run from main. Current branch: {git.branch}.
   >    Run: git checkout main
-- `git.hasOrigin` is false → abort:
+- `git.hasOrigin === false` → abort:
   > ❌ No remote origin configured. Cannot push release branch.
 
 **Step A4 — Determine bump type:**
 
-Analyze `commits.log`. Priority: BREAKING → MAJOR · FEATURE → MINOR · else → PATCH.
+Analyze `version.commitsSinceTag` from `CONTEXT_JSON`.
+
+> 💡 `version.suggestedBump` from `CONTEXT_JSON` is a **hint based on commit message prefix patterns**. You MUST analyze the commit messages semantically before accepting or overriding it. A commit like `"chore: add new flow-docs-sync skill"` may warrant MINOR even without a `feat:` prefix.
 
 | Signals | Bump |
 |---------|------|
 | `BREAKING CHANGE`, `!` after type, removed exports | MAJOR |
-| `feat(...)`, new skills/commands | MINOR |
+| `feat(...)`, new skills/commands, new capabilities | MINOR |
 | `fix(...)`, `chore(...)`, `docs:`, `refactor(...)` | PATCH |
+
+If the suggested bump matches your analysis → accept `version.suggestedBump` directly.
+If you override the bump → recalculate `version` and `prUrl` (replace version segment in the stored `prUrl` string).
 
 **Step A5 — Calculate new version:**
 
-Parse `version.current` (X.Y.Z). Apply bump → new version string `X.Y.Z`.
+If bump type was accepted from `version.suggestedBump`: use `version.suggestedVersion` directly.
+If bump type was overridden: parse `version.current` (X.Y.Z) and apply bump → new version string.
 
 **Step A6 — Generate CHANGELOG entry:**
 
@@ -182,14 +188,14 @@ If the `git-tag` step fails with "tag already exists":
 
 **Step A11 — PR instruction:**
 
-Parse `owner` and `repo` from `git.remoteUrl` in the `--context` JSON output. Handle both SSH (`git@github.com:owner/repo.git`) and HTTPS (`https://github.com/owner/repo.git`) formats.
+Use `prUrl` from `CONTEXT_JSON` directly. If you overrode the version in Step A4/A5, substitute the version segment: replace `release/v{suggestedVersion}` with `release/v{actualVersion}` in the stored `prUrl` string.
 
 ```
 Release v{new} prepared on branch release/v{new}.
   Updated: {files}  |  Commit: chore(release): bump version to {new}
   Tag: v{new}  |  Branch: release/v{new} pushed to origin
   ⚠️  Open a PR: release/v{new} → main
-  https://github.com/{owner}/{repo}/compare/release/v{new}?expand=1
+  {prUrl}
 ```
 
 ---
@@ -198,23 +204,21 @@ Release v{new} prepared on branch release/v{new}.
 
 Pull latest and reinstall.
 
-**Step B1 — Pull:**
+**Step B1 — Pull and install:**
 
 ```bash
-REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo ".")
-cd "$REPO_ROOT"
-git pull
+node "$FS_SCRIPT" --update
 ```
 
-Show what changed (commits pulled).
-
-**Step B2 — Install:**
-
-```bash
-node install.mjs
-```
-
-Show the output. Remind the user to restart OpenCode to load the updated skills.
+Read the JSON result:
+- If `json.ok === true`:
+  Show `json.pull.output` (commits pulled / "Already up to date.").
+  ✅ Update complete. Restart OpenCode to load the updated skills.
+- If `json.ok === false` and `json.pull.ok === false`:
+  ❌ git pull failed. Details: `json.pull.output`
+  Resolve the conflict or network issue, then re-run.
+- If `json.ok === false` and `json.pull.ok === true` and `json.install.ok === false`:
+  ❌ git pull succeeded but install failed. Details: `json.install.output`
 
 ---
 
