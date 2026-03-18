@@ -9,15 +9,13 @@
  *   --push         Execute `git push origin <branch>` and return result
  */
 
-import { execSync } from "child_process";
+import { run, runSafe, parseArgs, PROTECTED_BRANCHES } from "./lib/helpers.mjs";
 import process from "process";
 import path from "path";
 import os from "os";
 import fs from "fs";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-const PROTECTED_BRANCHES = ["main", "master", "develop", "development"];
 
 const PLATFORM_PATTERNS = [
   {
@@ -74,58 +72,6 @@ const PLATFORM_PATTERNS = [
       url.replace(/^git@([^:]+):(.*)/, "https://$1/$2").replace(/\.git$/, ""),
   },
 ];
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function run(cmd, opts = {}) {
-  try {
-    return execSync(cmd, {
-      encoding: "utf8",
-      stdio: ["pipe", "pipe", "pipe"],
-      cwd: process.cwd(),
-      ...opts,
-    }).trim();
-  } catch (err) {
-    const msg = (err.stderr || err.message || String(err)).trim();
-    throw new Error(msg);
-  }
-}
-
-function runSafe(cmd, opts = {}) {
-  try {
-    const output = execSync(cmd, {
-      encoding: "utf8",
-      stdio: ["pipe", "pipe", "pipe"],
-      cwd: process.cwd(),
-      ...opts,
-    }).trim();
-    return { ok: true, output };
-  } catch (err) {
-    return {
-      ok: false,
-      output: (err.stderr || err.message || String(err)).trim(),
-    };
-  }
-}
-
-function parseArgs() {
-  const args = process.argv.slice(2);
-  const flags = {};
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (arg.startsWith("--")) {
-      const key = arg.slice(2);
-      const next = args[i + 1];
-      if (next && !next.startsWith("--")) {
-        flags[key] = next;
-        i++;
-      } else {
-        flags[key] = true;
-      }
-    }
-  }
-  return flags;
-}
 
 // ─── Platform detection ───────────────────────────────────────────────────────
 

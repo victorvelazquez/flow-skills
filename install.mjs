@@ -163,14 +163,12 @@ function install(dryRun = false) {
   // ── Scripts ──────────────────────────────────────────────────────────────────
   head("Scripts");
   if (fs.existsSync(REPO.scripts)) {
-    const scriptFiles = fs
-      .readdirSync(REPO.scripts)
-      .filter((f) => f.startsWith("flow-") && f.endsWith(".mjs"));
-    for (const scriptFile of scriptFiles) {
-      const src = path.join(REPO.scripts, scriptFile);
-      const dest = path.join(OPENCODE.scripts, scriptFile);
-      copyFile(src, dest, dryRun);
-      ok(scriptFile);
+    const scriptFiles = collectFiles(REPO.scripts);
+    for (const srcFile of scriptFiles) {
+      const rel = path.relative(REPO.scripts, srcFile);
+      const dest = path.join(OPENCODE.scripts, rel);
+      copyFile(srcFile, dest, dryRun);
+      ok(rel);
       totalFiles++;
     }
   }
@@ -271,22 +269,21 @@ function exportToRepo(dryRun = false) {
   // ── Scripts ──────────────────────────────────────────────────────────────────
   head("Scripts");
   if (fs.existsSync(OPENCODE.scripts)) {
-    const scriptFiles = fs
-      .readdirSync(OPENCODE.scripts)
-      .filter((f) => f.startsWith("flow-") && f.endsWith(".mjs"));
-    for (const scriptFile of scriptFiles) {
-      const src = path.join(OPENCODE.scripts, scriptFile);
-      const dest = path.join(REPO.scripts, scriptFile);
+    const scriptFiles = collectFiles(OPENCODE.scripts);
+    for (const srcFile of scriptFiles) {
+      const rel = path.relative(OPENCODE.scripts, srcFile);
+      const dest = path.join(REPO.scripts, rel);
       const isNew = !fs.existsSync(dest);
       const isDiff =
         !isNew &&
-        fs.readFileSync(src).toString() !== fs.readFileSync(dest).toString();
+        fs.readFileSync(srcFile).toString() !==
+          fs.readFileSync(dest).toString();
       if (isNew || isDiff) {
-        copyFile(src, dest, dryRun);
-        ok(`${scriptFile} — ${dryRun ? "would update" : "updated"}`);
+        copyFile(srcFile, dest, dryRun);
+        ok(`${rel} — ${dryRun ? "would update" : "updated"}`);
         changedFiles++;
       } else {
-        info(`${scriptFile} — no changes`);
+        info(`${rel} — no changes`);
       }
       totalFiles++;
     }
@@ -364,17 +361,27 @@ function uninstall(dryRun = false) {
   // ── Scripts ──────────────────────────────────────────────────────────────────
   head("Scripts");
   if (fs.existsSync(OPENCODE.scripts)) {
-    const scriptFiles = fs
-      .readdirSync(OPENCODE.scripts)
-      .filter((f) => f.startsWith("flow-") && f.endsWith(".mjs"));
-    for (const scriptFile of scriptFiles) {
-      const dest = path.join(OPENCODE.scripts, scriptFile);
-      if (removeFile(dest, dryRun)) {
-        ok(`${scriptFile} — ${dryRun ? "would remove" : "removed"}`);
+    const scriptFiles = collectFiles(OPENCODE.scripts);
+    for (const srcFile of scriptFiles) {
+      if (removeFile(srcFile, dryRun)) {
+        const rel = path.relative(OPENCODE.scripts, srcFile);
+        ok(`${rel} — ${dryRun ? "would remove" : "removed"}`);
         removed++;
       }
     }
-    if (scriptFiles.length === 0) info("No flow-* scripts found");
+    // Remove lib/ subdirectory if empty after removing files
+    const libDir = path.join(OPENCODE.scripts, "lib");
+    if (!dryRun && fs.existsSync(libDir)) {
+      try {
+        const remaining = fs.readdirSync(libDir);
+        if (remaining.length === 0) {
+          fs.rmdirSync(libDir);
+        }
+      } catch {
+        // ignore
+      }
+    }
+    if (scriptFiles.length === 0) info("No scripts found");
   }
 
   // ── Summary ──────────────────────────────────────────────────────────────────

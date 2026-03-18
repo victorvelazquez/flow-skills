@@ -9,61 +9,11 @@
  *   --update-cache   Write current snapshot to .ai-flow/cache/docs-analysis.json
  */
 
-import { execSync } from "child_process";
+import { runSafe, parseArgs, exists, readJsonFile } from "./lib/helpers.mjs";
 import process from "process";
 import path from "path";
 import fs from "fs";
 import os from "os";
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function runSafe(cmd, opts = {}) {
-  try {
-    const out = execSync(cmd, {
-      encoding: "utf8",
-      stdio: ["pipe", "pipe", "pipe"],
-      cwd: process.cwd(),
-      ...opts,
-    }).trim();
-    return { ok: true, output: out };
-  } catch (err) {
-    return {
-      ok: false,
-      output: (err.stderr || err.message || String(err)).trim(),
-    };
-  }
-}
-
-function parseArgs() {
-  const args = process.argv.slice(2);
-  const flags = {};
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (arg.startsWith("--")) {
-      const key = arg.slice(2);
-      const next = args[i + 1];
-      if (next && !next.startsWith("--")) {
-        flags[key] = next;
-        i++;
-      } else {
-        flags[key] = true;
-      }
-    }
-  }
-  return flags;
-}
-
-function exists(rel) {
-  return fs.existsSync(path.join(process.cwd(), rel));
-}
-
-function readJsonFile(rel) {
-  try {
-    return JSON.parse(fs.readFileSync(path.join(process.cwd(), rel), "utf8"));
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Walk a directory recursively, returning relative POSIX paths.
