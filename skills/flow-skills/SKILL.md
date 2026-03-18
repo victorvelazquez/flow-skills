@@ -37,7 +37,13 @@ Ask the user which mode they want if context is ambiguous.
 
 ### Mode A — Publish local changes to repo
 
-Export, review, commit, push.
+Export, version bump, CHANGELOG, release branch, PR.
+
+**Script path — resolve once and store as `$SCRIPT`:**
+
+```bash
+SCRIPT=$(node -e "const os=require('os'),path=require('path');console.log(path.join(os.homedir(),'.config','opencode','scripts','flow-release.mjs'))")
+```
 
 **Step A1 — Export from opencode → repo:**
 
@@ -47,49 +53,144 @@ cd "$REPO_ROOT"
 node install.mjs --export
 ```
 
-Show the output. If "No files changed" → done.
+Show the output.
 
-**Step A2 — Review what changed:**
+**Step A2 — Collect changed files:**
 
-```bash
-git diff --stat
-```
+Collect all lines from the export output that start with `  exported: ` (two spaces then `exported: `).
+Strip the prefix to get bare file paths. Store as `EXPORT_FILES` (list of paths).
 
-Ask the user: "Which files do you want to include in this commit?" If they say all, proceed. If selective, stage only specified files.
+If `EXPORT_FILES` is empty → **abort**:
+> ❌ Nothing to publish. No skill files have changed since the last export.
+>    Make changes in OpenCode first, then re-run /flow-skills → Publish.
 
-**Step A3 — Stage files:**
-
-```bash
-# Stage all changes:
-git add -A
-
-# Or selectively (if user specified):
-git add <file1> <file2> ...
-```
-
-**Step A4 — Generate commit message and commit:**
-
-Analyze the staged changes and generate a semantic commit message following Conventional Commits:
-
-- `feat(flow-X):` for new features or skills
-- `fix(flow-X):` for bug fixes
-- `docs:` for README/CHANGELOG only
-- `chore:` for install.mjs or tooling changes
-- `refactor(flow-X):` for internal rewrites
-
-Present the message to the user for approval before committing:
+**Step A3 — Gather context:**
 
 ```bash
-git commit -m "<generated message>"
+node "$SCRIPT" --context
 ```
 
-**Step A5 — Push:**
+Parse the JSON output. Extract:
+- `git.branch` — current branch
+- `git.hasOrigin` — remote configured?
+- `git.remoteUrl` — origin remote URL (for PR link)
+- `version.current` — e.g. `"0.0.1"`
+- `version.lastTag` — e.g. `"v0.0.1"`
+- `commits.log` — commit list since last tag
+
+**Pre-flight checks — abort if:**
+
+- `git.branch !== 'main'` → abort:
+  > ❌ Publish must run from main. Current branch: {branch}.
+  >    Run: git checkout main
+- `git.hasOrigin` is false → abort:
+  > ❌ No remote origin configured. Cannot push release branch.
+
+**Step A4 — Determine bump type:**
+
+Analyze `commits.log`. Priority: BREAKING → MAJOR · FEATURE → MINOR · else → PATCH.
+
+| Signals | Bump |
+|---------|------|
+| `BREAKING CHANGE`, `!` after type, removed exports | MAJOR |
+| `feat(...)`, new skills/commands | MINOR |
+| `fix(...)`, `chore(...)`, `docs:`, `refactor(...)` | PATCH |
+
+**Step A5 — Calculate new version:**
+
+Parse `version.current` (X.Y.Z). Apply bump → new version string `X.Y.Z`.
+
+**Step A6 — Generate CHANGELOG entry:**
+
+Write a new entry in Keep a Changelog format. Prepend it after the `## [Unreleased]` line in `CHANGELOG.md` (or at the top if no Unreleased section exists):
+
+```
+## [X.Y.Z] - YYYY-MM-DD
+
+### Added
+- ...
+
+### Changed
+- ...
+
+### Fixed
+- ...
+```
+
+Include only sections that have content. Date: today (YYYY-MM-DD).
+
+**Step A7 — Bump version in package.json:**
 
 ```bash
-git push
+node "$SCRIPT" --update-version --version X.Y.Z
 ```
 
-Report the result with the commit hash and remote URL.
+**Step A8 — Confirmation panel:**
+
+Show this panel and wait for user approval before proceeding:
+
+```
+╔══════════════════════════════════════════════════════╗
+║              flow-skills — Publish Release           ║
+╠══════════════════════════════════════════════════════╣
+║  Version:  {current}  →  {new}  ({BUMP_TYPE})        ║
+║  Branch:   release/v{new}  (will be created)         ║
+║  Tag:      v{new}                                    ║
+║  Date:     {YYYY-MM-DD}                              ║
+╠══════════════════════════════════════════════════════╣
+║  Files to commit:                                    ║
+║    package.json                                      ║
+║    CHANGELOG.md                                      ║
+║    {each file from EXPORT_FILES, one per line}       ║
+╠══════════════════════════════════════════════════════╣
+║  CHANGELOG preview:                                  ║
+║    {first 4 lines of the generated entry}            ║
+╠══════════════════════════════════════════════════════╣
+║  Git actions:                                        ║
+║    git add <files>                                   ║
+║    git commit "chore(release): bump version to {new}"║
+║    git tag -a v{new}                                 ║
+║    git push origin release/v{new}                   ║
+║    git push origin v{new}                            ║
+╚══════════════════════════════════════════════════════╝
+Proceed? (yes / no)
+```
+
+If the user says no → abort. No branch has been created yet.
+
+**Step A9 — Create release branch:**
+
+```bash
+git checkout -b release/vX.Y.Z
+```
+
+**Step A10 — Execute release:**
+
+Build the `--files` argument: `package.json` and `CHANGELOG.md` always come first, followed by all files from `EXPORT_FILES` joined with commas.
+
+```bash
+node "$SCRIPT" --execute --version X.Y.Z \
+  --files "package.json,CHANGELOG.md,{EXPORT_FILES comma-joined}"
+```
+
+Parse the JSON result. Check each `step.ok`. If any step failed, show the failure and stop.
+
+If the `git-tag` step fails with "tag already exists":
+> ❌ Tag v{version} already exists. To fix:
+>    git tag -d v{version} && git push origin --delete v{version}
+>    Then re-run Publish to try again.
+
+**Step A11 — PR instruction:**
+
+Parse `owner` and `repo` from `git.remoteUrl` in the `--context` JSON output. Handle both SSH (`git@github.com:owner/repo.git`) and HTTPS (`https://github.com/owner/repo.git`) formats.
+
+```
+Release v{new} prepared on branch release/v{new}.
+  Updated: {files}  |  Commit: chore(release): bump version to {new}
+  Tag: v{new}  |  Branch: release/v{new} pushed to origin
+  ⚠️  Open a PR: release/v{new} → main
+  https://github.com/{owner}/{repo}/compare/release/v{new}?expand=1
+```
 
 ---
 
