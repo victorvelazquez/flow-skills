@@ -8,43 +8,13 @@
  *   --phase-files   Return absolute paths to all 11 phase files → JSON
  */
 
+import { parseArgs, exists, readJsonFile } from "./lib/helpers.mjs";
 import process from "process";
 import path from "path";
 import fs from "fs";
 import os from "os";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function parseArgs() {
-  const args = process.argv.slice(2);
-  const flags = {};
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (arg.startsWith("--")) {
-      const key = arg.slice(2);
-      const next = args[i + 1];
-      if (next && !next.startsWith("--")) {
-        flags[key] = next;
-        i++;
-      } else {
-        flags[key] = true;
-      }
-    }
-  }
-  return flags;
-}
-
-function exists(rel) {
-  return fs.existsSync(path.join(process.cwd(), rel));
-}
-
-function readJson(rel) {
-  try {
-    return JSON.parse(fs.readFileSync(path.join(process.cwd(), rel), "utf8"));
-  } catch {
-    return null;
-  }
-}
 
 function readFile(rel) {
   try {
@@ -57,7 +27,7 @@ function readFile(rel) {
 // ─── Stack detection ──────────────────────────────────────────────────────────
 
 function detectProjectType() {
-  const pkg = readJson("package.json");
+  const pkg = readJsonFile("package.json");
   const deps = Object.assign(
     {},
     pkg?.dependencies || {},
@@ -112,7 +82,7 @@ function detectProjectType() {
 }
 
 function detectFramework() {
-  const pkg = readJson("package.json");
+  const pkg = readJsonFile("package.json");
   const deps = Object.assign(
     {},
     pkg?.dependencies || {},
@@ -157,7 +127,7 @@ function detectFramework() {
 
 function detectLanguage() {
   if (exists("tsconfig.json")) return "TypeScript";
-  const pkg = readJson("package.json");
+  const pkg = readJsonFile("package.json");
   const deps = Object.assign(
     {},
     pkg?.dependencies || {},

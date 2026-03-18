@@ -10,67 +10,11 @@
  *   --execute --version X.Y.Z --files "f1,f2,f3"  Stage + commit + tag + push
  */
 
-import { execSync } from "child_process";
+import { run, runSafe, parseArgs, exists, readJsonFile } from "./lib/helpers.mjs";
 import process from "process";
 import path from "path";
 import fs from "fs";
 import os from "os";
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function run(cmd, opts = {}) {
-  try {
-    return execSync(cmd, {
-      encoding: "utf8",
-      stdio: ["pipe", "pipe", "pipe"],
-      cwd: process.cwd(),
-      ...opts,
-    }).trim();
-  } catch (err) {
-    const msg = (err.stderr || err.message || String(err)).trim();
-    throw new Error(msg);
-  }
-}
-
-function runSafe(cmd, opts = {}) {
-  try {
-    return { ok: true, output: run(cmd, opts) };
-  } catch (err) {
-    return { ok: false, output: err.message };
-  }
-}
-
-function parseArgs() {
-  const args = process.argv.slice(2);
-  const flags = {};
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (arg.startsWith("--")) {
-      const key = arg.slice(2);
-      const next = args[i + 1];
-      if (next && !next.startsWith("--")) {
-        flags[key] = next;
-        i++;
-      } else {
-        flags[key] = true;
-      }
-    }
-  }
-  return flags;
-}
-
-function exists(file) {
-  return fs.existsSync(path.join(process.cwd(), file));
-}
-
-function readJsonFile(file) {
-  try {
-    const full = path.join(process.cwd(), file);
-    return JSON.parse(fs.readFileSync(full, "utf8"));
-  } catch {
-    return null;
-  }
-}
 
 // ─── --context / --dry-run ────────────────────────────────────────────────────
 
@@ -101,7 +45,7 @@ function context() {
   // ── Branch ────────────────────────────────────────────────────────────────
   const branch = runSafe("git branch --show-current");
   const currentBranch = branch.ok ? branch.output : "unknown";
-  const RELEASE_BRANCHES = ["main", "master", "develop"];
+  const RELEASE_BRANCHES = ["main", "master", "development"];
   const isReleaseBranch = RELEASE_BRANCHES.includes(currentBranch);
 
   // ── Remote ────────────────────────────────────────────────────────────────

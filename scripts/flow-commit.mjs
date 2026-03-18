@@ -10,56 +10,10 @@
  *   --create-branch --name "type/slug"         Create and checkout new branch
  */
 
-import { execSync } from "child_process";
+import { run, parseArgs, PROTECTED_BRANCHES } from "./lib/helpers.mjs";
 import process from "process";
 import path from "path";
 import fs from "fs";
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const PROTECTED_BRANCHES = [
-  "main",
-  "master",
-  "develop",
-  "development",
-  "staging",
-  "production",
-];
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function run(cmd, opts = {}) {
-  try {
-    return execSync(cmd, {
-      encoding: "utf8",
-      stdio: ["pipe", "pipe", "pipe"],
-      cwd: process.cwd(),
-      ...opts,
-    }).trim();
-  } catch (err) {
-    const msg = (err.stderr || err.message || String(err)).trim();
-    throw new Error(msg);
-  }
-}
-
-function parseArgs() {
-  const args = process.argv.slice(2);
-  const flags = {};
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (arg.startsWith("--")) {
-      const key = arg.slice(2);
-      const next = args[i + 1];
-      if (next && !next.startsWith("--")) {
-        flags[key] = next;
-        i++;
-      } else {
-        flags[key] = true;
-      }
-    }
-  }
-  return flags;
-}
 
 // ─── Stack detection ──────────────────────────────────────────────────────────
 
