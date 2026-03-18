@@ -3,6 +3,9 @@ node_modules/
 Thumbs.db
 *.log
 
+# SDD artifact directory (local spec/design/task files — not for version control)
+.atl/
+
 # Windows device files (reserved OS names — never commit these)
 nul
 con

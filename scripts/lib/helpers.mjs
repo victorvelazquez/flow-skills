@@ -100,7 +100,16 @@ export function readJsonFile(file) {
 // ─── Branch protection ────────────────────────────────────────────────────────
 
 /**
- * Canonical list of protected branch names.
+ * Canonical list of protected branch names used at SCRIPT RUNTIME.
+ *
+ * Intentional divergence from SKILL.md:
+ *   - This list is the strict runtime guard enforced by all flow-* scripts.
+ *     It covers the 6 branches that realistically exist in production workflows.
+ *   - SKILL.md (LLM instructions) may list additional entries such as "dev" and
+ *     "release" as LLM-only guardrails for AI-assisted workflows. Those extra
+ *     entries are intentional and correct — they are NOT required to be present
+ *     here because they are advisory guidance, not hard script enforcement.
+ *
  * All flow-* scripts that enforce branch protection MUST import this constant.
  */
 export const PROTECTED_BRANCHES = [
