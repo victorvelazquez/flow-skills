@@ -1,9 +1,14 @@
 {
   "name": "flow-skills",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Flow skills for OpenCode — git workflow automation, documentation, and release management",
   "type": "module",
   "scripts": {},
-  "keywords": ["opencode", "skills", "git", "workflow"],
+  "keywords": [
+    "opencode",
+    "skills",
+    "git",
+    "workflow"
+  ],
   "license": "MIT"
 }
