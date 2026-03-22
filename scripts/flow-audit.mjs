@@ -53,23 +53,61 @@ function detect() {
   const tooling = detectTooling(cwd);
 
   // ── Derive commands from detected names ────────────────────────────────────
+  // ── Monorepo-aware command builder ──────────────────────────────────────────
+  // When running from monorepo root, use recursive package-manager commands
+  // with --if-present (pnpm) or equivalent so workspaces without a script
+  // are silently skipped. Stays agnostic to npm / pnpm / yarn / bun.
+  const isMonorepoRoot =
+    exists("pnpm-workspace.yaml") ||
+    exists("turbo.json") ||
+    exists("nx.json") ||
+    exists("lerna.json");
+
+  // Package-manager-aware recursive runner (agnostic)
+  const pm = tooling.packageManager; // "pnpm" | "npm" | "yarn" | "bun" | null
+  const monoRun = (scriptName) => {
+    if (pm === "pnpm") return `pnpm -r --if-present ${scriptName}`;
+    if (pm === "yarn") return `yarn workspaces run ${scriptName}`;
+    if (pm === "bun") return `bun run --filter '*' ${scriptName}`;
+    // npm workspaces (npm >=7) — --if-present not supported, use --workspaces
+    return `npm run ${scriptName} --workspaces --if-present`;
+  };
+
+  // Package-manager-aware local exec (for tools like prettier not in PATH)
+  const pmExec = (cmd) => {
+    if (pm === "pnpm") return `pnpm exec ${cmd}`;
+    if (pm === "yarn") return `yarn exec ${cmd}`;
+    if (pm === "bun") return `bun x ${cmd}`;
+    return `npx ${cmd}`;
+  };
+
   // Test runner commands
   let testCommand = null;
   switch (tooling.testRunner) {
     case "vitest":
-      testCommand = scripts["test"] || "npx vitest run";
+      testCommand = isMonorepoRoot
+        ? monoRun("test")
+        : scripts["test"] || "npx vitest run";
       break;
     case "jest":
-      testCommand = scripts["test"] || "npx jest --passWithNoTests";
+      testCommand = isMonorepoRoot
+        ? monoRun("test")
+        : scripts["test"] || "npx jest --passWithNoTests";
       break;
     case "mocha":
-      testCommand = scripts["test"] || "npx mocha";
+      testCommand = isMonorepoRoot
+        ? monoRun("test")
+        : scripts["test"] || "npx mocha";
       break;
     case "jasmine":
-      testCommand = scripts["test"] || "npx jasmine";
+      testCommand = isMonorepoRoot
+        ? monoRun("test")
+        : scripts["test"] || "npx jasmine";
       break;
     case "ava":
-      testCommand = scripts["test"] || "npx ava";
+      testCommand = isMonorepoRoot
+        ? monoRun("test")
+        : scripts["test"] || "npx ava";
       break;
     case "cargo-test":
       testCommand = "cargo test";
@@ -84,7 +122,9 @@ function detect() {
       testCommand = "bundle exec rspec";
       break;
     case "npm-test":
-      testCommand = "npm test";
+      testCommand = isMonorepoRoot
+        ? monoRun("test")
+        : scripts["test"] || "npm test";
       break;
   }
 
@@ -92,13 +132,19 @@ function detect() {
   let lintCommand = null;
   switch (tooling.linter) {
     case "eslint":
-      lintCommand = scripts["lint"] || "npx eslint .";
+      lintCommand = isMonorepoRoot
+        ? monoRun("lint")
+        : scripts["lint"] || "npx eslint .";
       break;
     case "biome":
-      lintCommand = scripts["lint"] || "npx biome lint .";
+      lintCommand = isMonorepoRoot
+        ? monoRun("lint")
+        : scripts["lint"] || "npx biome lint .";
       break;
     case "oxlint":
-      lintCommand = scripts["lint"] || "npx oxlint .";
+      lintCommand = isMonorepoRoot
+        ? monoRun("lint")
+        : scripts["lint"] || "npx oxlint .";
       break;
     case "rubocop":
       lintCommand = "bundle exec rubocop";
@@ -116,15 +162,20 @@ function detect() {
       lintCommand = "flake8 .";
       break;
     case "npm-lint":
-      lintCommand = "npm run lint";
+      lintCommand = isMonorepoRoot ? monoRun("lint") : "npm run lint";
       break;
   }
 
-  // Type checker detection (not in detectTooling — kept inline as it's audit-specific)
+  // Type checker detection — monorepo-aware, package-manager-agnostic
   let typeChecker = null;
   let typeCommand = null;
 
-  if (
+  if (isMonorepoRoot) {
+    // Any monorepo (pnpm/npm/yarn/bun): run typecheck recursively
+    typeChecker = "tsc";
+    typeCommand =
+      scripts["typecheck"] || scripts["type-check"] || monoRun("typecheck");
+  } else if (
     exists("tsconfig.json") &&
     (deps["typescript"] || existsGlob("*.ts") || existsGlob("*.tsx"))
   ) {
@@ -148,7 +199,7 @@ function detect() {
     typeCommand = "go build ./...";
   }
 
-  // Formatter commands
+  // Formatter commands — monorepo-aware, pm-agnostic
   let formatCommand = null;
   switch (tooling.formatter) {
     case "prettier":
@@ -156,7 +207,9 @@ function detect() {
         scripts["format:check"] ||
         scripts["lint:format"] ||
         scripts["check:format"] ||
-        "npx prettier --check .";
+        (isMonorepoRoot
+          ? `${pmExec('prettier --check "**/*.{ts,tsx,js,json,md}" --ignore-path .gitignore')}`
+          : `${pmExec("prettier --check .")}`);
       break;
     case "biome-format":
       formatCommand = scripts["format:check"] || "npx biome format .";
@@ -172,21 +225,23 @@ function detect() {
       break;
   }
 
-  // Coverage commands
+  // Coverage commands — monorepo-aware, pm-agnostic
   let coverageCommand = null;
   switch (tooling.coverage) {
     case "vitest-coverage":
-      coverageCommand =
-        scripts["test:coverage"] ||
-        scripts["coverage"] ||
-        scripts["test:cov"] ||
-        "npx vitest run --coverage";
+      coverageCommand = isMonorepoRoot
+        ? monoRun("test:cov")
+        : scripts["test:coverage"] ||
+          scripts["coverage"] ||
+          scripts["test:cov"] ||
+          "npx vitest run --coverage";
       break;
     case "jest-coverage":
-      coverageCommand =
-        scripts["test:coverage"] ||
-        scripts["coverage"] ||
-        "npx jest --coverage --passWithNoTests";
+      coverageCommand = isMonorepoRoot
+        ? monoRun("test:cov")
+        : scripts["test:coverage"] ||
+          scripts["coverage"] ||
+          "npx jest --coverage --passWithNoTests";
       break;
     case "go-coverage":
       coverageCommand = "go test -cover ./...";

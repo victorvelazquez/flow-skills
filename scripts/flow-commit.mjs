@@ -4,10 +4,18 @@
  * Node.js ESM, zero external dependencies, cross-platform (Windows + Linux/macOS)
  *
  * Modes:
- *   --analyze                                  Detect changes → output JSON
- *   --commit --files "f1,f2" --message "msg"   Stage + commit files
- *   --summary [--count N]                      Show last N git log entries (default 5)
- *   --create-branch --name "type/slug"         Create and checkout new branch
+ *   --analyze                                        Detect changes → output JSON
+ *   --analyze --known-files "f1,f2"                  Same but filter to known files only (safe re-scan)
+ *   --commit --files "f1,f2" --message "msg"         Stage + commit files
+ *   --summary [--count N] [--known-files "f1,f2"]    Show last N commits + post-commit safety check
+ *   --create-branch --name "type/slug"               Create and checkout new branch
+ *
+ * Semi-automatic leftover detection (workflow):
+ *   1. Run --analyze → capture all file paths as known-files set
+ *   2. After each --commit round, run --summary --known-files "..."
+ *   3. If leftovers exist AND they are in known-files → propose next commit (wait confirmation)
+ *   4. If leftovers exist but NOT in known-files → warn only (artifact guard, do NOT commit)
+ *   5. Max 3 re-scan rounds to prevent infinite loops
  */
 
 import { run, parseArgs, PROTECTED_BRANCHES } from "./lib/helpers.mjs";
@@ -229,29 +237,25 @@ function enrichFile(filePath, status) {
   };
 }
 
-// ─── --analyze ────────────────────────────────────────────────────────────────
+// ─── git status parser (shared) ───────────────────────────────────────────────
 
-function analyze() {
-  const stack = detectStack();
-
-  // Current branch
-  const currentBranch = run("git branch --show-current");
-  const isProtected = PROTECTED_BRANCHES.includes(currentBranch);
-
-  // git status --porcelain — use explicit encoding and filter Windows artifacts
+/**
+ * Parse `git status --porcelain` and return enriched file lists.
+ * @param {Set<string>|null} knownFiles  If provided, only include files in this set.
+ * @returns {{ staged, unstaged, untracked, deleted, skipped }}
+ */
+function parseGitStatus(knownFiles = null) {
   const statusOutput = run("git status --porcelain");
   const lines = statusOutput
     ? statusOutput.split("\n").filter((l) => {
         if (!l || l.length < 4) return false;
         const trimmed = l.trim();
-        // Skip Windows null device artifact — appears as "?? nul"
         if (
           trimmed === "nul" ||
           trimmed === "?? nul" ||
           trimmed.endsWith(" nul")
         )
           return false;
-        // Must match porcelain format: 2 status chars + space + non-empty path
         return /^.{2} .+$/.test(l);
       })
     : [];
@@ -260,64 +264,75 @@ function analyze() {
   const unstaged = [];
   const untracked = [];
   const deleted = [];
+  const skipped = []; // files present in working tree but NOT in knownFiles
 
   for (const line of lines) {
-    // git status --porcelain format: exactly 2 status chars + 1 space + path
-    // X = index/staged status, Y = working-tree/unstaged status
-    const X = line[0]; // staged column
-    const Y = line[1]; // unstaged column
+    const X = line[0];
+    const Y = line[1];
 
-    // Extract path — always starts at index 3
     let filePath = line.slice(3).trim();
-
-    // Handle renamed files: "R  old-name -> new-name" → take new-name
     if (filePath.includes(" -> ")) {
       filePath = filePath.split(" -> ")[1].trim();
     }
-
-    // Normalize separators (Windows backslash → forward slash)
     filePath = filePath.replace(/\\/g, "/");
-
-    // Skip Windows null device, empty paths, and quoted paths with issues
     if (!filePath || filePath === "nul" || filePath === "/dev/null") continue;
 
-    // Untracked files
+    // ── Known-files guard: if a whitelist is active, filter unknown files ──
+    if (knownFiles !== null && !knownFiles.has(filePath)) {
+      skipped.push(filePath);
+      continue;
+    }
+
     if (X === "?" && Y === "?") {
       untracked.push(enrichFile(filePath, "?"));
       continue;
     }
-
-    // Staged changes (index column X is not space or ?)
     if (X !== " " && X !== "?") {
-      if (X === "D") {
-        deleted.push(enrichFile(filePath, "D"));
-      } else {
-        staged.push(enrichFile(filePath, X));
-      }
+      if (X === "D") deleted.push(enrichFile(filePath, "D"));
+      else staged.push(enrichFile(filePath, X));
     }
-
-    // Unstaged changes (working tree column Y is not space or ?)
     if (Y !== " " && Y !== "?") {
-      if (Y === "D") {
-        deleted.push(enrichFile(filePath, "D"));
-      } else {
-        unstaged.push(enrichFile(filePath, Y));
-      }
+      if (Y === "D") deleted.push(enrichFile(filePath, "D"));
+      else unstaged.push(enrichFile(filePath, Y));
     }
   }
 
+  return { staged, unstaged, untracked, deleted, skipped };
+}
+
+// ─── --analyze ────────────────────────────────────────────────────────────────
+
+function analyze(flags = {}) {
+  const stack = detectStack();
+
+  // Current branch
+  const currentBranch = run("git branch --show-current");
+  const isProtected = PROTECTED_BRANCHES.includes(currentBranch);
+
+  // Optional known-files whitelist (for safe re-scans after initial analysis)
+  const knownFilesArg = flags["known-files"];
+  const knownFiles = knownFilesArg
+    ? new Set(
+        knownFilesArg
+          .split(",")
+          .map((f) => f.trim())
+          .filter(Boolean),
+      )
+    : null;
+
+  const { staged, unstaged, untracked, deleted, skipped } =
+    parseGitStatus(knownFiles);
+
   const allFiles = [...staged, ...unstaged, ...untracked, ...deleted];
 
-  // Deduplicate features — normalize leading dot so ".github" and "github" are the same
+  // Deduplicate features
   const features = [
     ...new Set(
       allFiles
-        .map((f) => f.feature.replace(/^\./, "")) // strip leading dot for dedup
+        .map((f) => f.feature.replace(/^\./, ""))
         .filter((f) => f !== "root" && f !== "config" && f !== "github"),
     ),
   ];
-
-  // Re-add "github" once if any .github files are present
   const hasGithubFiles = allFiles.some(
     (f) => f.feature === ".github" || f.feature === "github",
   );
@@ -332,6 +347,12 @@ function analyze() {
     branch: { current: currentBranch, isProtected },
     changes: { staged, unstaged, untracked, deleted },
     summary: { total, features, hasTests, hasConfig },
+    // knownFiles summary — helps orchestrator track what was in scope
+    scope: {
+      knownFilesActive: knownFiles !== null,
+      knownCount: knownFiles ? knownFiles.size : null,
+      skippedArtifacts: skipped,
+    },
   };
 
   process.stdout.write(JSON.stringify(result, null, 2) + "\n");
@@ -393,6 +414,65 @@ function summary(flags) {
     process.stderr.write(`git log failed: ${err.message}\n`);
     process.exit(1);
   }
+
+  // ── Post-commit safety check with known-files guard ──
+  try {
+    // Parse known-files whitelist from flag (comma-separated paths)
+    const knownFilesArg = flags["known-files"];
+    const knownFiles = knownFilesArg
+      ? new Set(
+          knownFilesArg
+            .split(",")
+            .map((f) => f.trim())
+            .filter(Boolean),
+        )
+      : null;
+
+    const { staged, unstaged, untracked, deleted, skipped } =
+      parseGitStatus(knownFiles);
+
+    const leftover = [...staged, ...unstaged, ...untracked, ...deleted].map(
+      (f) => f.path,
+    );
+
+    if (leftover.length === 0 && skipped.length === 0) {
+      process.stdout.write(
+        "\n✅ Working tree is clean — all changes committed.\n",
+      );
+      // Emit machine-readable result for orchestrator
+      process.stdout.write(
+        "\n__LEFTOVER__:" + JSON.stringify({ known: [], artifacts: [] }) + "\n",
+      );
+      return;
+    }
+
+    if (leftover.length > 0) {
+      process.stdout.write(
+        "\n⚠️  " +
+          leftover.length +
+          " known file(s) still uncommitted — proposing next commit round:\n",
+      );
+      leftover.forEach((f) => process.stdout.write("   • " + f + "\n"));
+    }
+
+    if (skipped.length > 0) {
+      process.stdout.write(
+        "\n🚫 " +
+          skipped.length +
+          " file(s) detected but NOT in original scope (artifact guard — skipped):\n",
+      );
+      skipped.forEach((f) => process.stdout.write("   ○ " + f + "\n"));
+    }
+
+    // Emit machine-readable result for orchestrator semi-auto loop
+    process.stdout.write(
+      "\n__LEFTOVER__:" +
+        JSON.stringify({ known: leftover, artifacts: skipped }) +
+        "\n",
+    );
+  } catch {
+    // non-fatal
+  }
 }
 
 // ─── --create-branch ──────────────────────────────────────────────────────────
@@ -419,7 +499,7 @@ function createBranch(flags) {
 const flags = parseArgs();
 
 if (flags["analyze"]) {
-  analyze();
+  analyze(flags);
 } else if (flags["commit"]) {
   commit(flags);
 } else if (flags["summary"]) {
@@ -430,8 +510,9 @@ if (flags["analyze"]) {
   process.stderr.write(
     "Usage:\n" +
       "  node flow-commit.mjs --analyze\n" +
+      '  node flow-commit.mjs --analyze --known-files "f1,f2"  (re-scan, known-files only)\n' +
       '  node flow-commit.mjs --commit --files "f1.ts,f2.tsx" --message "feat(scope): desc"\n' +
-      "  node flow-commit.mjs --summary [--count 5]\n" +
+      '  node flow-commit.mjs --summary [--count 5] [--known-files "f1,f2"]\n' +
       '  node flow-commit.mjs --create-branch --name "feature/slug"\n',
   );
   process.exit(1);

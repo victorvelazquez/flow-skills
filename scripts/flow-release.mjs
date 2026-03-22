@@ -45,7 +45,7 @@ function context() {
   // ── Branch ────────────────────────────────────────────────────────────────
   const branch = runSafe("git branch --show-current");
   const currentBranch = branch.ok ? branch.output : "unknown";
-  const RELEASE_BRANCHES = ["main", "master", "development"];
+  const RELEASE_BRANCHES = ["main", "master", "development", "develop"];
   const isReleaseBranch = RELEASE_BRANCHES.includes(currentBranch);
 
   // ── Remote ────────────────────────────────────────────────────────────────

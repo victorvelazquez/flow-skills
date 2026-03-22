@@ -6,9 +6,25 @@ Format: [Conventional Commits](https://www.conventionalcommits.org/) — `feat`,
 
 ---
 
+## [0.1.0] — 2026-03-22
+
+### Added
+
+- `flow-skills` skill — `flow-skills.mjs` script for LLM token offloading; safe publish via release branch workflow
+
+### Changed
+
+- `flow-build` skill — added `--context`, `--entity-scan`, `--smart-skip`, `--write-cache` script flags
+- `flow-build` skill — fixed `deployment.md` → `operations.md` references, removed dead refs, trimmed phase bleed
+- `flow-build` skill — fixed malformed cache reason distinction in `--smart-skip`; gitignore cache dir
+- `install.mjs` — emit `exported:` prefix per file in `--export` mode
+
+---
+
 ## [0.0.1] — 2026-03-18
 
 ### Changed
+
 - Extracted shared helpers module (`scripts/lib/helpers.mjs`) and synced `PROTECTED_BRANCHES` across all scripts
 - Removed hardcoded Windows absolute paths from `skills/flow-skills/SKILL.md`, replaced with `git rev-parse --show-toplevel`
 - Fixed `install.mjs` to recursively copy `scripts/lib/` subdirectory via `collectFiles()`

@@ -28,7 +28,7 @@ Parse JSON: `git` (branch, isReleaseBranch, isClean, dirtyFiles, hasOrigin), `ve
 
 **Pre-flight — abort if:**
 
-- `git.branch !== 'development'` → abort: `"❌ Release must start from 'development' branch. Current: {branch}. Please switch to development first."`
+- `git.branch !== 'development' && git.branch !== 'develop'` → abort: `"❌ Release must start from 'development' or 'develop' branch. Current: {branch}. Please switch to the integration branch first."`
 - `git.isClean` is false → abort and show dirtyFiles
 - `git.hasOrigin` is false → abort
 
@@ -93,7 +93,7 @@ Updates `package.json` (and `package-lock.json`) via `npm version --no-git-tag-v
 
 Show before executing (ASCII box: old→new, bump type, date, files to update, git actions):
 
-- Base branch: `development`
+- Base branch: `development` or `develop`
 - Release branch: `release/vX.Y.Z` (will be created)
 
 Wait for user confirmation.
@@ -104,7 +104,7 @@ Wait for user confirmation.
 
 After confirmation:
 
-1. Create and checkout the release branch from `development`:
+1. Create and checkout the release branch from `development` or `develop`:
 
    ```
    git checkout -b release/vX.Y.Z
@@ -118,7 +118,7 @@ After confirmation:
 
    Performs: `git add` → `git commit "chore(release): bump version to X.Y.Z"` → `git tag -a vX.Y.Z` → `git push -u origin release/vX.Y.Z` → `git push origin vX.Y.Z`.
 
-   > All commits go on `release/vX.Y.Z`. Do NOT push to `development` or `main` — the release branch is a PR candidate.
+   > All commits go on `release/vX.Y.Z`. Do NOT push to `development`/`develop` or `main` — the release branch is a PR candidate.
 
 Parse result: check each `step.ok`. Report failures.
 
@@ -133,7 +133,7 @@ Release v<new> prepared on branch release/v<new>.
   ⚠️  Open a PR: release/v<new> → main
 ```
 
-`--dry-run`: Stage 1 + Stage 2 analysis only. Show panel. Branch `release/vX.Y.Z` would be created from `development` — no git operations executed. State "Dry-run complete — no changes made."
+`--dry-run`: Stage 1 + Stage 2 analysis only. Show panel. Branch `release/vX.Y.Z` would be created from `development` or `develop` — no git operations executed. State "Dry-run complete — no changes made."
 
 ---
 
