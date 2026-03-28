@@ -55,7 +55,10 @@ Parse JSON: `files`, `modules`, `hasTests`, `detectionMethod`, `truncated`, `mon
 node "$SCRIPT" --run-all
 ```
 
-Returns the aggregated report JSON directly: `{ passed, failed, errored, skipped, overallStatus, summary, details }`.
+Returns the aggregated report JSON directly: `{ passed, failed, errored, skipped, overallStatus, summary, totalDuration, ranAt, details }`.
+
+Each entry in `details` includes: `tool`, `status`, `duration`, `keyLines` (first 20 relevant lines), `stdout`, `stderr`.
+Read `keyLines` first — only fall back to `stdout`/`stderr` if you need more context.
 
 **Option B — individual calls (issue all simultaneously for parallel execution):**
 
@@ -138,16 +141,16 @@ Severity scale: `CRITICAL` (must fix) | `WARN` (fix before merge) | `INFO` (sugg
 Emit a structured report with these exact sections:
 
 ```
-## [AUTOMATED]
+## [AUTOMATED] — <total duration>ms
 
-- Lint:      ✅ passed | ❌ failed (<N> errors) | ⚠️ error (tool not found) | ⏭ skipped
-- Typecheck: ✅ passed | ❌ failed (<N> errors) | ⚠️ error (tool not found) | ⏭ skipped
-- Tests:     ✅ passed | ❌ failed (<N> failed)  | ⚠️ error (tool not found) | ⏭ skipped
-- Format:    ✅ passed | ❌ failed (<N> files)   | ⚠️ error (tool not found) | ⏭ skipped
-- Coverage:  ✅ passed | ❌ failed (below threshold) | ⚠️ error | ⏭ skipped
-- Security:  ✅ passed | ❌ failed (<N> vulns)   | ⚠️ error | ⏭ skipped
+- Lint:      ✅ passed (<N>ms) | ❌ failed (<N> errors, <N>ms) | ⚠️ error (tool not found) | ⏭ skipped
+- Typecheck: ✅ passed (<N>ms) | ❌ failed (<N> errors, <N>ms) | ⚠️ error (tool not found) | ⏭ skipped
+- Tests:     ✅ passed (<N>ms) | ❌ failed (<N> failed, <N>ms)  | ⚠️ error (tool not found) | ⏭ skipped
+- Format:    ✅ passed (<N>ms) | ❌ failed (<N> files, <N>ms)   | ⚠️ error (tool not found) | ⏭ skipped
+- Coverage:  ✅ passed (<N>ms) | ❌ failed (below threshold, <N>ms) | ⚠️ error | ⏭ skipped
+- Security:  ✅ passed (<N>ms) | ❌ failed (<N> vulns, <N>ms)   | ⚠️ error | ⏭ skipped
 
-<Paste key error lines if any tool failed — truncate to 20 lines max>
+<For each failed tool: paste keyLines from the result — max 20 lines>
 <For status "error": explain which tool binary was not found and how to install it>
 
 ## [REVIEW] — <N> files reviewed
@@ -166,9 +169,19 @@ Emit a structured report with these exact sections:
 PASS | WARN | FAIL | SKIP
 
 Reason: <one sentence>
-Next steps:
-1. <actionable item>
-2. <actionable item>
+
+## [ACTION PLAN]
+
+🤖 Auto-fixable NOW (`node "$SCRIPT" --fix --auto-only`):
+- <issue from REVIEW with fixable: auto, or "none">
+
+🧠 LLM-assisted (I can patch these, verify after):
+- <issue from REVIEW with fixable: llm, or "none">
+
+🧑 Manual only (needs your judgment):
+- <issue from REVIEW with fixable: manual, or "none">
+
+⏱ Estimated effort: ~<X> min auto + ~<Y> min manual
 ```
 
 **VERDICT rules:**
@@ -183,6 +196,13 @@ Next steps:
 - `fixable: auto` → can be fixed by running `--fix --auto-only` (lint rules, formatting)
 - `fixable: llm` → LLM can propose a patch, then re-run tools to verify (missing error handling, simple type fixes)
 - `fixable: manual` → requires human judgment (auth logic, race conditions, architecture decisions)
+
+**ACTION PLAN rules:**
+
+- Only list items that appear in `[REVIEW]` — never invent new issues here
+- If a section has no items, write "none" — never omit the section
+- Effort estimate: auto fixes ≈ 1 min per item; llm fixes ≈ 5–15 min each; manual ≈ 30+ min each
+- If VERDICT is PASS, all three sections should read "none" and effort is "0 min"
 
 ---
 

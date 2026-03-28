@@ -6,6 +6,27 @@ Format: [Conventional Commits](https://www.conventionalcommits.org/) — `feat`,
 
 ---
 
+## [0.2.0] — 2026-03-28
+
+### Added
+
+- `flow-build` skill — Playbook Mode (35-50 min) for projects using the shared engineering playbook; 5 new phase files (`phase-3-playbook`, `phase-4-playbook`, `phase-5-playbook`, `phase-6-playbook`, `phase-8-playbook`)
+- `flow-playbook-sync` skill — new skill for syncing the shared engineering playbook across projects
+- `flow-pr` skill — new skill for pushing branches and creating GitHub PRs with AI-generated descriptions
+- `playbook/` — shared engineering playbook (backend-stack, api-contract, testing-strategy, infra-stack, mobile-stack)
+- `skills/flow-build/REFACTOR-PROMPT.md` — master prompt for systematic phase refactoring
+
+### Changed
+
+- `flow-build` skill — complete DX refactor of all 9 phases (Standalone Mode): AI proposes, dev approves; ~55% line reduction; estimated flow time reduced from 75-90 min to 30-45 min
+- `flow-build` skill — SKILL.md rewritten with explicit Playbook Mode vs Standalone Mode separation
+- `flow-build` phases — eliminated cross-phase question duplication, converted technical questions to visible smart defaults (✅), added `🧠 AI:` inference directives throughout
+- `flow-audit` skill — updated
+- `flow-commit` skill — updated
+- `flow-skills` skill — updated workflow for main-branch publish
+
+---
+
 ## [0.1.0] — 2026-03-22
 
 ### Added

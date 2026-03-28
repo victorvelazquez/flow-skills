@@ -1,6 +1,6 @@
 {
   "name": "flow-skills",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Flow skills for OpenCode — git workflow automation, documentation, and release management",
   "type": "module",
   "scripts": {},

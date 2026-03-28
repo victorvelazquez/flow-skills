@@ -15,11 +15,11 @@ When the user invokes `/flow-skills` or asks to publish, update, or install flow
 **Script paths — resolve once before starting:**
 
 ```bash
-SCRIPT=$(node -e "const os=require('os'),path=require('path');console.log(path.join(os.homedir(),'.config','opencode','scripts','flow-release.mjs'))")
+SCRIPT=$(node -e "const os=require('os'),path=require('path');console.log(path.join(os.homedir(),'.config','opencode','scripts','flow-pr.mjs'))")
 FS_SCRIPT=$(node -e "const os=require('os'),path=require('path');console.log(path.join(os.homedir(),'.config','opencode','scripts','flow-skills.mjs'))")
 ```
 
-`$SCRIPT` is used in Mode A for versioning and release. `$FS_SCRIPT` is used in Steps 1, Mode A (A1–A2), and Mode B.
+`$SCRIPT` is used in Mode A for versioning (version bump only). `$FS_SCRIPT` is used in Steps 1, Mode A (A1–A2), and Mode B.
 
 ### Step 1 — Detect context
 
@@ -31,12 +31,12 @@ node "$FS_SCRIPT" --context
 
 Store the full JSON output as `CONTEXT_JSON`. Read the `mode` field:
 
-| `mode` value | Action |
-|---|---|
-| `"publish"` | Proceed to Mode A |
-| `"update"` | Proceed to Mode B |
-| `"install"` | Proceed to Mode C |
-| `"synced"` | Report "✅ Everything is up to date. No action needed." and stop |
+| `mode` value | Action                                                           |
+| ------------ | ---------------------------------------------------------------- |
+| `"publish"`  | Proceed to Mode A                                                |
+| `"update"`   | Proceed to Mode B                                                |
+| `"install"`  | Proceed to Mode C                                                |
+| `"synced"`   | Report "✅ Everything is up to date. No action needed." and stop |
 
 If the user explicitly requests a different mode than detected, honor their request.
 
@@ -63,14 +63,16 @@ Show the `count` and `files` from the JSON result.
 Read `json.files` from the `--run-export` response. Store as `EXPORT_FILES` (array of relative repo paths).
 
 If `json.nothing === true` → **abort**:
+
 > ❌ Nothing to publish. No skill files have changed since the last export.
->    Make changes in OpenCode first, then re-run /flow-skills → Publish.
+> Make changes in OpenCode first, then re-run /flow-skills → Publish.
 
 For subsequent references to changed files (e.g. in the confirmation panel), use `git diff --name-only` — do NOT call `--run-export` again.
 
 **Step A3 — Read release context (from Step 1 CONTEXT_JSON):**
 
 Context was already gathered in Step 1. Read these fields from `CONTEXT_JSON`:
+
 - `git.branch` — current branch name
 - `git.hasOrigin` — remote configured? (boolean)
 - `git.remoteUrl` — origin remote URL (for reference)
@@ -82,7 +84,7 @@ Context was already gathered in Step 1. Read these fields from `CONTEXT_JSON`:
 
 - `git.branch !== 'main'` → abort:
   > ❌ Publish must run from main. Current branch: {git.branch}.
-  >    Run: git checkout main
+  > Run: git checkout main
 - `git.hasOrigin === false` → abort:
   > ❌ No remote origin configured. Cannot push release branch.
 
@@ -92,8 +94,8 @@ Analyze `version.commitsSinceTag` from `CONTEXT_JSON`.
 
 > 💡 `version.suggestedBump` from `CONTEXT_JSON` is a **hint based on commit message prefix patterns**. You MUST analyze the commit messages semantically before accepting or overriding it. A commit like `"chore: add new flow-docs-sync skill"` may warrant MINOR even without a `feat:` prefix.
 
-| Signals | Bump |
-|---------|------|
+| Signals                                            | Bump  |
+| -------------------------------------------------- | ----- |
 | `BREAKING CHANGE`, `!` after type, removed exports | MAJOR |
 | `feat(...)`, new skills/commands, new capabilities | MINOR |
 | `fix(...)`, `chore(...)`, `docs:`, `refactor(...)` | PATCH |
@@ -129,6 +131,62 @@ Include only sections that have content. Date: today (YYYY-MM-DD).
 
 ```bash
 node "$SCRIPT" --update-version --version X.Y.Z
+```
+
+**Step A8 — Confirmation panel:**
+
+Show this panel and wait for user approval before proceeding:
+
+```
+╔══════════════════════════════════════════════════════╗
+║              flow-skills — Publish Release           ║
+╠══════════════════════════════════════════════════════╣
+║  Version:  {current}  →  {new}  ({BUMP_TYPE})        ║
+║  Branch:   main  (version commit goes here)          ║
+║  Tag:      v{new}  (created by CI/CD after merge)    ║
+║  Date:     {YYYY-MM-DD}                              ║
+╠══════════════════════════════════════════════════════╣
+║  Files to commit:                                    ║
+║    package.json                                      ║
+║    CHANGELOG.md                                      ║
+║    {each file from EXPORT_FILES, one per line}       ║
+╠══════════════════════════════════════════════════════╣
+║  CHANGELOG preview:                                  ║
+║    {first 4 lines of the generated entry}            ║
+╠══════════════════════════════════════════════════════╣
+║  Git actions:                                        ║
+║    git add <files>                                   ║
+║    git commit "chore(release): bump version to {new}"║
+║    git push origin main                              ║
+╚══════════════════════════════════════════════════════╝
+Proceed? (yes / no)
+```
+
+If the user says no → abort. No files have been changed yet.
+
+**Step A9 — Commit the version bump:**
+
+Build the `--files` argument: `package.json` and `CHANGELOG.md` always come first, followed by all files from `EXPORT_FILES` joined with commas.
+
+```bash
+node "$SCRIPT" --commit-version --version X.Y.Z \
+  --files "package.json,CHANGELOG.md,{EXPORT_FILES comma-joined}"
+```
+
+Parse the JSON result. Check each `step.ok`. If any step failed, show the failure and stop.
+
+**Step A10 — Push and summary:**
+
+```bash
+git push origin main
+```
+
+If push fails due to branch protection, the flow-skills repo uses `main` directly. If protected, open a PR manually.
+
+```
+Release v{new} committed on main.
+  Updated: {files}  |  Commit: chore(release): bump version to {new}
+  🏷️  Tag v{new} will be created by CI/CD after the commit is on main.
 ```
 
 **Step A8 — Confirmation panel:**
@@ -182,9 +240,10 @@ node "$SCRIPT" --execute --version X.Y.Z \
 Parse the JSON result. Check each `step.ok`. If any step failed, show the failure and stop.
 
 If the `git-tag` step fails with "tag already exists":
+
 > ❌ Tag v{version} already exists. To fix:
->    git tag -d v{version} && git push origin --delete v{version}
->    Then re-run Publish to try again.
+> git tag -d v{version} && git push origin --delete v{version}
+> Then re-run Publish to try again.
 
 **Step A11 — PR instruction:**
 
@@ -211,6 +270,7 @@ node "$FS_SCRIPT" --update
 ```
 
 Read the JSON result:
+
 - If `json.ok === true`:
   Show `json.pull.output` (commits pulled / "Already up to date.").
   ✅ Update complete. Restart OpenCode to load the updated skills.

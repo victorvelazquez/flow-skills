@@ -7,7 +7,9 @@
  *   --detect                              Auto-detect project toolchain → JSON
  *   --scope [path]                        Determine audit scope from git → JSON
  *   --run lint|typecheck|test [--scope p] Run a specific tool → JSON
- *   --report                              Aggregate results from stdin → JSON
+ *   --run-all                             Run all tools in parallel → aggregated JSON
+ *   --report                              Aggregate results from stdin/file → JSON
+ *   --fix [--auto-only]                   Auto-fix lint + format, then re-verify → JSON
  */
 
 import { execSync, spawnSync, spawn } from "child_process";
@@ -38,9 +40,97 @@ function existsGlob(pattern) {
   }
 }
 
-// ─── --detect ─────────────────────────────────────────────────────────────────
+/**
+ * Extract the first N meaningful lines from a raw tool output string.
+ * Strips empty lines and ANSI escape codes. Used to populate `keyLines`
+ * in the result JSON so the LLM doesn't need to parse thousands of raw lines.
+ *
+ * @param {string} output — raw stdout or stderr
+ * @param {number} [max=20] — max lines to return
+ * @returns {string[]}
+ */
+function extractKeyLines(output, max = 20) {
+  if (!output) return [];
+  // Strip ANSI escape codes
+  const clean = output.replace(/\x1B\[[0-9;]*[mGKHF]/g, "");
+  return clean
+    .split("\n")
+    .map((l) => l.trimEnd())
+    .filter(Boolean)
+    .slice(0, max);
+}
 
-function detect() {
+/**
+ * Aggregate an array of tool result objects into the standard report shape.
+ * Shared by runAll() and report() — single source of truth.
+ *
+ * @param {Array<{tool: string, status: string, duration?: number, stdout?: string, stderr?: string}>} results
+ * @param {number} [startTime] — epoch ms when the run started (for totalDuration)
+ * @returns {{ passed, failed, errored, skipped, overallStatus, summary, totalDuration, ranAt, details }}
+ */
+function aggregateResults(results, startTime) {
+  const passed = results
+    .filter((r) => r.status === "passed")
+    .map((r) => r.tool);
+  const failed = results
+    .filter((r) => r.status === "failed")
+    .map((r) => r.tool);
+  const errored = results
+    .filter((r) => r.status === "error")
+    .map((r) => r.tool);
+  const skipped = results
+    .filter((r) => r.status === "skipped")
+    .map((r) => r.tool);
+
+  const summaryParts = [];
+  if (passed.length) summaryParts.push(`passed: ${passed.join(", ")}`);
+  if (failed.length) summaryParts.push(`FAILED: ${failed.join(", ")}`);
+  if (errored.length)
+    summaryParts.push(`ERROR (could not run): ${errored.join(", ")}`);
+  if (skipped.length) summaryParts.push(`skipped: ${skipped.join(", ")}`);
+
+  // SKIP only when ALL tools were skipped (none configured at all)
+  const overallStatus =
+    failed.length > 0 || errored.length > 0
+      ? "FAIL"
+      : skipped.length === results.length
+        ? "SKIP"
+        : "PASS";
+
+  const totalDuration = startTime != null ? Date.now() - startTime : null;
+
+  // Enrich each detail entry with keyLines (first 20 meaningful lines)
+  const details = results.map((r) => ({
+    ...r,
+    keyLines: extractKeyLines(
+      (r.stdout || "") + (r.stderr ? "\n" + r.stderr : ""),
+    ),
+  }));
+
+  return {
+    passed,
+    failed,
+    errored,
+    skipped,
+    overallStatus,
+    summary: summaryParts.join(" | ") || "No results",
+    totalDuration,
+    ranAt: new Date().toISOString(),
+    details,
+  };
+}
+
+// ─── buildToolchain ───────────────────────────────────────────────────────────
+
+/**
+ * Build the toolchain config object directly (no subprocess).
+ * Previously each of runTool(), runAll(), fix() would spawn a child process
+ * to call --detect, adding ~100-300ms overhead per call.
+ *
+ * This function is the single source of truth for command resolution.
+ * detect() now calls this and emits the result to stdout.
+ */
+function buildToolchain() {
   const cwd = process.cwd();
   const pkg = readJsonFile("package.json");
   const scripts = (pkg && pkg.scripts) || {};
@@ -49,31 +139,22 @@ function detect() {
     ...(pkg && pkg.devDependencies),
   };
 
-  // Delegate name detection to shared module
   const tooling = detectTooling(cwd);
 
-  // ── Derive commands from detected names ────────────────────────────────────
-  // ── Monorepo-aware command builder ──────────────────────────────────────────
-  // When running from monorepo root, use recursive package-manager commands
-  // with --if-present (pnpm) or equivalent so workspaces without a script
-  // are silently skipped. Stays agnostic to npm / pnpm / yarn / bun.
   const isMonorepoRoot =
     exists("pnpm-workspace.yaml") ||
     exists("turbo.json") ||
     exists("nx.json") ||
     exists("lerna.json");
 
-  // Package-manager-aware recursive runner (agnostic)
-  const pm = tooling.packageManager; // "pnpm" | "npm" | "yarn" | "bun" | null
+  const pm = tooling.packageManager;
   const monoRun = (scriptName) => {
     if (pm === "pnpm") return `pnpm -r --if-present ${scriptName}`;
     if (pm === "yarn") return `yarn workspaces run ${scriptName}`;
     if (pm === "bun") return `bun run --filter '*' ${scriptName}`;
-    // npm workspaces (npm >=7) — --if-present not supported, use --workspaces
     return `npm run ${scriptName} --workspaces --if-present`;
   };
 
-  // Package-manager-aware local exec (for tools like prettier not in PATH)
   const pmExec = (cmd) => {
     if (pm === "pnpm") return `pnpm exec ${cmd}`;
     if (pm === "yarn") return `yarn exec ${cmd}`;
@@ -166,12 +247,11 @@ function detect() {
       break;
   }
 
-  // Type checker detection — monorepo-aware, package-manager-agnostic
+  // Type checker commands
   let typeChecker = null;
   let typeCommand = null;
 
   if (isMonorepoRoot) {
-    // Any monorepo (pnpm/npm/yarn/bun): run typecheck recursively
     typeChecker = "tsc";
     typeCommand =
       scripts["typecheck"] || scripts["type-check"] || monoRun("typecheck");
@@ -199,7 +279,7 @@ function detect() {
     typeCommand = "go build ./...";
   }
 
-  // Formatter commands — monorepo-aware, pm-agnostic
+  // Formatter commands
   let formatCommand = null;
   switch (tooling.formatter) {
     case "prettier":
@@ -225,7 +305,7 @@ function detect() {
       break;
   }
 
-  // Coverage commands — monorepo-aware, pm-agnostic
+  // Coverage commands
   let coverageCommand = null;
   switch (tooling.coverage) {
     case "vitest-coverage":
@@ -285,7 +365,7 @@ function detect() {
     }
   }
 
-  const result = {
+  return {
     testRunner: tooling.testRunner
       ? { name: tooling.testRunner, command: testCommand }
       : null,
@@ -312,7 +392,12 @@ function detect() {
       exists("nx.json") ||
       exists("lerna.json"),
   };
+}
 
+// ─── --detect ─────────────────────────────────────────────────────────────────
+
+function detect() {
+  const result = buildToolchain();
   process.stdout.write(JSON.stringify(result, null, 2) + "\n");
 }
 
@@ -545,15 +630,8 @@ function runTool(flags) {
     process.exit(1);
   }
 
-  // Detect toolchain first
-  let toolchain = null;
-  try {
-    const detectOut = run(`node "${import.meta.filename}" --detect`);
-    toolchain = JSON.parse(detectOut);
-  } catch (err) {
-    process.stderr.write(`detect failed: ${err.message}\n`);
-    process.exit(1);
-  }
+  // Build toolchain directly — no subprocess overhead
+  const toolchain = buildToolchain();
 
   let command = null;
   let toolName = tool;
@@ -589,6 +667,7 @@ function runTool(flags) {
       exitCode: null,
       stdout: "",
       stderr: `Tool '${tool}' not detected or not configured in this project.`,
+      keyLines: [],
       duration: 0,
       status: "skipped",
     };
@@ -621,16 +700,33 @@ function runTool(flags) {
       stderr = `Execution failed: ${err.message}`;
       stdout = "";
     } else {
-      status = "failed"; // tool ran and found issues
-      // For lint/typecheck, output usually comes through stderr channel
-      // Keep both streams intact so the LLM can read either
-      const rawOutput = (err.stderr || err.message || "").trim();
-      stdout = rawOutput.includes("\n") ? rawOutput : "";
-      stderr = stdout ? "" : rawOutput;
+      // Also check stderr/message for "binary not found" patterns that execSync
+      // surfaces as a non-zero exit WITHOUT setting err.code = ENOENT on Windows.
+      // Covers: CMD English ("is not recognized"), CMD Spanish ("no se reconoce"),
+      // sh/bash ("command not found"), PowerShell ("is not recognized as the name").
+      const rawStderr = (err.stderr || "").trim();
+      const rawMessage = (err.message || "").trim();
+      const combinedRaw = (rawStderr + " " + rawMessage).toLowerCase();
+      const isWindowsNotFound =
+        combinedRaw.includes("is not recognized") ||
+        combinedRaw.includes("no se reconoce") ||
+        combinedRaw.includes("command not found") ||
+        combinedRaw.includes("no such file");
+      if (isWindowsNotFound) {
+        status = "error";
+        stderr = `Execution failed: ${rawStderr || rawMessage}`;
+        stdout = "";
+      } else {
+        status = "failed"; // tool ran and found issues
+        // Preserve stdout and stderr independently — no swapping heuristics
+        stdout = (err.stdout || "").trim();
+        stderr = rawStderr || rawMessage;
+      }
     }
   }
 
   const duration = Date.now() - start;
+  const combinedOutput = [stdout, stderr].filter(Boolean).join("\n");
 
   const result = {
     tool: toolName,
@@ -638,6 +734,7 @@ function runTool(flags) {
     exitCode,
     stdout,
     stderr,
+    keyLines: extractKeyLines(combinedOutput),
     duration,
     status,
   };
@@ -691,46 +788,9 @@ function report() {
     }
   }
 
-  const passed = results
-    .filter((r) => r.status === "passed")
-    .map((r) => r.tool);
-  const failed = results
-    .filter((r) => r.status === "failed")
-    .map((r) => r.tool);
-  const errored = results
-    .filter((r) => r.status === "error")
-    .map((r) => r.tool);
-  const skipped = results
-    .filter((r) => r.status === "skipped")
-    .map((r) => r.tool);
+  const aggregated = aggregateResults(results);
 
-  const summaryParts = [];
-  if (passed.length) summaryParts.push(`passed: ${passed.join(", ")}`);
-  if (failed.length) summaryParts.push(`FAILED: ${failed.join(", ")}`);
-  if (errored.length)
-    summaryParts.push(`ERROR (could not run): ${errored.join(", ")}`);
-  if (skipped.length) summaryParts.push(`skipped: ${skipped.join(", ")}`);
-
-  // SKIP only when ALL tools were skipped (none configured at all)
-  // ERROR = at least one tool could not execute (different from "found issues")
-  const overallStatus =
-    failed.length > 0 || errored.length > 0
-      ? "FAIL"
-      : skipped.length === results.length
-        ? "SKIP"
-        : "PASS";
-
-  const result = {
-    passed,
-    failed,
-    errored,
-    skipped,
-    overallStatus,
-    summary: summaryParts.join(" | ") || "No results",
-    details: results,
-  };
-
-  process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+  process.stdout.write(JSON.stringify(aggregated, null, 2) + "\n");
 
   // Auto-update .flow-skills/work/status.json if it exists in the project
   const statusJsonPath = path.join(
@@ -743,18 +803,18 @@ function report() {
     try {
       const statusJson = JSON.parse(fs.readFileSync(statusJsonPath, "utf8"));
       if (!statusJson.validation) statusJson.validation = {};
-      statusJson.validation.lastCheck = new Date().toISOString();
-      statusJson.validation.overallStatus = result.overallStatus;
+      statusJson.validation.lastCheck = aggregated.ranAt;
+      statusJson.validation.overallStatus = aggregated.overallStatus;
       if (!statusJson.finalChecklist) statusJson.finalChecklist = {};
       statusJson.finalChecklist.qualityCheckPassed =
-        result.overallStatus === "PASS";
+        aggregated.overallStatus === "PASS";
       fs.writeFileSync(
         statusJsonPath,
         JSON.stringify(statusJson, null, 2) + "\n",
         "utf8",
       );
       process.stderr.write(
-        `status.json updated: validation.overallStatus=${result.overallStatus}\n`,
+        `status.json updated: validation.overallStatus=${aggregated.overallStatus}\n`,
       );
     } catch (err) {
       process.stderr.write(
@@ -767,23 +827,20 @@ function report() {
 // ─── --run-all ────────────────────────────────────────────────────────────────
 
 /**
- * Runs lint, typecheck, test (+ format and coverage if detected) in true
- * parallel using child_process.spawn + Promise.all. This avoids the 3× detect
- * overhead of individual --run calls and removes the parallelism dependency on
- * the LLM agent issuing calls simultaneously.
+ * Runs lint, typecheck, test (+ format, coverage, security if detected) in true
+ * parallel using child_process.spawn + Promise.all.
  *
- * Returns the aggregated --report JSON directly.
+ * Previously called `--detect` via subprocess three times (once per caller).
+ * Now uses buildToolchain() directly — no subprocess overhead.
+ *
+ * Returns the aggregated report JSON including totalDuration, ranAt, and
+ * keyLines per tool result.
  */
 async function runAll(flags) {
-  // Detect toolchain once
-  let toolchain = null;
-  try {
-    const detectOut = run(`node "${import.meta.filename}" --detect`);
-    toolchain = JSON.parse(detectOut);
-  } catch (err) {
-    process.stderr.write(`detect failed: ${err.message}\n`);
-    process.exit(1);
-  }
+  const startTime = Date.now();
+
+  // Build toolchain directly — no subprocess overhead
+  const toolchain = buildToolchain();
 
   // Build list of tools to run
   const tools = [
@@ -829,6 +886,7 @@ async function runAll(flags) {
           exitCode: null,
           stdout: "",
           stderr: `Tool '${toolDef.key}' not detected or not configured in this project.`,
+          keyLines: [],
           duration: 0,
           status: "skipped",
         });
@@ -851,12 +909,14 @@ async function runAll(flags) {
       child.on("error", (err) => {
         const isExecutionFailure =
           err.code === "ENOENT" || err.code === "EACCES";
+        const errMsg = `Execution failed: ${err.message}`;
         resolve({
           tool: toolDef.name,
           command: toolDef.command,
           exitCode: 1,
           stdout: "",
-          stderr: `Execution failed: ${err.message}`,
+          stderr: errMsg,
+          keyLines: extractKeyLines(errMsg),
           duration: Date.now() - start,
           status: isExecutionFailure ? "error" : "failed",
         });
@@ -864,19 +924,35 @@ async function runAll(flags) {
 
       child.on("close", (code) => {
         const exitCode = code ?? 1;
-        const rawOutput = (stderr || stdout).trim();
-        const resolvedStdout = rawOutput.includes("\n")
-          ? rawOutput
-          : stdout.trim();
-        const resolvedStderr = resolvedStdout ? "" : rawOutput;
+        const combinedOutput = [stdout.trim(), stderr.trim()]
+          .filter(Boolean)
+          .join("\n");
+
+        // Detect execution failure: binary not found / not in PATH
+        const isExecutionFailure =
+          exitCode !== 0 &&
+          (combinedOutput.toLowerCase().includes("command not found") ||
+            combinedOutput.toLowerCase().includes("is not recognized") ||
+            combinedOutput.toLowerCase().includes("no such file") ||
+            combinedOutput.toLowerCase().includes("enoent"));
+
         resolve({
           tool: toolDef.name,
           command: toolDef.command,
           exitCode,
-          stdout: resolvedStdout,
-          stderr: resolvedStderr,
+          // Keep stdout and stderr as independent fields — no swapping heuristics
+          stdout: isExecutionFailure ? "" : stdout.trim(),
+          stderr: isExecutionFailure
+            ? `Execution failed: binary not found — ${combinedOutput}`
+            : stderr.trim(),
+          keyLines: isExecutionFailure
+            ? extractKeyLines(
+                `Execution failed: binary not found — ${combinedOutput}`,
+              )
+            : extractKeyLines(combinedOutput),
           duration: Date.now() - start,
-          status: exitCode === 0 ? "passed" : "failed",
+          status:
+            exitCode === 0 ? "passed" : isExecutionFailure ? "error" : "failed",
         });
       });
     });
@@ -884,45 +960,10 @@ async function runAll(flags) {
   // Run all in parallel
   const results = await Promise.all(tools.map(runToolAsync));
 
-  // Aggregate (reuse report logic inline)
-  const passed = results
-    .filter((r) => r.status === "passed")
-    .map((r) => r.tool);
-  const failed = results
-    .filter((r) => r.status === "failed")
-    .map((r) => r.tool);
-  const errored = results
-    .filter((r) => r.status === "error")
-    .map((r) => r.tool);
-  const skipped = results
-    .filter((r) => r.status === "skipped")
-    .map((r) => r.tool);
+  // Aggregate using shared function
+  const aggregated = aggregateResults(results, startTime);
 
-  const summaryParts = [];
-  if (passed.length) summaryParts.push(`passed: ${passed.join(", ")}`);
-  if (failed.length) summaryParts.push(`FAILED: ${failed.join(", ")}`);
-  if (errored.length)
-    summaryParts.push(`ERROR (could not run): ${errored.join(", ")}`);
-  if (skipped.length) summaryParts.push(`skipped: ${skipped.join(", ")}`);
-
-  const overallStatus =
-    failed.length > 0 || errored.length > 0
-      ? "FAIL"
-      : skipped.length === results.length
-        ? "SKIP"
-        : "PASS";
-
-  const report = {
-    passed,
-    failed,
-    errored,
-    skipped,
-    overallStatus,
-    summary: summaryParts.join(" | ") || "No results",
-    details: results,
-  };
-
-  process.stdout.write(JSON.stringify(report, null, 2) + "\n");
+  process.stdout.write(JSON.stringify(aggregated, null, 2) + "\n");
 }
 
 // ─── --fix ────────────────────────────────────────────────────────────────────
@@ -939,15 +980,8 @@ async function runAll(flags) {
 async function fix(flags) {
   const autoOnly = flags["auto-only"] === true;
 
-  // Detect toolchain
-  let toolchain = null;
-  try {
-    const detectOut = run(`node "${import.meta.filename}" --detect`);
-    toolchain = JSON.parse(detectOut);
-  } catch (err) {
-    process.stderr.write(`detect failed: ${err.message}\n`);
-    process.exit(1);
-  }
+  // Build toolchain directly — no subprocess overhead
+  const toolchain = buildToolchain();
 
   const pkg = readJsonFile("package.json");
   const scripts = (pkg && pkg.scripts) || {};
