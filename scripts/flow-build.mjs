@@ -184,6 +184,13 @@ function modeDetect() {
   const isExistingProject =
     existingDocs.found >= 2 || exists("src") || exists("app") || exists("lib");
 
+  const playbookDetected =
+    exists("playbook") ||
+    exists(".agent/playbook") ||
+    exists("playbook/backend-stack.md") ||
+    exists("playbook/frontend-stack.md") ||
+    exists("playbook/api-contract.md");
+
   const result = {
     projectType,
     framework,
@@ -192,6 +199,7 @@ function modeDetect() {
     aiFlowExists,
     isExistingProject,
     existingDocs,
+    playbookDetected,
     suggestedScope:
       existingDocs.found >= 6
         ? "production"
@@ -290,6 +298,14 @@ function buildContextResult(cwd) {
       }
     }
   }
+
+  // Playbook detection
+  const playbookDetected =
+    exists("playbook") ||
+    exists(".agent/playbook") ||
+    exists("playbook/backend-stack.md") ||
+    exists("playbook/frontend-stack.md") ||
+    exists("playbook/api-contract.md");
 
   // Docker
   const dockerCandidates = [
@@ -399,6 +415,7 @@ function buildContextResult(cwd) {
     aiFlowExists,
     isExistingProject,
     existingDocs,
+    playbookDetected,
     suggestedScope,
     cwd: norm(cwd),
     // New context fields

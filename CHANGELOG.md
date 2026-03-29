@@ -6,6 +6,18 @@ Format: [Conventional Commits](https://www.conventionalcommits.org/) — `feat`,
 
 ---
 
+## [0.3.0] — 2026-03-29
+
+### Added
+
+- `flow-build` script — `playbookDetected` context field in both `modeDetect()` and `buildContextResult()` output; enables automatic Playbook Mode activation when a `playbook/` directory is present in the project
+
+### Changed
+
+- `flow-build` skill — updated SKILL.md with cleaner playbook phase notes; phase note now references playbook variants (`phase-N-playbook.md`) instead of specific file counts; added explicit playbook detection step in Phase 0
+
+---
+
 ## [0.2.0] — 2026-03-28
 
 ### Added
