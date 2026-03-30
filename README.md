@@ -13,7 +13,7 @@ A versioned repository of `flow-*` AI skills for [OpenCode](https://opencode.ai)
 | `flow-docs-sync` | Incremental documentation sync — detects changes, updates affected docs           |
 | `flow-finish`    | Generate professional PR description + Jira comment                               |
 | `flow-release`   | Semantic versioning + CHANGELOG + git tag + push                                  |
-| `flow-skills`    | Manage this repo — publish, update, or install skills conversationally            |
+| `flow-skills-sync` | Manage this repo — publish, update, or install skills conversationally          |
 
 ## Install
 
@@ -37,7 +37,7 @@ node install.mjs
 
 ### Or use the AI skill
 
-After installing, just type `/flow-skills` in OpenCode — it will detect context and offer to publish, update, or install for you.
+After installing, just type `/flow-skills-sync` in OpenCode — it will detect context and offer to publish, update, or install for you.
 
 ## Publish local changes
 
@@ -49,7 +49,7 @@ git commit -m "feat(...): ..."
 git push
 ```
 
-Or use `/flow-skills` in OpenCode for a guided conversational flow.
+Or use `/flow-skills-sync` in OpenCode for a guided conversational flow.
 
 ## Other commands
 

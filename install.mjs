@@ -192,7 +192,7 @@ function install(dryRun = false) {
     console.log(
       `  ${c.cyan("→")} Restart OpenCode to load the updated skills.`,
     );
-    console.log(`  ${c.cyan("→")} Use /flow-skills to manage updates anytime.`);
+    console.log(`  ${c.cyan("→")} Use /flow-skills-sync to manage updates anytime.`);
   }
   console.log("");
 }
