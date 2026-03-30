@@ -142,62 +142,6 @@ Show this panel and wait for user approval before proceeding:
 ║          flow-skills-sync — Publish Release          ║
 ╠══════════════════════════════════════════════════════╣
 ║  Version:  {current}  →  {new}  ({BUMP_TYPE})        ║
-║  Branch:   main  (version commit goes here)          ║
-║  Tag:      v{new}  (created by CI/CD after merge)    ║
-║  Date:     {YYYY-MM-DD}                              ║
-╠══════════════════════════════════════════════════════╣
-║  Files to commit:                                    ║
-║    package.json                                      ║
-║    CHANGELOG.md                                      ║
-║    {each file from EXPORT_FILES, one per line}       ║
-╠══════════════════════════════════════════════════════╣
-║  CHANGELOG preview:                                  ║
-║    {first 4 lines of the generated entry}            ║
-╠══════════════════════════════════════════════════════╣
-║  Git actions:                                        ║
-║    git add <files>                                   ║
-║    git commit "chore(release): bump version to {new}"║
-║    git push origin main                              ║
-╚══════════════════════════════════════════════════════╝
-Proceed? (yes / no)
-```
-
-If the user says no → abort. No files have been changed yet.
-
-**Step A9 — Commit the version bump:**
-
-Build the `--files` argument: `package.json` and `CHANGELOG.md` always come first, followed by all files from `EXPORT_FILES` joined with commas.
-
-```bash
-node "$SCRIPT" --commit-version --version X.Y.Z \
-  --files "package.json,CHANGELOG.md,{EXPORT_FILES comma-joined}"
-```
-
-Parse the JSON result. Check each `step.ok`. If any step failed, show the failure and stop.
-
-**Step A10 — Push and summary:**
-
-```bash
-git push origin main
-```
-
-If push fails due to branch protection, the flow-skills repo uses `main` directly. If protected, open a PR manually.
-
-```
-Release v{new} committed on main.
-  Updated: {files}  |  Commit: chore(release): bump version to {new}
-  🏷️  Tag v{new} will be created by CI/CD after the commit is on main.
-```
-
-**Step A8 — Confirmation panel:**
-
-Show this panel and wait for user approval before proceeding:
-
-```
-╔══════════════════════════════════════════════════════╗
-║          flow-skills-sync — Publish Release          ║
-╠══════════════════════════════════════════════════════╣
-║  Version:  {current}  →  {new}  ({BUMP_TYPE})        ║
 ║  Branch:   release/v{new}  (will be created)         ║
 ║  Tag:      v{new}                                    ║
 ║  Date:     {YYYY-MM-DD}                              ║
@@ -230,10 +174,10 @@ git checkout -b release/vX.Y.Z
 
 **Step A10 — Execute release:**
 
-Build the `--files` argument: `package.json` and `CHANGELOG.md` always come first, followed by all files from `EXPORT_FILES` joined with commas.
+Build the `--files` argument: `package.json` and `CHANGELOG.md` always come first, followed by all files from `EXPORT_FILES` joined with commas. If `package-lock.json` exists and is tracked by git, include it immediately after `package.json`.
 
 ```bash
-node "$SCRIPT" --execute --version X.Y.Z \
+node "$SCRIPT" --commit-version --version X.Y.Z \
   --files "package.json,CHANGELOG.md,{EXPORT_FILES comma-joined}"
 ```
 
@@ -285,8 +229,14 @@ Read the JSON result:
 ### Mode C — Install from scratch (new machine)
 
 ```bash
+# macOS / Linux
 git clone https://github.com/victorvelazquez/flow-skills.git ~/Developer/Tools/flow-skills
 cd ~/Developer/Tools/flow-skills
+node install.mjs
+
+# Windows (PowerShell)
+git clone https://github.com/victorvelazquez/flow-skills.git "$HOME\Developer\Tools\flow-skills"
+cd "$HOME\Developer\Tools\flow-skills"
 node install.mjs
 ```
 
@@ -297,6 +247,5 @@ Adapt the clone path to the user's OS if needed.
 ## Notes
 
 - The repo lives wherever you cloned it. The canonical remote is `https://github.com/victorvelazquez/flow-skills.git`.
-- Remote: `https://github.com/victorvelazquez/flow-skills.git`
 - Always run `node install.mjs --dry-run` first if the user wants to preview changes before installing.
 - After installing, restart OpenCode for the skills to take effect.
