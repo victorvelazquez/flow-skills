@@ -1,4 +1,4 @@
-# flow-skills — Skill Manager
+# flow-skills-sync — Skill Manager
 
 ## Description
 
@@ -6,7 +6,7 @@ Manages the `flow-skills` repository: publish local changes, update your machine
 
 ## Trigger
 
-When the user invokes `/flow-skills` or asks to publish, update, or install flow skills.
+When the user invokes `/flow-skills-sync` or asks to publish, update, or install flow skills.
 
 ---
 
@@ -65,7 +65,7 @@ Read `json.files` from the `--run-export` response. Store as `EXPORT_FILES` (arr
 If `json.nothing === true` → **abort**:
 
 > ❌ Nothing to publish. No skill files have changed since the last export.
-> Make changes in OpenCode first, then re-run /flow-skills → Publish.
+> Make changes in OpenCode first, then re-run /flow-skills-sync → Publish.
 
 For subsequent references to changed files (e.g. in the confirmation panel), use `git diff --name-only` — do NOT call `--run-export` again.
 
@@ -139,7 +139,7 @@ Show this panel and wait for user approval before proceeding:
 
 ```
 ╔══════════════════════════════════════════════════════╗
-║              flow-skills — Publish Release           ║
+║          flow-skills-sync — Publish Release          ║
 ╠══════════════════════════════════════════════════════╣
 ║  Version:  {current}  →  {new}  ({BUMP_TYPE})        ║
 ║  Branch:   main  (version commit goes here)          ║
@@ -195,7 +195,7 @@ Show this panel and wait for user approval before proceeding:
 
 ```
 ╔══════════════════════════════════════════════════════╗
-║              flow-skills — Publish Release           ║
+║          flow-skills-sync — Publish Release          ║
 ╠══════════════════════════════════════════════════════╣
 ║  Version:  {current}  →  {new}  ({BUMP_TYPE})        ║
 ║  Branch:   release/v{new}  (will be created)         ║
