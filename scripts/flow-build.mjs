@@ -685,19 +685,8 @@ function modeSmartSkip(flags) {
   const phaseNums = phaseFilter ? [phaseFilter] : [1, 2, 3, 4, 5, 6, 7];
   const phases = {};
 
-  // Resolve project type from cache (may be null if cache is absent/malformed)
-  const projectType = cacheData ? cacheData.projectType : null;
-
-  // Phase 2 doc differs by project type: frontend/mobile use api-contracts, others use data-model
-  const phase2Doc =
-    projectType === "frontend" || projectType === "mobile"
-      ? "docs/api-contracts.md"
-      : "docs/data-model.md";
-
-  const effectivePhaseDocFiles = { ...PHASE_DOC_FILES, 2: phase2Doc };
-
   for (const n of phaseNums) {
-    const docFile = effectivePhaseDocFiles[n];
+    const docFile = PHASE_DOC_FILES[n];
     const fileExists = docFile ? fs.existsSync(path.join(cwd, docFile)) : false;
 
     if (!cacheExists || !cacheData) {

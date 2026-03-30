@@ -14,6 +14,7 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import { fileURLToPath } from "url";
+import { execSync } from "child_process";
 
 // ─── Paths ────────────────────────────────────────────────────────────────────
 
@@ -273,9 +274,21 @@ function exportToRepo(dryRun = false) {
   // ── Scripts ──────────────────────────────────────────────────────────────────
   head("Scripts");
   if (fs.existsSync(OPENCODE.scripts)) {
+    const trackedScripts = new Set(
+      execSync("git ls-files scripts/", { cwd: REPO_DIR })
+        .toString().trim().split("\n")
+        .filter(Boolean)
+        .map(f => f.replace(/^scripts\//, "").replace(/\//g, path.sep))
+    );
+
     const scriptFiles = collectFiles(OPENCODE.scripts);
     for (const srcFile of scriptFiles) {
       const rel = path.relative(OPENCODE.scripts, srcFile);
+      const relNorm = rel.replace(/\\/g, "/");
+      if (!trackedScripts.has(rel) && !trackedScripts.has(relNorm) && !trackedScripts.has(path.basename(rel))) {
+        info(`${rel} — skipped (not tracked in repo)`);
+        continue;
+      }
       const dest = path.join(REPO.scripts, rel);
       const isNew = !fs.existsSync(dest);
       const isDiff =

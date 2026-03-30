@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * flow-skills.mjs — flow-skills-sync-specific context and automation
+ * flow-skills.mjs — flow-skills-specific context and automation
  * Node.js ESM, zero external dependencies, cross-platform (Windows + Linux/macOS)
  *
  * Modes:
