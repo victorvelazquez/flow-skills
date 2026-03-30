@@ -6,6 +6,18 @@ Format: [Conventional Commits](https://www.conventionalcommits.org/) — `feat`,
 
 ---
 
+## [0.3.1] — 2026-03-30
+
+### Changed
+
+- `flow-skills` skill renamed to `flow-skills-sync` — better reflects its purpose (bidirectional sync between local OpenCode config and the remote repo); update your trigger from `/flow-skills` to `/flow-skills-sync`
+
+### Fixed
+
+- `flow-build` script — `--smart-skip --phase 2` now correctly checks `docs/api-contracts.md` for `frontend` and `mobile` project types instead of always checking `docs/data-model.md`; backend and fullstack projects are unaffected
+
+---
+
 ## [0.3.0] — 2026-03-29
 
 ### Added
