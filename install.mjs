@@ -193,7 +193,9 @@ function install(dryRun = false) {
     console.log(
       `  ${c.cyan("→")} Restart OpenCode to load the updated skills.`,
     );
-    console.log(`  ${c.cyan("→")} Use /flow-skills-sync to manage updates anytime.`);
+    console.log(
+      `  ${c.cyan("→")} Use /flow-skills-sync to manage updates anytime.`,
+    );
   }
   console.log("");
 }
@@ -210,10 +212,40 @@ function exportToRepo(dryRun = false) {
 
   let totalFiles = 0;
   let changedFiles = 0;
+  let removedFiles = 0;
+
+  const relativeRepoPath = (targetPath) =>
+    path.relative(REPO_DIR, targetPath).replace(/\\/g, "/");
+
+  const logExport = (targetPath) => {
+    if (!dryRun) console.log(`  exported: ${relativeRepoPath(targetPath)}`);
+  };
+
+  const logRemoval = (targetPath) => {
+    if (!dryRun) console.log(`  removed: ${relativeRepoPath(targetPath)}`);
+  };
 
   // ── Skills ──────────────────────────────────────────────────────────────────
   head("Skills");
   const skillDirs = collectFlowSkillDirs(OPENCODE.skills);
+  const repoSkillDirs = collectFlowSkillDirs(REPO.skills);
+  const localSkillSet = new Set(skillDirs);
+
+  for (const repoSkillName of repoSkillDirs) {
+    if (localSkillSet.has(repoSkillName)) continue;
+    const repoSkillDir = path.join(REPO.skills, repoSkillName);
+    const repoSkillFiles = collectFiles(repoSkillDir);
+    if (repoSkillFiles.length === 0) continue;
+    for (const repoFile of repoSkillFiles) {
+      logRemoval(repoFile);
+      removedFiles++;
+    }
+    removeDir(repoSkillDir, dryRun);
+    ok(
+      `${repoSkillName} — ${dryRun ? "would remove" : "removed"} (missing from opencode)`,
+    );
+  }
+
   for (const skillName of skillDirs) {
     const srcDir = path.join(OPENCODE.skills, skillName);
     const destDir = path.join(REPO.skills, skillName);
@@ -229,16 +261,33 @@ function exportToRepo(dryRun = false) {
           fs.readFileSync(destFile).toString();
       if (isNew || isDiff) {
         copyFile(srcFile, destFile, dryRun);
-        const relPath = path.relative(REPO_DIR, destFile).replace(/\\/g, '/');
-        if (!dryRun) console.log(`  exported: ${relPath}`);
+        logExport(destFile);
         changed++;
         changedFiles++;
       }
       totalFiles++;
     }
+    const repoFiles = collectFiles(destDir);
+    const localRelFiles = new Set(
+      files.map((srcFile) => path.relative(srcDir, srcFile)),
+    );
+    let removedFromSkill = 0;
+    for (const repoFile of repoFiles) {
+      const rel = path.relative(destDir, repoFile);
+      if (localRelFiles.has(rel)) continue;
+      if (removeFile(repoFile, dryRun)) {
+        logRemoval(repoFile);
+        removedFiles++;
+        removedFromSkill++;
+      }
+    }
     if (changed > 0) {
       ok(
         `${skillName} — ${changed} file${changed > 1 ? "s" : ""} ${dryRun ? "would update" : "updated"}`,
+      );
+    } else if (removedFromSkill > 0) {
+      ok(
+        `${skillName} — ${removedFromSkill} file${removedFromSkill > 1 ? "s" : ""} ${dryRun ? "would remove" : "removed"}`,
       );
     } else {
       info(`${skillName} — no changes`);
@@ -247,10 +296,30 @@ function exportToRepo(dryRun = false) {
 
   // ── Commands ─────────────────────────────────────────────────────────────────
   head("Commands");
-  if (fs.existsSync(OPENCODE.commands)) {
-    const cmdFiles = fs
-      .readdirSync(OPENCODE.commands)
-      .filter((f) => f.startsWith("flow-") && f.endsWith(".md"));
+  const localCmdFiles = fs.existsSync(OPENCODE.commands)
+    ? fs
+        .readdirSync(OPENCODE.commands)
+        .filter((f) => f.startsWith("flow-") && f.endsWith(".md"))
+    : [];
+  const repoCmdFiles = fs.existsSync(REPO.commands)
+    ? fs
+        .readdirSync(REPO.commands)
+        .filter((f) => f.startsWith("flow-") && f.endsWith(".md"))
+    : [];
+
+  const localCmdSet = new Set(localCmdFiles);
+  for (const repoCmd of repoCmdFiles) {
+    if (localCmdSet.has(repoCmd)) continue;
+    const repoCmdPath = path.join(REPO.commands, repoCmd);
+    if (removeFile(repoCmdPath, dryRun)) {
+      logRemoval(repoCmdPath);
+      ok(`${repoCmd} — ${dryRun ? "would remove" : "removed"}`);
+      removedFiles++;
+    }
+  }
+
+  if (localCmdFiles.length > 0) {
+    const cmdFiles = localCmdFiles;
     for (const cmdFile of cmdFiles) {
       const src = path.join(OPENCODE.commands, cmdFile);
       const dest = path.join(REPO.commands, cmdFile);
@@ -261,8 +330,7 @@ function exportToRepo(dryRun = false) {
       if (isNew || isDiff) {
         copyFile(src, dest, dryRun);
         ok(`${cmdFile} — ${dryRun ? "would update" : "updated"}`);
-        const relPath = path.relative(REPO_DIR, dest).replace(/\\/g, '/');
-        if (!dryRun) console.log(`  exported: ${relPath}`);
+        logExport(dest);
         changedFiles++;
       } else {
         info(`${cmdFile} — no changes`);
@@ -276,17 +344,49 @@ function exportToRepo(dryRun = false) {
   if (fs.existsSync(OPENCODE.scripts)) {
     const trackedScripts = new Set(
       execSync("git ls-files scripts/", { cwd: REPO_DIR })
-        .toString().trim().split("\n")
+        .toString()
+        .trim()
+        .split("\n")
         .filter(Boolean)
-        .map(f => f.replace(/^scripts\//, "").replace(/\//g, path.sep))
+        .map((f) => f.replace(/^scripts\//, "").replace(/\//g, path.sep)),
     );
 
     const scriptFiles = collectFiles(OPENCODE.scripts);
+    const localScriptSet = new Set(
+      scriptFiles.map((srcFile) => path.relative(OPENCODE.scripts, srcFile)),
+    );
+    const repoScriptFiles = collectFiles(REPO.scripts).filter((repoFile) => {
+      const rel = path.relative(REPO.scripts, repoFile);
+      const relNorm = rel.replace(/\\/g, "/");
+      return (
+        trackedScripts.has(rel) ||
+        trackedScripts.has(relNorm) ||
+        trackedScripts.has(path.basename(rel))
+      );
+    });
+
+    for (const repoFile of repoScriptFiles) {
+      const rel = path.relative(REPO.scripts, repoFile);
+      if (localScriptSet.has(rel)) continue;
+      if (removeFile(repoFile, dryRun)) {
+        logRemoval(repoFile);
+        ok(`${rel} — ${dryRun ? "would remove" : "removed"}`);
+        removedFiles++;
+      }
+    }
+
     for (const srcFile of scriptFiles) {
       const rel = path.relative(OPENCODE.scripts, srcFile);
       const relNorm = rel.replace(/\\/g, "/");
-      if (!trackedScripts.has(rel) && !trackedScripts.has(relNorm) && !trackedScripts.has(path.basename(rel))) {
-        info(`${rel} — skipped (not tracked in repo)`);
+      const baseName = path.basename(rel);
+      const isFlowScript = baseName.startsWith("flow-");
+      if (
+        !isFlowScript &&
+        !trackedScripts.has(rel) &&
+        !trackedScripts.has(relNorm) &&
+        !trackedScripts.has(baseName)
+      ) {
+        info(`${rel} — skipped (not a flow-* script)`);
         continue;
       }
       const dest = path.join(REPO.scripts, rel);
@@ -298,8 +398,7 @@ function exportToRepo(dryRun = false) {
       if (isNew || isDiff) {
         copyFile(srcFile, dest, dryRun);
         ok(`${rel} — ${dryRun ? "would update" : "updated"}`);
-        const relPath = path.relative(REPO_DIR, dest).replace(/\\/g, '/');
-        if (!dryRun) console.log(`  exported: ${relPath}`);
+        logExport(dest);
         changedFiles++;
       } else {
         info(`${rel} — no changes`);
@@ -318,7 +417,16 @@ function exportToRepo(dryRun = false) {
         ),
       ),
     );
-  } else if (changedFiles === 0) {
+    if (removedFiles > 0) {
+      console.log(
+        c.yellow(
+          c.bold(
+            `  Dry-run also detected ${removedFiles} item${removedFiles > 1 ? "s" : ""} that would be removed from repo.`,
+          ),
+        ),
+      );
+    }
+  } else if (changedFiles === 0 && removedFiles === 0) {
     console.log(
       c.green(
         c.bold(`  ✓ Everything is already up to date. No files changed.`),
@@ -328,7 +436,7 @@ function exportToRepo(dryRun = false) {
     console.log(
       c.green(
         c.bold(
-          `  ✓ Export complete — ${changedFiles} file${changedFiles > 1 ? "s" : ""} updated in repo.`,
+          `  ✓ Export complete — ${changedFiles} file${changedFiles > 1 ? "s" : ""} updated and ${removedFiles} item${removedFiles > 1 ? "s" : ""} removed in repo.`,
         ),
       ),
     );
