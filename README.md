@@ -1,19 +1,19 @@
 # flow-skills
 
-A versioned repository of `flow-*` AI skills for [OpenCode](https://opencode.ai). Share and install git workflow automation across machines and teams.
+A versioned repository of `flow-*` AI skills for [OpenCode](https://opencode.ai). Git workflow automation, documentation generation, and code quality tools — shareable across machines and teams.
 
 ## What's included
 
-| Skill            | Description                                                                       |
-| ---------------- | --------------------------------------------------------------------------------- |
-| `flow-audit`     | Code quality audit — lint, typecheck, tests, security, AI review                  |
-| `flow-branch`    | Interactive branch switcher with pull prompt and cleanup                          |
-| `flow-build`     | Universal documentation builder (15-17 docs across 11 phases)                     |
-| `flow-commit`    | Git workflow automation — Conventional Commits, atomic commits, branch protection |
-| `flow-docs-sync` | Incremental documentation sync — detects changes, updates affected docs           |
-| `flow-finish`    | Generate professional PR description + Jira comment                               |
-| `flow-release`   | Semantic versioning + CHANGELOG + git tag + push                                  |
-| `flow-skills-sync` | Manage this repo — publish, update, or install skills conversationally          |
+| Skill | Trigger | Description |
+| ----- | ------- | ----------- |
+| `flow-audit` | `/flow-audit` | Stack-agnostic code quality audit — automated lint, typecheck, tests, security checks, and LLM review |
+| `flow-branch` | `/flow-branch` | Interactive branch switcher — list, checkout, and delete branches with pull prompt |
+| `flow-build` | `/flow-build` | Universal documentation builder — 15-17 docs across 11 phases for any project type |
+| `flow-commit` | `/flow-commit` | Git workflow automation — Conventional Commits, atomic grouping, protected-branch handling |
+| `flow-docs-sync` | `/flow-docs-sync` | Incremental documentation sync — detects what changed and updates only affected docs |
+| `flow-playbook-sync` | `/flow-playbook-sync` | Bidirectional sync between a project's implementation state and the shared engineering playbook |
+| `flow-pr` | `/flow-pr` | Push branch and create a GitHub PR — production guardrails, PR description generation |
+| `flow-skills-sync` | `/flow-skills-sync` | Manage this repo — publish local changes, pull updates, or install on a new machine |
 
 ## Install
 
@@ -37,12 +37,12 @@ node install.mjs
 
 ### Or use the AI skill
 
-After installing, just type `/flow-skills-sync` in OpenCode — it will detect context and offer to publish, update, or install for you.
+After installing, type `/flow-skills-sync` in OpenCode — it detects context and offers to publish, update, or install automatically.
 
 ## Publish local changes
 
 ```bash
-node install.mjs --export   # copies opencode → repo, shows what changed
+node install.mjs --export   # copy opencode → repo, show what changed
 git diff                     # review
 git add <files>              # stage what you want
 git commit -m "feat(...): ..."
@@ -51,12 +51,12 @@ git push
 
 Or use `/flow-skills-sync` in OpenCode for a guided conversational flow.
 
-## Other commands
+## CLI reference
 
 ```bash
 node install.mjs             # install repo → ~/.config/opencode/
 node install.mjs --export    # export ~/.config/opencode/ → repo
-node install.mjs --dry-run   # preview without changes
+node install.mjs --dry-run   # preview without making changes
 node install.mjs --uninstall # remove all flow-* from opencode
 node install.mjs --help      # show usage
 ```
