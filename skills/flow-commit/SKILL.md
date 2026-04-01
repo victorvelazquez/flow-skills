@@ -1,6 +1,6 @@
 ---
 name: flow-commit
-description: Universal git workflow automation — stack-agnostic, branch protection, intelligent file grouping by feature/module, Conventional Commits, atomic commits
+description: Universal git commit workflow — uses the runtime script as the source of truth for automatic commits, protected-branch handling, and dry-run previews. Trigger: /flow-commit command.
 trigger: /flow-commit command
 ---
 
@@ -8,136 +8,63 @@ trigger: /flow-commit command
 
 Trigger: user runs `/flow-commit`
 
-Script: `node "$(node -e "process.stdout.write(require('os').homedir())")/.config/opencode/scripts/flow-commit.mjs"`
+Script:
 
-## Workflow (4 steps)
-
-### 1 — Analyze
-
+```bash
+node "$(node -e "process.stdout.write(require('os').homedir())")/.config/opencode/scripts/flow-commit.mjs"
 ```
+
+## Default Behavior
+
+The script is the source of truth. Prefer the runtime flow over manual orchestration.
+
+- Happy path: run `--auto`
+- Safe preview: run `--auto --dry-run`
+- Ask the user **only** if the script returns an actual error or a blocking ambiguity
+
+## Primary Commands
+
+### Automatic execution
+
+```bash
+node "$(node -e "process.stdout.write(require('os').homedir())")/.config/opencode/scripts/flow-commit.mjs" --auto
+```
+
+### Safe rehearsal
+
+```bash
+node "$(node -e "process.stdout.write(require('os').homedir())")/.config/opencode/scripts/flow-commit.mjs" --auto --dry-run
+```
+
+## What the script handles
+
+- protected-branch detection
+- automatic working-branch creation
+- changed-file discovery
+- deterministic commit grouping
+- commit message generation
+- leftover detection for known files
+- dry-run planning without side effects
+
+## Response Rules
+
+- If the script succeeds, present a concise summary of what it did or plans to do
+- If dry-run was used, clearly label the result as a preview with no side effects
+- If the script fails, present the error and ask what action to take
+
+## Fallback / Debug Commands
+
+Use these only for debugging or recovery, not as the normal path:
+
+```bash
 node "$(node -e "process.stdout.write(require('os').homedir())")/.config/opencode/scripts/flow-commit.mjs" --analyze
+node "$(node -e "process.stdout.write(require('os').homedir())")/.config/opencode/scripts/flow-commit.mjs" --summary --count 5
+node "$(node -e "process.stdout.write(require('os').homedir())")/.config/opencode/scripts/flow-commit.mjs" --create-branch --name "feat/example"
+node "$(node -e "process.stdout.write(require('os').homedir())")/.config/opencode/scripts/flow-commit.mjs" --commit --files "f1,f2" --message "feat(scope): add example"
 ```
-
-Parse the JSON output. Note `stack`, `branch.isProtected`, and all changes with their `feature` and `type`.
-
-### 1b — Completeness check (MANDATORY)
-
-After parsing the analysis, verify no files are missing before proposing commit groups.
-Use the best available source of truth — in order of priority:
-
-**Priority 1 — SDD artifacts (if SDD is active in the project)**
-
-- Search Engram for `sdd/{change}/design` or `sdd/{change}/apply-progress`
-- Or read `openspec/changes/*/tasks.md` if openspec mode is used
-- Cross-check the "Files Created/Modified" list against `staged + unstaged + untracked` from `--analyze`
-
-**Priority 2 — User-provided file list (if user mentioned specific files)**
-
-- If the user said "I also changed X" or "don't forget Y", add those files to the list
-- Cross-check them against `--analyze` output
-
-**Priority 3 — git status fallback (always applicable)**
-
-- Run: `git status --short`
-- Compare the full output against what `--analyze` reported
-- Flag any file in `git status` that is NOT already present in the `--analyze` JSON
-
-**In all cases:**
-
-- Flag any file that appears in the source of truth but is absent from `--analyze`
-- Show the flagged files to the user and ask: "These files were not detected by the analyzer — should they be included?"
-- Never silently drop files
-
-> ⚠️ Do NOT skip this step. Missing a file means it goes uncommitted silently, requiring a follow-up commit session.
-
-### 2 — Branch protection
-
-**Always-protected branches (hardcoded — NEVER commit directly, regardless of git config):**
-
-```
-main, master, dev, develop, development, staging, release
-```
-
-If the current branch matches any name in the list above OR `branch.isProtected: true` from the analysis:
-
-- **STOP immediately. Do NOT proceed with any commit.**
-- Inform the user: "⛔ You are on a protected branch (`<branch-name>`). Direct commits are not allowed."
-- Determine prefix from changes: new features → `feat/`, bug fixes → `fix/`, refactoring → `refactor/`, config/chore → `chore/`
-- Generate slug from `summary.features` (join with `-`) or from changed file basenames
-- Show proposed branch name to user, wait for confirmation, then:
-
-```
-node "$(node -e "process.stdout.write(require('os').homedir())")/.config/opencode/scripts/flow-commit.mjs" --create-branch --name "<type>/<slug>"
-```
-
-> ⚠️ This check is MANDATORY and cannot be skipped, even if the user asks to bypass it.
-
-### 3 — Atomic commits (per group)
-
-Group rules (stack-agnostic):
-
-- **Same `feature`** → one commit per feature: `feat(<feature>):` / `fix(<feature>):` / `refactor(<feature>):`
-- **`type: config`** → separate commit: `chore(config):`
-- **`type: test`** → separate commit: `test(<feature>):`
-- **`type: doc`** → separate commit: `docs(<scope>):`
-- **`feature: root`** → grouped by type (config → `chore(root):`, source → `feat(root):`)
-
-For each group: show files + proposed message → wait user confirmation → execute:
-
-```
-node "$(node -e "process.stdout.write(require('os').homedir())")/.config/opencode/scripts/flow-commit.mjs" --commit --files "f1,f2" --message "type(scope): description"
-```
-
-Message rules: English, imperative mood (`add`, `update`, `fix`, `remove`), lowercase after colon, scope = feature name.
-
-Valid types: `feat`, `fix`, `refactor`, `chore`, `docs`, `test`, `perf`, `style`
-
-### 4 — Summary + semi-automatic leftover detection
-
-After all commits, run summary passing the full known-files set from Step 1:
-
-```
-node "$(node -e "process.stdout.write(require('os').homedir())")/.config/opencode/scripts/flow-commit.mjs" --summary --count <N> --known-files "f1,f2,f3,..."
-```
-
-where N = number of commits created in this session, and `--known-files` = ALL file paths from the original `--analyze` output (staged + unstaged + untracked + deleted), comma-separated.
-
-**Parse the `__LEFTOVER__:` line** from the output — it contains:
-
-```json
-{
-  "known": ["files still uncommitted from original scope"],
-  "artifacts": ["new files NOT in original scope"]
-}
-```
-
-**Semi-automatic loop rules (max 3 rounds):**
-
-| `known` array | `artifacts` array | Action                                                                                                                                   |
-| ------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| empty         | empty             | ✅ Done — working tree is clean                                                                                                          |
-| non-empty     | any               | Re-run `--analyze --known-files "..."` with the leftover known files, propose next commit group, **wait user confirmation**, then commit |
-| empty         | non-empty         | ⚠️ Warn only — artifact guard triggered, do NOT commit these files                                                                       |
-
-**Loop safety guarantees:**
-
-- Max 3 re-scan rounds — exit with warning if still not clean after round 3
-- Only files from the **original known-files set** can enter a new commit round
-- If after a commit round the `known` leftovers are identical to the previous round → exit (no progress, something is blocking)
-- Never auto-commit without user confirmation
 
 ## Restrictions
 
-- **NEVER commit directly to protected branches: `main`, `master`, `dev`, `develop`, `development`, `staging`, `release` — this is non-negotiable and cannot be overridden by the user**
-- **NEVER suggest or execute `git push`**
-- Never commit unrelated files in the same commit
-- Include ALL changed files (staged + unstaged + untracked) — ask user which to include if ambiguous
-- **ALWAYS run the completeness check (Step 1b)** — use SDD artifacts if available, otherwise fall back to user-provided file lists or plain `git status`. Never rely solely on `--analyze` output.
-- **ALWAYS pass `--known-files` to `--summary`** using the full file list from the initial `--analyze`
-
-## status.json integration
-
-If `.flow-skills/work/status.json` exists in the project after all commits, update:
-
-- `git.uncommittedChanges: false`
-- `finalChecklist.committed: true`
+- NEVER push from this skill
+- NEVER re-implement commit logic in the prompt when the script can do it
+- NEVER ask for confirmation on the happy path just because the script succeeded
