@@ -19,11 +19,220 @@ import { runSafe, parseArgs, exists, readJsonFile } from "./lib/helpers.mjs";
 import process from "process";
 import path from "path";
 import fs from "fs";
+import os from "os";
 
 // ─── Branch type constants ────────────────────────────────────────────────────
 
 const PROD_BRANCHES = ["main", "master"];
 const DEV_BRANCHES = ["development", "develop"];
+
+function quoteShellArg(value) {
+  return `"${String(value).replace(/"/g, '\\"')}"`;
+}
+
+function runSelfMode(args) {
+  const scriptPath = path.resolve(process.argv[1]);
+  const command = `node ${quoteShellArg(scriptPath)} ${args.join(" ")}`;
+  const result = runSafe(command);
+
+  if (!result.ok) {
+    throw new Error(result.output);
+  }
+
+  try {
+    return JSON.parse(result.output);
+  } catch {
+    throw new Error(
+      `Could not parse flow-pr output for command: ${args.join(" ")}`,
+    );
+  }
+}
+
+function hasTruthyFlag(value) {
+  if (value === true) return true;
+  const normalized = String(value || "").toLowerCase();
+  return normalized === "true" || normalized === "1" || normalized === "yes";
+}
+
+function humanizeBranchName(branch) {
+  return branch
+    .replace(/^[^/]+\//, "")
+    .replace(/[-_]+/g, " ")
+    .trim();
+}
+
+function buildPrTitle(scanResult, targetBranch, version = null) {
+  if (scanResult.isIntegrationPR && version) {
+    return `chore(release): bump version to ${version}`;
+  }
+
+  if (
+    scanResult.branchType === "hotfix" &&
+    PROD_BRANCHES.includes(targetBranch)
+  ) {
+    return `hotfix: ${humanizeBranchName(scanResult.currentBranch)}`;
+  }
+
+  const type = scanResult.currentBranch.includes("/")
+    ? scanResult.currentBranch.split("/")[0]
+    : scanResult.branchType;
+  const subject = humanizeBranchName(scanResult.currentBranch);
+  return `${type}: ${subject}`;
+}
+
+function groupCommitSubjects(commitSubjects) {
+  const grouped = { added: [], changed: [], fixed: [] };
+
+  for (const line of commitSubjects) {
+    const subject = line.replace(/^[a-f0-9]+\s+/, "").trim();
+    if (!subject) continue;
+
+    if (/^feat[(:]/i.test(subject)) grouped.added.push(subject);
+    else if (/^fix[(:]/i.test(subject)) grouped.fixed.push(subject);
+    else grouped.changed.push(subject);
+  }
+
+  return grouped;
+}
+
+function generateChangelogEntry(version, commitSubjects) {
+  const today = new Date().toISOString().split("T")[0];
+  const groups = groupCommitSubjects(commitSubjects);
+  const lines = [`## [${version}] - ${today}`, ""];
+
+  if (groups.added.length > 0) {
+    lines.push("### Added");
+    groups.added.slice(0, 8).forEach((subject) => lines.push(`- ${subject}`));
+    lines.push("");
+  }
+
+  if (groups.changed.length > 0) {
+    lines.push("### Changed");
+    groups.changed.slice(0, 8).forEach((subject) => lines.push(`- ${subject}`));
+    lines.push("");
+  }
+
+  if (groups.fixed.length > 0) {
+    lines.push("### Fixed");
+    groups.fixed.slice(0, 8).forEach((subject) => lines.push(`- ${subject}`));
+    lines.push("");
+  }
+
+  if (lines[lines.length - 1] === "") lines.pop();
+  return lines.join("\n") + "\n";
+}
+
+function updateChangelog(version, commitSubjects) {
+  const entry = generateChangelogEntry(version, commitSubjects);
+  const changelogPath = "CHANGELOG.md";
+  let created = false;
+
+  if (!exists(changelogPath)) {
+    const initial = `# Changelog\n\n## [Unreleased]\n\n${entry}`;
+    fs.writeFileSync(changelogPath, initial, "utf8");
+    created = true;
+    return { file: changelogPath, created, entry };
+  }
+
+  const content = fs.readFileSync(changelogPath, "utf8");
+  if (/## \[Unreleased\]/i.test(content)) {
+    const updated = content.replace(
+      /(## \[Unreleased\]\s*\n)/i,
+      `$1\n${entry}\n`,
+    );
+    fs.writeFileSync(changelogPath, updated, "utf8");
+  } else {
+    fs.writeFileSync(changelogPath, `${entry}\n${content}`, "utf8");
+  }
+
+  return { file: changelogPath, created, entry };
+}
+
+function buildPrDescription(scanResult, options = {}) {
+  const version = options.version;
+  const summaryLine = scanResult.isIntegrationPR
+    ? `This release batch is ready for production and bumps version ${scanResult.versionBefore || "current"} → ${version}.`
+    : `This PR delivers ${scanResult.totalCommits} commit(s) from ${scanResult.currentBranch} into ${scanResult.targetBranches.join(", ")}.`;
+
+  const changes =
+    scanResult.commits
+      .slice(0, 5)
+      .map((commit) => `- ${commit.subject}`)
+      .join("\n") || "- No commit summary available";
+
+  const testing = "- Not run by /flow-pr (use /flow-audit when needed)";
+  const checklist = [
+    "- [x] Branch scanned before push",
+    "- [x] PR target resolved automatically",
+    scanResult.isIntegrationPR
+      ? "- [x] Release guardrails passed before production PR creation"
+      : "- [x] Branch pushed before PR creation",
+  ].join("\n");
+
+  const deploymentNotes = scanResult.deployment.showDeploymentNotes
+    ? `\n## Deployment Notes\n- Impact area: ${scanResult.impactArea}\n- New dependencies: ${scanResult.deployment.hasNewDeps ? "yes" : "no"}\n- Migrations: ${scanResult.deployment.hasMigrations ? "yes" : "no"}`
+    : "";
+
+  const breakingChanges = scanResult.hasBreakingChanges
+    ? `\n## Breaking Changes\n${scanResult.breakingCommits
+        .slice(0, 5)
+        .map((commit) => `- ${commit.subject}`)
+        .join("\n")}`
+    : "";
+
+  return [
+    "## Summary",
+    summaryLine,
+    "",
+    "## Changes",
+    changes,
+    "",
+    "## Testing",
+    testing,
+    "",
+    "## Checklist",
+    checklist,
+    breakingChanges,
+    deploymentNotes,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function buildJiraComment(scanResult, options = {}) {
+  const version = options.version;
+  const title = scanResult.isIntegrationPR
+    ? `### Release: versión ${version}`
+    : `### PR: ${humanizeBranchName(scanResult.currentBranch)}`;
+
+  const summary = scanResult.isIntegrationPR
+    ? `**Se preparó una integración a producción desde ${scanResult.currentBranch} hacia ${scanResult.targetBranches.join(", ")} con bump de versión a ${version}.**`
+    : `**Se generó automáticamente el PR de ${scanResult.currentBranch} hacia ${scanResult.targetBranches.join(", ")}.**`;
+
+  return [
+    title,
+    "",
+    summary,
+    "",
+    "### Cómo validar",
+    `- Revisar el PR generado para ${scanResult.targetBranches.join(", ")}`,
+    "- Validar el alcance funcional según el resumen del PR",
+    "",
+    "### Evidencia",
+    "| Dato | Valor |",
+    "| --- | --- |",
+    `| Rama | ${scanResult.currentBranch} |`,
+    `| Commits | ${scanResult.totalCommits} |`,
+    `| Impacto | ${scanResult.impactArea} |`,
+  ].join("\n");
+}
+
+function createTempBodyFile(content) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "flow-pr-"));
+  const filePath = path.join(dir, "pr-body.md");
+  fs.writeFileSync(filePath, content, "utf8");
+  return filePath;
+}
 
 // ─── Platform patterns ────────────────────────────────────────────────────────
 
@@ -400,6 +609,212 @@ function createPr(flags) {
   if (!result.ok) {
     process.exit(1);
   }
+}
+
+// ─── --release-guard ─────────────────────────────────────────────────────────
+
+function releaseGuard(flags) {
+  const source = flags["source"];
+  const target = flags["target"];
+  const isClean = String(flags["is-clean"] || "").toLowerCase() === "true";
+  const newVersion = flags["version"];
+  const branchType = detectBranchType(source || "");
+
+  const reasons = [];
+
+  if (!source) reasons.push("missing source branch");
+  if (!target) reasons.push("missing target branch");
+  if (!DEV_BRANCHES.includes(source)) {
+    reasons.push(`source branch '${source}' is not an integration branch`);
+  }
+  if (!PROD_BRANCHES.includes(target)) {
+    reasons.push(`target branch '${target}' is not a production branch`);
+  }
+  if (branchType !== "integration") {
+    reasons.push(
+      `branch type '${branchType}' is not allowed for production PR automation`,
+    );
+  }
+  if (!isClean) {
+    reasons.push("working tree must be clean before release automation");
+  }
+  if (!newVersion || !/^\d+\.\d+\.\d+$/.test(newVersion)) {
+    reasons.push("resolved version is missing or invalid");
+  }
+
+  const result = {
+    success: reasons.length === 0,
+    source,
+    target,
+    version: newVersion || null,
+    reasons,
+  };
+
+  process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+
+  if (!result.success) {
+    process.exit(1);
+  }
+}
+
+function auto(flags = {}) {
+  const dryRun = hasTruthyFlag(flags["dry-run"]);
+  const scanResult = runSelfMode(["--scan"]);
+
+  if (scanResult.isAbort) {
+    throw new Error(scanResult.abortReason || "flow-pr scan aborted");
+  }
+
+  if (!scanResult.isClean) {
+    throw new Error(
+      `Uncommitted files detected (${scanResult.uncommittedFiles.join(", ")}). Run /flow-commit first.`,
+    );
+  }
+
+  if (
+    !Array.isArray(scanResult.targetBranches) ||
+    scanResult.targetBranches.length === 0
+  ) {
+    throw new Error("No target branches resolved for /flow-pr automation.");
+  }
+
+  let versionBefore = null;
+  let versionAfter = null;
+  let changelogEntry = null;
+  let cicdObservations = null;
+
+  if (scanResult.isIntegrationPR) {
+    cicdObservations = runSelfMode(["--check-cicd"]);
+    const versionContextResult = runSelfMode(["--version-context"]);
+
+    versionBefore = versionContextResult.version.current;
+    versionAfter = versionContextResult.version.suggestedVersion;
+
+    runSelfMode([
+      "--release-guard",
+      "--source",
+      scanResult.currentBranch,
+      "--target",
+      scanResult.targetBranches[0],
+      "--is-clean",
+      String(versionContextResult.git.isClean),
+      "--version",
+      versionAfter,
+    ]);
+
+    if (!dryRun) {
+      const versionUpdateResult = runSelfMode([
+        "--update-version",
+        "--version",
+        versionAfter,
+      ]);
+
+      const changelog = updateChangelog(
+        versionAfter,
+        versionContextResult.commits.log,
+      );
+      changelogEntry = changelog.entry;
+
+      const filesToCommit = [
+        ...versionUpdateResult.updatedByNpm,
+        ...versionUpdateResult.updatedEnvFiles,
+        changelog.file,
+      ];
+
+      const uniqueFiles = [...new Set(filesToCommit.filter(Boolean))];
+
+      runSelfMode([
+        "--commit-version",
+        "--version",
+        versionAfter,
+        "--files",
+        uniqueFiles.join(","),
+      ]);
+    }
+  }
+
+  const pushResult = dryRun
+    ? {
+        success: true,
+        branch: scanResult.currentBranch,
+        remote: "origin",
+        output: "DRY RUN: push skipped",
+        error: null,
+      }
+    : runSelfMode(["--push"]);
+
+  const finalScan = dryRun ? scanResult : runSelfMode(["--scan"]);
+  finalScan.versionBefore = versionBefore;
+
+  const prDescription = buildPrDescription(finalScan, {
+    version: versionAfter,
+  });
+  const jiraComment = buildJiraComment(finalScan, { version: versionAfter });
+
+  const prResults = [];
+  for (const targetBranch of finalScan.targetBranches) {
+    if (
+      PROD_BRANCHES.includes(targetBranch) &&
+      !(
+        DEV_BRANCHES.includes(finalScan.currentBranch) ||
+        finalScan.branchType === "hotfix"
+      )
+    ) {
+      throw new Error(
+        `Automatic production PR creation is not allowed from '${finalScan.currentBranch}' to '${targetBranch}'.`,
+      );
+    }
+
+    const title = buildPrTitle(finalScan, targetBranch, versionAfter);
+    const prResult = dryRun
+      ? {
+          success: true,
+          prUrl: null,
+          target: targetBranch,
+          alreadyExists: false,
+          output: "DRY RUN: PR creation skipped",
+          error: null,
+        }
+      : runSelfMode([
+          "--create-pr",
+          "--target",
+          targetBranch,
+          "--title",
+          title,
+          "--body-file",
+          createTempBodyFile(prDescription),
+        ]);
+
+    prResults.push({
+      target: targetBranch,
+      title,
+      ...prResult,
+    });
+  }
+
+  const result = {
+    success: true,
+    mode: "auto",
+    dryRun,
+    branch: finalScan.currentBranch,
+    branchType: finalScan.branchType,
+    integration: finalScan.isIntegrationPR,
+    pushed: pushResult.success,
+    push: pushResult,
+    version: finalScan.isIntegrationPR
+      ? {
+          before: versionBefore,
+          after: versionAfter,
+          changelogUpdated: dryRun ? false : Boolean(changelogEntry),
+        }
+      : null,
+    cicdObservations,
+    prDescription,
+    jiraComment,
+    prs: prResults,
+  };
+
+  process.stdout.write(JSON.stringify(result, null, 2) + "\n");
 }
 
 // ─── --version-context ───────────────────────────────────────────────────────
@@ -797,7 +1212,7 @@ function scan() {
   } else if (branchType === "spike") {
     // spike/ branches are for research/PoC — warn but allow PR if user insists
     warnings.push(
-      `⚠️  '${currentBranch}' is a spike branch (research/PoC). Spike branches are not usually merged. Are you sure you want to create a PR?`,
+      `WARNING: '${currentBranch}' is a spike branch (research/PoC). Spike branches are not usually merged. Are you sure you want to create a PR?`,
     );
   } else if (branchType === "unknown") {
     isAbort = true;
@@ -1153,30 +1568,41 @@ function checkCicd() {
 
 const flags = parseArgs();
 
-if (flags["scan"]) {
-  scan();
-} else if (flags["check-cicd"]) {
-  checkCicd();
-} else if (flags["push"]) {
-  push();
-} else if (flags["create-pr"]) {
-  createPr(flags);
-} else if (flags["version-context"]) {
-  versionContext();
-} else if (flags["update-version"]) {
-  updateVersion(flags);
-} else if (flags["commit-version"]) {
-  commitVersion(flags);
-} else {
-  process.stderr.write(
-    "Usage:\n" +
-      "  node flow-pr.mjs --scan\n" +
-      "  node flow-pr.mjs --check-cicd\n" +
-      "  node flow-pr.mjs --push\n" +
-      "  node flow-pr.mjs --create-pr --target <branch> --title <title> --body-file <path>\n" +
-      "  node flow-pr.mjs --version-context\n" +
-      "  node flow-pr.mjs --update-version --version X.Y.Z\n" +
-      '  node flow-pr.mjs --commit-version --version X.Y.Z --files "f1,f2,f3"\n',
-  );
+try {
+  if (flags["auto"]) {
+    auto(flags);
+  } else if (flags["scan"]) {
+    scan();
+  } else if (flags["check-cicd"]) {
+    checkCicd();
+  } else if (flags["push"]) {
+    push();
+  } else if (flags["create-pr"]) {
+    createPr(flags);
+  } else if (flags["version-context"]) {
+    versionContext();
+  } else if (flags["update-version"]) {
+    updateVersion(flags);
+  } else if (flags["commit-version"]) {
+    commitVersion(flags);
+  } else if (flags["release-guard"]) {
+    releaseGuard(flags);
+  } else {
+    process.stderr.write(
+      "Usage:\n" +
+        "  node flow-pr.mjs --auto [--dry-run]\n" +
+        "  node flow-pr.mjs --scan\n" +
+        "  node flow-pr.mjs --check-cicd\n" +
+        "  node flow-pr.mjs --push\n" +
+        "  node flow-pr.mjs --create-pr --target <branch> --title <title> --body-file <path>\n" +
+        "  node flow-pr.mjs --version-context\n" +
+        "  node flow-pr.mjs --update-version --version X.Y.Z\n" +
+        '  node flow-pr.mjs --commit-version --version X.Y.Z --files "f1,f2,f3"\n' +
+        "  node flow-pr.mjs --release-guard --source <branch> --target <branch> --is-clean true --version X.Y.Z\n",
+    );
+    process.exit(1);
+  }
+} catch (error) {
+  process.stderr.write(`${error.message}\n`);
   process.exit(1);
 }

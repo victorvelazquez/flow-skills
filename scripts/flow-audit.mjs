@@ -4,6 +4,8 @@
  * Node.js ESM, zero external dependencies, cross-platform (Windows + Linux/macOS)
  *
  * Modes:
+ *   --auto [--scope p] [--since ref] [--dry-run]
+ *                                           Gather audit context in one entrypoint → JSON
  *   --detect                              Auto-detect project toolchain → JSON
  *   --scope [path]                        Determine audit scope from git → JSON
  *   --run lint|typecheck|test [--scope p] Run a specific tool → JSON
@@ -38,6 +40,12 @@ function existsGlob(pattern) {
   } catch {
     return false;
   }
+}
+
+function hasTruthyFlag(value) {
+  if (value === true) return true;
+  const normalized = String(value || "").toLowerCase();
+  return normalized === "true" || normalized === "1" || normalized === "yes";
 }
 
 /**
@@ -403,7 +411,7 @@ function detect() {
 
 // ─── --scope ──────────────────────────────────────────────────────────────────
 
-function scope(flags) {
+function getScopeInfo(flags) {
   const scopePath = flags["scope"] !== true ? flags["scope"] : null;
   const sinceRef = flags["since"] !== true ? flags["since"] : null;
 
@@ -573,6 +581,11 @@ function scope(flags) {
     );
     result.monorepoWarning = true;
   }
+  return result;
+}
+
+function scope(flags) {
+  const result = getScopeInfo(flags);
   process.stdout.write(JSON.stringify(result, null, 2) + "\n");
 }
 
@@ -836,7 +849,7 @@ function report() {
  * Returns the aggregated report JSON including totalDuration, ranAt, and
  * keyLines per tool result.
  */
-async function runAll(flags) {
+async function executeRunAll(flags) {
   const startTime = Date.now();
 
   // Build toolchain directly — no subprocess overhead
@@ -963,7 +976,34 @@ async function runAll(flags) {
   // Aggregate using shared function
   const aggregated = aggregateResults(results, startTime);
 
+  return aggregated;
+}
+
+async function runAll(flags) {
+  const aggregated = await executeRunAll(flags);
   process.stdout.write(JSON.stringify(aggregated, null, 2) + "\n");
+}
+
+async function auto(flags) {
+  const dryRun = hasTruthyFlag(flags["dry-run"]);
+  const detection = buildToolchain();
+  const scopeResult = getScopeInfo(flags);
+
+  const result = {
+    success: true,
+    mode: "auto",
+    dryRun,
+    detection,
+    scope: scopeResult,
+    automated: null,
+    nextAction: "llm-review",
+  };
+
+  if (!dryRun) {
+    result.automated = await executeRunAll(flags);
+  }
+
+  process.stdout.write(JSON.stringify(result, null, 2) + "\n");
 }
 
 // ─── --fix ────────────────────────────────────────────────────────────────────
@@ -1010,8 +1050,8 @@ async function fix(flags) {
     });
     process.stderr.write(
       r.ok
-        ? `  ✅ lint:fix passed\n`
-        : `  ⚠️  lint:fix exited with issues (some may need manual fix)\n`,
+        ? `  OK: lint:fix passed\n`
+        : `  WARNING: lint:fix exited with issues (some may need manual fix)\n`,
     );
   }
 
@@ -1039,7 +1079,7 @@ async function fix(flags) {
       output: r.output,
     });
     process.stderr.write(
-      r.ok ? `  ✅ format passed\n` : `  ⚠️  format exited with issues\n`,
+      r.ok ? `  OK: format passed\n` : `  WARNING: format exited with issues\n`,
     );
   }
 
@@ -1055,7 +1095,7 @@ async function fix(flags) {
     const r = runSafe(t.command);
     verifyResults.push({ tool: t.key, ok: r.ok, output: r.output });
     process.stderr.write(
-      r.ok ? `  ✅ ${t.key} passed\n` : `  ❌ ${t.key} still failing\n`,
+      r.ok ? `  OK: ${t.key} passed\n` : `  FAIL: ${t.key} still failing\n`,
     );
   }
 
@@ -1087,6 +1127,8 @@ const flags = parseArgs();
 
 if (flags["detect"]) {
   detect();
+} else if (flags["auto"]) {
+  await auto(flags);
 } else if ("scope" in flags) {
   scope(flags);
 } else if ("run-all" in flags) {
@@ -1100,6 +1142,7 @@ if (flags["detect"]) {
 } else {
   process.stderr.write(
     "Usage:\n" +
+      "  node flow-audit.mjs --auto [--scope <path>] [--since <ref>] [--dry-run]\n" +
       "  node flow-audit.mjs --detect\n" +
       "  node flow-audit.mjs --scope [path] [--since <ref>]\n" +
       "  node flow-audit.mjs --run lint|typecheck|test|format|coverage|security\n" +
