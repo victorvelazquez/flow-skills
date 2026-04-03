@@ -37,154 +37,189 @@ const PLAYBOOK_FILES = [
   "testing-strategy.md",
 ];
 
-// ─── --find-playbook ──────────────────────────────────────────────────────────
+function hasTruthyFlag(value) {
+  if (value === true) return true;
+  const normalized = String(value || "").toLowerCase();
+  return normalized === "true" || normalized === "1" || normalized === "yes";
+}
 
-/**
- * Locate the playbook directory using multiple strategies:
- * 1. FLOW_PLAYBOOK_PATH env variable
- * 2. --playbook-path flag
- * 3. Walk upward from cwd looking for Tools/flow-skills/playbook/
- * 4. Hardcoded relative fallback ../../Tools/flow-skills/playbook/
- */
-function findPlaybook(flags) {
-  // Strategy 1 — env variable
+function parseStatusFile(content) {
+  const lines = content.split("\n");
+  const sections = {
+    implemented: [],
+    pending: [],
+    excluded: [],
+  };
+
+  let currentSection = null;
+  let playbookPath = null;
+  let generatedAt = null;
+  let lastSync = null;
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    if (line.startsWith("> Playbook:")) {
+      playbookPath = line.replace(/^> Playbook:\s*/, "").trim();
+      continue;
+    }
+
+    if (line.startsWith("> Generado:")) {
+      generatedAt = line.replace(/^> Generado:\s*/, "").trim();
+      continue;
+    }
+
+    if (line.startsWith("> Última sync:")) {
+      lastSync = line.replace(/^> Última sync:\s*/, "").trim();
+      continue;
+    }
+
+    if (/^##\s+Implemented/i.test(line)) {
+      currentSection = "implemented";
+      continue;
+    }
+
+    if (/^##\s+Pending/i.test(line)) {
+      currentSection = "pending";
+      continue;
+    }
+
+    if (/^##\s+Excluded/i.test(line)) {
+      currentSection = "excluded";
+      continue;
+    }
+
+    if (line.startsWith("-") && currentSection) {
+      sections[currentSection].push(line.replace(/^-\s*/, ""));
+    }
+  }
+
+  return {
+    playbookPath,
+    generatedAt,
+    lastSync,
+    ...sections,
+  };
+}
+
+function resolvePlaybook(flags) {
   if (process.env.FLOW_PLAYBOOK_PATH) {
     const resolved = path.resolve(process.env.FLOW_PLAYBOOK_PATH);
     if (fs.existsSync(resolved)) {
-      output({ found: true, path: resolved, method: "env-FLOW_PLAYBOOK_PATH" });
-      return;
+      return { found: true, path: resolved, method: "env-FLOW_PLAYBOOK_PATH" };
     }
   }
 
-  // Strategy 2 — explicit flag
-  const flagPath = flags["playbook-path"] !== true ? flags["playbook-path"] : null;
+  const flagPath =
+    flags["playbook-path"] !== true ? flags["playbook-path"] : null;
   if (flagPath) {
     const resolved = path.resolve(process.cwd(), flagPath);
     if (fs.existsSync(resolved)) {
-      output({ found: true, path: resolved, method: "flag-playbook-path" });
-      return;
+      return { found: true, path: resolved, method: "flag-playbook-path" };
     }
-    output({ found: false, path: null, method: "flag-playbook-path-not-found" });
-    return;
+    return { found: false, path: null, method: "flag-playbook-path-not-found" };
   }
 
-  // Strategy 3 — walk upward looking for Tools/flow-skills/playbook/
   let dir = process.cwd();
   const root = path.parse(dir).root;
   while (dir !== root) {
     const candidate = path.join(dir, "Tools", "flow-skills", "playbook");
     if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) {
-      output({ found: true, path: candidate, method: "walk-upward" });
-      return;
+      return { found: true, path: candidate, method: "walk-upward" };
     }
     const parent = path.dirname(dir);
     if (parent === dir) break;
     dir = parent;
   }
 
-  // Strategy 4 — hardcoded relative fallback
-  const fallback = path.resolve(process.cwd(), "..", "..", "Tools", "flow-skills", "playbook");
+  const fallback = path.resolve(
+    process.cwd(),
+    "..",
+    "..",
+    "Tools",
+    "flow-skills",
+    "playbook",
+  );
   if (fs.existsSync(fallback) && fs.statSync(fallback).isDirectory()) {
-    output({ found: true, path: fallback, method: "hardcoded-relative" });
-    return;
+    return { found: true, path: fallback, method: "hardcoded-relative" };
   }
 
-  output({ found: false, path: null, method: "not-found" });
+  return { found: false, path: null, method: "not-found" };
 }
 
-// ─── --check-status ───────────────────────────────────────────────────────────
-
-/**
- * Check whether .flow-skills/playbook-status.md exists in the project.
- */
-function checkStatus() {
+function getStatusInfo() {
   const full = path.join(process.cwd(), STATUS_FILE);
-  const exists = fs.existsSync(full);
-  output({
-    exists,
-    path: exists ? full : null,
+  const fileExists = fs.existsSync(full);
+
+  return {
+    exists: fileExists,
+    path: fileExists ? full : null,
     relativePath: STATUS_FILE,
-  });
+    parsed: fileExists ? parseStatusFile(fs.readFileSync(full, "utf8")) : null,
+  };
 }
 
-// ─── --diff ───────────────────────────────────────────────────────────────────
-
-/**
- * Get recent changes from git for sync analysis.
- * Returns the diff method, a summary, and affected files.
- */
-function diff() {
+function getDiffInfo() {
   const isGit = fs.existsSync(path.join(process.cwd(), ".git"));
 
   if (!isGit) {
-    output({
+    return {
       method: "no-git",
       summary: "",
       files: [],
       hasDiff: false,
-    });
-    return;
+    };
   }
 
-  // Try staged files first
   const staged = runSafe("git diff --name-only --cached");
   if (staged.ok && staged.output.trim()) {
     const files = staged.output.trim().split("\n").filter(Boolean);
     const diffOut = runSafe("git diff --cached --stat");
-    output({
+    return {
       method: "git-staged",
       summary: diffOut.ok ? diffOut.output : "",
       files,
       hasDiff: true,
-    });
-    return;
+    };
   }
 
-  // Try last commit
   const lastLog = runSafe("git log -1 --oneline");
   const lastFiles = runSafe("git diff --name-only HEAD~1..HEAD");
   if (lastFiles.ok && lastFiles.output.trim()) {
     const files = lastFiles.output.trim().split("\n").filter(Boolean);
     const diffStat = runSafe("git diff --stat HEAD~1..HEAD");
-    output({
+    return {
       method: "git-last-commit",
-      summary: (lastLog.ok ? lastLog.output + "\n" : "") + (diffStat.ok ? diffStat.output : ""),
+      summary:
+        (lastLog.ok ? lastLog.output + "\n" : "") +
+        (diffStat.ok ? diffStat.output : ""),
       files,
       hasDiff: true,
-    });
-    return;
+    };
   }
 
-  // Fallback: unstaged working tree changes
   const unstaged = runSafe("git diff --name-only");
   if (unstaged.ok && unstaged.output.trim()) {
     const files = unstaged.output.trim().split("\n").filter(Boolean);
-    output({
+    return {
       method: "git-unstaged",
       summary: "",
       files,
       hasDiff: true,
-    });
-    return;
+    };
   }
 
-  output({
+  return {
     method: "git-no-changes",
     summary: "",
     files: [],
     hasDiff: false,
-  });
+  };
 }
 
-// ─── --analyze ────────────────────────────────────────────────────────────────
-
-/**
- * Analyze the project structure and dependencies for init-mode inference.
- */
-function analyze() {
+function getAnalysisInfo() {
   const cwd = process.cwd();
-
-  // package.json
   const pkg = readJsonFile("package.json");
   const hasPkg = pkg !== null;
   const allDeps = {
@@ -193,7 +228,6 @@ function analyze() {
   };
   const deps = Object.keys(allDeps);
 
-  // Key files
   const hasSchema = fs.existsSync(path.join(cwd, "prisma", "schema.prisma"));
   const hasMigrations = fs.existsSync(path.join(cwd, "prisma", "migrations"));
   const hasDockerCompose =
@@ -208,7 +242,6 @@ function analyze() {
   const hasNxConfig = fs.existsSync(path.join(cwd, "nx.json"));
   const hasPnpmWorkspace = fs.existsSync(path.join(cwd, "pnpm-workspace.yaml"));
 
-  // Top-level structure
   let structure = [];
   try {
     structure = fs
@@ -222,13 +255,20 @@ function analyze() {
       })
       .filter(
         (d) =>
-          !["node_modules", ".git", "dist", "build", ".next", ".turbo", "coverage"].includes(d),
+          ![
+            "node_modules",
+            ".git",
+            "dist",
+            "build",
+            ".next",
+            ".turbo",
+            "coverage",
+          ].includes(d),
       );
   } catch {
     /* ignore */
   }
 
-  // Key dep groups (for inference)
   const depGroups = {
     nestjs: deps.some((d) => d.startsWith("@nestjs/")),
     prisma: deps.includes("prisma") || deps.includes("@prisma/client"),
@@ -237,15 +277,15 @@ function analyze() {
     nestjsSwagger: deps.includes("@nestjs/swagger"),
     opentelemetry: deps.some((d) => d.startsWith("@opentelemetry/")),
     tanstackQuery:
-      deps.includes("@tanstack/react-query") ||
-      deps.includes("react-query"),
+      deps.includes("@tanstack/react-query") || deps.includes("react-query"),
     zustand: deps.includes("zustand"),
     reactHookForm:
       deps.includes("react-hook-form") || deps.includes("@hookform/resolvers"),
     zod: deps.includes("zod"),
     react: deps.includes("react"),
     nextjs: deps.includes("next"),
-    playwright: deps.includes("@playwright/test") || deps.includes("playwright"),
+    playwright:
+      deps.includes("@playwright/test") || deps.includes("playwright"),
     vitest: deps.includes("vitest"),
     jest: deps.includes("jest"),
     keycloak:
@@ -258,7 +298,7 @@ function analyze() {
       deps.includes("passport-jwt"),
   };
 
-  output({
+  return {
     hasPkg,
     deps,
     depGroups,
@@ -271,7 +311,133 @@ function analyze() {
     hasPnpmWorkspace,
     structure,
     projectName: path.basename(cwd),
-  });
+  };
+}
+
+function auto(flags) {
+  const requestedMode = flags["reset"]
+    ? "reset"
+    : flags["init"]
+      ? "init"
+      : "sync";
+  const dryRun = hasTruthyFlag(flags["dry-run"]);
+  const status = getStatusInfo();
+
+  if (requestedMode === "sync" && !status.exists) {
+    output({
+      success: true,
+      mode: "auto",
+      requestedMode,
+      dryRun,
+      noop: true,
+      silent: true,
+      reason: "status-file-missing",
+      status,
+    });
+    return;
+  }
+
+  const playbook = resolvePlaybook(flags);
+  if (!playbook.found) {
+    output({
+      success: false,
+      mode: "auto",
+      requestedMode,
+      dryRun,
+      noop: false,
+      reason: "playbook-not-found",
+      playbook,
+      status,
+    });
+    process.exit(1);
+  }
+
+  if (requestedMode === "init" && status.exists) {
+    output({
+      success: false,
+      mode: "auto",
+      requestedMode,
+      dryRun,
+      noop: false,
+      reason: "status-file-already-exists",
+      message:
+        "playbook-status.md already exists. Use --reset to regenerate it.",
+      playbook,
+      status,
+    });
+    process.exit(1);
+  }
+
+  const result = {
+    success: true,
+    mode: "auto",
+    requestedMode,
+    dryRun,
+    playbook,
+    status,
+    nextAction: null,
+  };
+
+  if (requestedMode === "sync") {
+    result.diff = getDiffInfo();
+    result.playbookFiles = PLAYBOOK_FILES.map((file) =>
+      path.join(playbook.path, file),
+    );
+    result.nextAction = result.diff.hasDiff
+      ? "llm-analyze-diff"
+      : "user-describe-or-noop";
+  } else {
+    result.analysis = getAnalysisInfo();
+    result.playbookFiles = PLAYBOOK_FILES.map((file) =>
+      path.join(playbook.path, file),
+    );
+    result.nextAction = dryRun
+      ? "preview-init-draft"
+      : "llm-generate-status-draft";
+  }
+
+  output(result);
+}
+
+// ─── --find-playbook ──────────────────────────────────────────────────────────
+
+/**
+ * Locate the playbook directory using multiple strategies:
+ * 1. FLOW_PLAYBOOK_PATH env variable
+ * 2. --playbook-path flag
+ * 3. Walk upward from cwd looking for Tools/flow-skills/playbook/
+ * 4. Hardcoded relative fallback ../../Tools/flow-skills/playbook/
+ */
+function findPlaybook(flags) {
+  output(resolvePlaybook(flags));
+}
+
+// ─── --check-status ───────────────────────────────────────────────────────────
+
+/**
+ * Check whether .flow-skills/playbook-status.md exists in the project.
+ */
+function checkStatus() {
+  output(getStatusInfo());
+}
+
+// ─── --diff ───────────────────────────────────────────────────────────────────
+
+/**
+ * Get recent changes from git for sync analysis.
+ * Returns the diff method, a summary, and affected files.
+ */
+function diff() {
+  output(getDiffInfo());
+}
+
+// ─── --analyze ────────────────────────────────────────────────────────────────
+
+/**
+ * Analyze the project structure and dependencies for init-mode inference.
+ */
+function analyze() {
+  output(getAnalysisInfo());
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -286,6 +452,7 @@ function printHelp() {
       "flow-playbook-sync.mjs — Playbook status sync script",
       "",
       "Usage:",
+      "  node flow-playbook-sync.mjs --auto [--init|--reset] [--dry-run] [--playbook-path <path>]",
       "  node flow-playbook-sync.mjs --find-playbook [--playbook-path <path>]",
       "  node flow-playbook-sync.mjs --check-status",
       "  node flow-playbook-sync.mjs --diff",
@@ -300,8 +467,8 @@ function printHelp() {
       "Environment:",
       "  FLOW_PLAYBOOK_PATH  Override playbook directory (takes precedence over all)",
       "",
-      "The bulk of the sync logic is executed by the AI agent following SKILL.md.",
-      "This script provides the data-gathering primitives the agent needs.",
+      "Use --auto as the primary entrypoint.",
+      "Lower-level commands are for fallback/debug only.",
     ].join("\n") + "\n",
   );
 }
@@ -313,6 +480,8 @@ const flags = parseArgs();
 if (flags["help"] || flags["h"]) {
   printHelp();
   process.exit(0);
+} else if (flags["auto"]) {
+  auto(flags);
 } else if (flags["find-playbook"]) {
   findPlaybook(flags);
 } else if (flags["check-status"]) {

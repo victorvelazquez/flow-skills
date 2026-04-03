@@ -10,6 +10,8 @@
  *   --push                                            Execute `git push -u origin <branch>` and return result
  *   --create-pr --target <branch> --title <title> --body-file <path>
  *                                                     Create a GitHub PR via `gh pr create`
+ *   --auto --title-override "feat(scope): semantic title"
+ *          --pr-body-file <path> --jira-file <path>   Optional safe content overrides for the auto flow
  *   --version-context                                 Gather semver + git context for integration PR version bump
  *   --update-version --version X.Y.Z                 Run npm version --no-git-tag-version + auto-update releaseDate + env templates
  *   --commit-version --version X.Y.Z --files "f1,f2" git add + commit (no tag, no push — CI handles tagging)
@@ -19,11 +21,485 @@ import { runSafe, parseArgs, exists, readJsonFile } from "./lib/helpers.mjs";
 import process from "process";
 import path from "path";
 import fs from "fs";
+import os from "os";
 
 // ─── Branch type constants ────────────────────────────────────────────────────
 
 const PROD_BRANCHES = ["main", "master"];
 const DEV_BRANCHES = ["development", "develop"];
+
+function quoteShellArg(value) {
+  return `"${String(value ?? "")
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')}"`;
+}
+
+function runSelfMode(args) {
+  const scriptPath = path.resolve(process.argv[1]);
+  const quotedArgs = args.map((arg) => quoteShellArg(arg)).join(" ");
+  const command = `node ${quoteShellArg(scriptPath)} ${quotedArgs}`;
+  const result = runSafe(command);
+
+  if (!result.ok) {
+    throw new Error(result.output);
+  }
+
+  try {
+    return JSON.parse(result.output);
+  } catch {
+    throw new Error(
+      `Could not parse flow-pr output for command: ${args.join(" ")}`,
+    );
+  }
+}
+
+function normalizeSingleLineText(value) {
+  return String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function readOptionalTextFile(filePath, label) {
+  if (!filePath) return null;
+
+  const resolvedPath = path.resolve(filePath);
+  if (!fs.existsSync(resolvedPath)) {
+    throw new Error(`${label} file not found: ${filePath}`);
+  }
+
+  return fs.readFileSync(resolvedPath, "utf8").replace(/\s+$/, "");
+}
+
+function hasTruthyFlag(value) {
+  if (value === true) return true;
+  const normalized = String(value || "").toLowerCase();
+  return normalized === "true" || normalized === "1" || normalized === "yes";
+}
+
+function humanizeBranchName(branch) {
+  return branch
+    .replace(/^[^/]+\//, "")
+    .replace(/[-_]+/g, " ")
+    .trim();
+}
+
+function normalizeBranchTypeToCommitType(branchType) {
+  switch (branchType) {
+    case "feature":
+      return "feat";
+    case "hotfix":
+      return "fix";
+    case "ci":
+      return "chore";
+    case "integration":
+      return "chore";
+    case "spike":
+      return "chore";
+    default:
+      return branchType || "chore";
+  }
+}
+
+function normalizeCommitSubject(subject) {
+  return normalizeSingleLineText(
+    String(subject || "").replace(/^[a-f0-9]+\s+/, ""),
+  );
+}
+
+function parseConventionalSubject(subject) {
+  const normalized = normalizeCommitSubject(subject);
+  const match = normalized.match(/^([a-z]+)(\(([^)]+)\))?(!)?:\s+(.+)$/i);
+
+  if (!match) return null;
+
+  return {
+    type: match[1].toLowerCase(),
+    scope: match[3] ? normalizeSingleLineText(match[3]) : null,
+    breaking: Boolean(match[4]),
+    description: normalizeSingleLineText(match[5]),
+    subject: normalized,
+  };
+}
+
+function inferScopeFromFiles(scanResult) {
+  const ignoredSegments = new Set([
+    "src",
+    "app",
+    "apps",
+    "lib",
+    "libs",
+    "packages",
+    "package",
+    "modules",
+    "module",
+    "features",
+    "feature",
+    "common",
+    "shared",
+    "internal",
+    "server",
+    "client",
+    "api",
+    "dto",
+    "dtos",
+    "components",
+    "controllers",
+    "controller",
+    "services",
+    "service",
+    "entities",
+    "entity",
+    "models",
+    "model",
+    "tests",
+    "test",
+    "specs",
+    "spec",
+  ]);
+
+  const files = [
+    ...(scanResult.topFiles || []).map((entry) => entry.file),
+    ...((scanResult.changedFiles || []).slice(0, 10) || []),
+  ].filter(Boolean);
+
+  for (const file of files) {
+    const segments = file
+      .replace(/\\/g, "/")
+      .split("/")
+      .map((segment) => segment.trim().toLowerCase())
+      .filter(Boolean);
+
+    for (const segment of segments) {
+      if (
+        ignoredSegments.has(segment) ||
+        segment.startsWith("__") ||
+        segment.includes(".") ||
+        /^v?\d+$/.test(segment)
+      ) {
+        continue;
+      }
+
+      return segment;
+    }
+  }
+
+  return null;
+}
+
+function buildTitleFallbackSubject(scanResult) {
+  const branchSubject = humanizeBranchName(scanResult.currentBranch);
+  if (branchSubject) return branchSubject;
+
+  const firstCommit = normalizeCommitSubject(
+    scanResult.commits?.[0]?.subject || "",
+  );
+  if (firstCommit) {
+    const parsed = parseConventionalSubject(firstCommit);
+    if (parsed?.description) return parsed.description;
+    return firstCommit;
+  }
+
+  return "update changes";
+}
+
+function pickSemanticCommitTitle(scanResult) {
+  const normalizedBranchType = normalizeBranchTypeToCommitType(
+    scanResult.branchType,
+  );
+  const parsedCommits = (scanResult.commits || [])
+    .map((commit) => parseConventionalSubject(commit.subject))
+    .filter(Boolean);
+
+  if (parsedCommits.length === 0) return null;
+
+  const preferred =
+    parsedCommits.find((commit) => commit.type === normalizedBranchType) ||
+    parsedCommits[0];
+
+  if (!preferred?.description) return null;
+
+  if (
+    scanResult.totalCommits <= 3 ||
+    preferred.type === normalizedBranchType ||
+    scanResult.branchType === "hotfix"
+  ) {
+    return preferred.subject;
+  }
+
+  return null;
+}
+
+function buildPrTitle(scanResult, targetBranch, version = null, options = {}) {
+  const overrideTitle = normalizeSingleLineText(options.titleOverride || "");
+  if (overrideTitle) {
+    return overrideTitle;
+  }
+
+  if (scanResult.isIntegrationPR && version) {
+    return `chore(release): bump version to ${version}`;
+  }
+
+  if (
+    scanResult.branchType === "hotfix" &&
+    PROD_BRANCHES.includes(targetBranch)
+  ) {
+    return `hotfix: ${humanizeBranchName(scanResult.currentBranch)}`;
+  }
+
+  const semanticCommitTitle = pickSemanticCommitTitle(scanResult);
+  if (semanticCommitTitle) {
+    return semanticCommitTitle;
+  }
+
+  const type = scanResult.currentBranch.includes("/")
+    ? normalizeBranchTypeToCommitType(scanResult.currentBranch.split("/")[0])
+    : normalizeBranchTypeToCommitType(scanResult.branchType);
+  const scope = inferScopeFromFiles(scanResult);
+  const subject = buildTitleFallbackSubject(scanResult);
+
+  if (scope) {
+    return `${type}(${scope}): ${subject}`;
+  }
+
+  return `${type}: ${subject}`;
+}
+
+function groupCommitSubjects(commitSubjects) {
+  const grouped = { added: [], changed: [], fixed: [] };
+
+  for (const line of commitSubjects) {
+    const subject = line.replace(/^[a-f0-9]+\s+/, "").trim();
+    if (!subject) continue;
+
+    if (/^feat[(:]/i.test(subject)) grouped.added.push(subject);
+    else if (/^fix[(:]/i.test(subject)) grouped.fixed.push(subject);
+    else grouped.changed.push(subject);
+  }
+
+  return grouped;
+}
+
+function buildCommitHighlights(scanResult, limit = 5) {
+  const seen = new Set();
+  const highlights = [];
+  const fallbackHighlights = [];
+
+  for (const commit of scanResult.commits || []) {
+    const normalizedSubject = normalizeCommitSubject(commit.subject);
+    if (!normalizedSubject) continue;
+
+    if (/^merge pull request\b/i.test(normalizedSubject)) {
+      continue;
+    }
+
+    const parsed = parseConventionalSubject(commit.subject);
+    const highlight = parsed?.description || normalizedSubject;
+
+    const key = highlight.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const bullet = `- ${highlight}`;
+
+    if (parsed?.description) {
+      highlights.push(bullet);
+    } else {
+      fallbackHighlights.push(bullet);
+    }
+
+    if (highlights.length >= limit) break;
+  }
+
+  return [...highlights, ...fallbackHighlights].slice(0, limit);
+}
+
+function generateChangelogEntry(version, commitSubjects) {
+  const today = new Date().toISOString().split("T")[0];
+  const groups = groupCommitSubjects(commitSubjects);
+  const lines = [`## [${version}] - ${today}`, ""];
+
+  if (groups.added.length > 0) {
+    lines.push("### Added");
+    groups.added.slice(0, 8).forEach((subject) => lines.push(`- ${subject}`));
+    lines.push("");
+  }
+
+  if (groups.changed.length > 0) {
+    lines.push("### Changed");
+    groups.changed.slice(0, 8).forEach((subject) => lines.push(`- ${subject}`));
+    lines.push("");
+  }
+
+  if (groups.fixed.length > 0) {
+    lines.push("### Fixed");
+    groups.fixed.slice(0, 8).forEach((subject) => lines.push(`- ${subject}`));
+    lines.push("");
+  }
+
+  if (lines[lines.length - 1] === "") lines.pop();
+  return lines.join("\n") + "\n";
+}
+
+function updateChangelog(version, commitSubjects) {
+  const entry = generateChangelogEntry(version, commitSubjects);
+  const changelogPath = "CHANGELOG.md";
+  let created = false;
+
+  if (!exists(changelogPath)) {
+    const initial = `# Changelog\n\n## [Unreleased]\n\n${entry}`;
+    fs.writeFileSync(changelogPath, initial, "utf8");
+    created = true;
+    return { file: changelogPath, created, entry };
+  }
+
+  const content = fs.readFileSync(changelogPath, "utf8");
+  if (/## \[Unreleased\]/i.test(content)) {
+    const updated = content.replace(
+      /(## \[Unreleased\]\s*\n)/i,
+      `$1\n${entry}\n`,
+    );
+    fs.writeFileSync(changelogPath, updated, "utf8");
+  } else {
+    fs.writeFileSync(changelogPath, `${entry}\n${content}`, "utf8");
+  }
+
+  return { file: changelogPath, created, entry };
+}
+
+function buildPrDescription(scanResult, options = {}) {
+  const version = options.version;
+  const title = normalizeSingleLineText(options.title || "");
+  const highlightLines = buildCommitHighlights(scanResult, 5);
+  const summaryLine = scanResult.isIntegrationPR
+    ? `This release batch is ready for production, covers ${scanResult.totalCommits} commit(s) since ${scanResult.lastProductionTag || scanResult.baseBranch}, and bumps version ${scanResult.versionBefore || "current"} → ${version}.`
+    : `This PR proposes ${title || buildTitleFallbackSubject(scanResult)} with ${scanResult.totalCommits} commit(s) across ${scanResult.fileStats.filesChanged} changed file(s) since the branch diverged from ${scanResult.baseBranch}.`;
+
+  const changes = highlightLines.join("\n") || "- No commit summary available";
+
+  const testing = "- Not run by /flow-pr (use /flow-audit when needed)";
+  const checklist = [
+    "- [x] Branch scanned before push",
+    "- [x] PR target resolved automatically",
+    scanResult.isIntegrationPR
+      ? "- [x] Release guardrails passed before production PR creation"
+      : "- [x] Branch pushed before PR creation",
+  ].join("\n");
+
+  const deploymentNotes = scanResult.deployment.showDeploymentNotes
+    ? `\n## Deployment Notes\n- Impact area: ${scanResult.impactArea}\n- New dependencies: ${scanResult.deployment.hasNewDeps ? "yes" : "no"}\n- Migrations: ${scanResult.deployment.hasMigrations ? "yes" : "no"}\n- Comparison base: ${scanResult.baseBranch}${scanResult.mergeBase ? ` (merge-base ${scanResult.mergeBase.slice(0, 7)})` : ""}`
+    : "";
+
+  const breakingChanges = scanResult.hasBreakingChanges
+    ? `\n## Breaking Changes\n${scanResult.breakingCommits
+        .slice(0, 5)
+        .map((commit) => `- ${commit.subject}`)
+        .join("\n")}`
+    : "";
+
+  return [
+    "## Summary",
+    summaryLine,
+    "",
+    "## Changes",
+    changes,
+    "",
+    "## Testing",
+    testing,
+    "",
+    "## Checklist",
+    checklist,
+    breakingChanges,
+    deploymentNotes,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function buildJiraComment(scanResult, options = {}) {
+  const version = options.version;
+  const title = scanResult.isIntegrationPR
+    ? `### 🚀 Release: versión ${version}`
+    : `### 🚀 ${scanResult.branchType.toUpperCase()}: ${buildTitleFallbackSubject(scanResult)}`;
+
+  const summary = scanResult.isIntegrationPR
+    ? `**Se preparó una integración a producción desde ${scanResult.currentBranch} hacia ${scanResult.targetBranches.join(", ")} con bump de versión a ${version}.**`
+    : `**Se dejó listo el PR de ${scanResult.currentBranch} hacia ${scanResult.targetBranches.join(", ")} con un resumen funcional más claro para revisión y validación.**`;
+
+  return [
+    title,
+    "",
+    summary,
+    "",
+    "### Cómo validar",
+    `- Revisar el PR generado hacia ${scanResult.targetBranches.join(", ")}`,
+    "- Validar el alcance funcional según el resumen y los archivos impactados",
+    "",
+    "### Evidencia",
+    "| Dato | Valor |",
+    "| --- | --- |",
+    `| Rama | ${scanResult.currentBranch} |`,
+    `| Destino | ${scanResult.targetBranches.join(", ")} |`,
+    `| Commits | ${scanResult.totalCommits} |`,
+    `| Impacto | ${scanResult.impactArea} |`,
+  ].join("\n");
+}
+
+function resolveGitRef(branchName, preferRemote = true) {
+  if (!branchName) return null;
+
+  const candidates = preferRemote
+    ? [`origin/${branchName}`, branchName]
+    : [branchName, `origin/${branchName}`];
+
+  for (const candidate of candidates) {
+    const result = runSafe(`git rev-parse --verify ${candidate}`);
+    if (result.ok) return candidate;
+  }
+
+  return null;
+}
+
+function resolveComparisonContext(branchType, devBase, prodBase) {
+  let baseBranch = prodBase || "main";
+  if (branchType !== "integration") {
+    baseBranch = devBase || prodBase || "main";
+  }
+
+  if (!resolveGitRef(baseBranch, true)) {
+    for (const candidate of ["main", "master", "develop", "development"]) {
+      if (resolveGitRef(candidate, true)) {
+        baseBranch = candidate;
+        break;
+      }
+    }
+  }
+
+  const baseRef = resolveGitRef(baseBranch, true) || baseBranch;
+  const forkPoint = runSafe(`git merge-base --fork-point ${baseRef} HEAD`);
+  const mergeBaseResult = forkPoint.ok
+    ? forkPoint
+    : runSafe(`git merge-base ${baseRef} HEAD`);
+  const mergeBase = mergeBaseResult.ok ? mergeBaseResult.output.trim() : null;
+  const comparisonRange = mergeBase ? `${mergeBase}..HEAD` : `${baseRef}..HEAD`;
+
+  return {
+    baseBranch,
+    baseRef,
+    mergeBase,
+    comparisonRange,
+    mergeBaseStrategy: forkPoint.ok
+      ? "fork-point"
+      : mergeBase
+        ? "merge-base"
+        : "base-ref",
+  };
+}
+
+function createTempBodyFile(content) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "flow-pr-"));
+  const filePath = path.join(dir, "pr-body.md");
+  fs.writeFileSync(filePath, content, "utf8");
+  return filePath;
+}
 
 // ─── Platform patterns ────────────────────────────────────────────────────────
 
@@ -402,6 +878,243 @@ function createPr(flags) {
   }
 }
 
+// ─── --release-guard ─────────────────────────────────────────────────────────
+
+function releaseGuard(flags) {
+  const source = flags["source"];
+  const target = flags["target"];
+  const isClean = String(flags["is-clean"] || "").toLowerCase() === "true";
+  const newVersion = flags["version"];
+  const branchType = detectBranchType(source || "");
+
+  const reasons = [];
+
+  if (!source) reasons.push("missing source branch");
+  if (!target) reasons.push("missing target branch");
+  if (!DEV_BRANCHES.includes(source)) {
+    reasons.push(`source branch '${source}' is not an integration branch`);
+  }
+  if (!PROD_BRANCHES.includes(target)) {
+    reasons.push(`target branch '${target}' is not a production branch`);
+  }
+  if (branchType !== "integration") {
+    reasons.push(
+      `branch type '${branchType}' is not allowed for production PR automation`,
+    );
+  }
+  if (!isClean) {
+    reasons.push("working tree must be clean before release automation");
+  }
+  if (!newVersion || !/^\d+\.\d+\.\d+$/.test(newVersion)) {
+    reasons.push("resolved version is missing or invalid");
+  }
+
+  const result = {
+    success: reasons.length === 0,
+    source,
+    target,
+    version: newVersion || null,
+    reasons,
+  };
+
+  process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+
+  if (!result.success) {
+    process.exit(1);
+  }
+}
+
+function auto(flags = {}) {
+  const dryRun = hasTruthyFlag(flags["dry-run"]);
+  const titleOverride = normalizeSingleLineText(flags["title-override"] || "");
+  const prBodyOverride = readOptionalTextFile(
+    flags["pr-body-file"],
+    "PR body override",
+  );
+  const jiraOverride = readOptionalTextFile(
+    flags["jira-file"],
+    "Jira comment override",
+  );
+  const scanResult = runSelfMode(["--scan"]);
+
+  if (scanResult.isAbort) {
+    throw new Error(scanResult.abortReason || "flow-pr scan aborted");
+  }
+
+  if (!scanResult.isClean) {
+    throw new Error(
+      `Uncommitted files detected (${scanResult.uncommittedFiles.join(", ")}). Run /flow-commit first.`,
+    );
+  }
+
+  if (
+    !Array.isArray(scanResult.targetBranches) ||
+    scanResult.targetBranches.length === 0
+  ) {
+    throw new Error("No target branches resolved for /flow-pr automation.");
+  }
+
+  let versionBefore = null;
+  let versionAfter = null;
+  let changelogEntry = null;
+  let cicdObservations = null;
+
+  if (scanResult.isIntegrationPR) {
+    cicdObservations = runSelfMode(["--check-cicd"]);
+    const versionContextResult = runSelfMode(["--version-context"]);
+
+    versionBefore = versionContextResult.version.current;
+    versionAfter = versionContextResult.version.suggestedVersion;
+
+    runSelfMode([
+      "--release-guard",
+      "--source",
+      scanResult.currentBranch,
+      "--target",
+      scanResult.targetBranches[0],
+      "--is-clean",
+      String(versionContextResult.git.isClean),
+      "--version",
+      versionAfter,
+    ]);
+
+    if (!dryRun) {
+      const versionUpdateResult = runSelfMode([
+        "--update-version",
+        "--version",
+        versionAfter,
+      ]);
+
+      const changelog = updateChangelog(
+        versionAfter,
+        versionContextResult.commits.log,
+      );
+      changelogEntry = changelog.entry;
+
+      const filesToCommit = [
+        ...versionUpdateResult.updatedByNpm,
+        ...versionUpdateResult.updatedEnvFiles,
+        changelog.file,
+      ];
+
+      const uniqueFiles = [...new Set(filesToCommit.filter(Boolean))];
+
+      runSelfMode([
+        "--commit-version",
+        "--version",
+        versionAfter,
+        "--files",
+        uniqueFiles.join(","),
+      ]);
+    }
+  }
+
+  const pushResult = dryRun
+    ? {
+        success: true,
+        branch: scanResult.currentBranch,
+        remote: "origin",
+        output: "DRY RUN: push skipped",
+        error: null,
+      }
+    : runSelfMode(["--push"]);
+
+  const finalScan = dryRun ? scanResult : runSelfMode(["--scan"]);
+  finalScan.versionBefore = versionBefore;
+
+  const defaultTitle = buildPrTitle(
+    finalScan,
+    finalScan.targetBranches[0],
+    versionAfter,
+    {
+      titleOverride,
+    },
+  );
+  const prDescription =
+    prBodyOverride ||
+    buildPrDescription(finalScan, {
+      version: versionAfter,
+      title: defaultTitle,
+    });
+  const jiraComment =
+    jiraOverride ||
+    buildJiraComment(finalScan, {
+      version: versionAfter,
+      title: defaultTitle,
+    });
+
+  const prResults = [];
+  for (const targetBranch of finalScan.targetBranches) {
+    if (
+      PROD_BRANCHES.includes(targetBranch) &&
+      !(
+        DEV_BRANCHES.includes(finalScan.currentBranch) ||
+        finalScan.branchType === "hotfix"
+      )
+    ) {
+      throw new Error(
+        `Automatic production PR creation is not allowed from '${finalScan.currentBranch}' to '${targetBranch}'.`,
+      );
+    }
+
+    const title = buildPrTitle(finalScan, targetBranch, versionAfter, {
+      titleOverride,
+    });
+    const prResult = dryRun
+      ? {
+          success: true,
+          prUrl: null,
+          target: targetBranch,
+          alreadyExists: false,
+          output: "DRY RUN: PR creation skipped",
+          error: null,
+        }
+      : runSelfMode([
+          "--create-pr",
+          "--target",
+          targetBranch,
+          "--title",
+          title,
+          "--body-file",
+          createTempBodyFile(prDescription),
+        ]);
+
+    prResults.push({
+      target: targetBranch,
+      title,
+      ...prResult,
+    });
+  }
+
+  const result = {
+    success: true,
+    mode: "auto",
+    dryRun,
+    branch: finalScan.currentBranch,
+    branchType: finalScan.branchType,
+    integration: finalScan.isIntegrationPR,
+    baseBranch: finalScan.baseBranch,
+    baseRef: finalScan.baseRef,
+    mergeBase: finalScan.mergeBase,
+    mergeBaseStrategy: finalScan.mergeBaseStrategy,
+    pushed: pushResult.success,
+    push: pushResult,
+    version: finalScan.isIntegrationPR
+      ? {
+          before: versionBefore,
+          after: versionAfter,
+          changelogUpdated: dryRun ? false : Boolean(changelogEntry),
+        }
+      : null,
+    cicdObservations,
+    prDescription,
+    jiraComment,
+    prs: prResults,
+  };
+
+  process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+}
+
 // ─── --version-context ───────────────────────────────────────────────────────
 //
 // Recopila contexto de semver para integration PRs.
@@ -433,6 +1146,9 @@ function versionContext() {
   // ── Branch ────────────────────────────────────────────────────────────────
   const branch = runSafe("git branch --show-current");
   const currentBranch = branch.ok ? branch.output : "unknown";
+  const branchType = detectBranchType(currentBranch);
+  const { devBase, prodBase } = detectBaseBranches();
+  const comparison = resolveComparisonContext(branchType, devBase, prodBase);
 
   // ── Remote ────────────────────────────────────────────────────────────────
   const remote = runSafe("git remote -v");
@@ -443,7 +1159,11 @@ function versionContext() {
 
   // ── Last tag ──────────────────────────────────────────────────────────────
   let lastTag = "v0.0.0";
-  const lastTagResult = runSafe("git describe --tags --abbrev=0");
+  const lastTagResult = runSafe(
+    comparison.mergeBase
+      ? `git describe --tags --abbrev=0 ${comparison.mergeBase} 2>/dev/null || git describe --tags --abbrev=0`
+      : "git describe --tags --abbrev=0",
+  );
   if (lastTagResult.ok && lastTagResult.output) {
     lastTag = lastTagResult.output.trim() || "v0.0.0";
   }
@@ -452,7 +1172,12 @@ function versionContext() {
   let commitCount = 0;
   let commitLog = [];
 
-  if (lastTag !== "v0.0.0") {
+  const commitRange =
+    comparison.mergeBase || lastTag === "v0.0.0"
+      ? comparison.comparisonRange
+      : `${lastTag}..HEAD`;
+
+  if (lastTag !== "v0.0.0" && !comparison.mergeBase) {
     const countResult = runSafe(`git rev-list ${lastTag}..HEAD --count`);
     if (countResult.ok) {
       commitCount = parseInt(countResult.output, 10) || 0;
@@ -462,7 +1187,7 @@ function versionContext() {
       commitLog = logResult.output.split("\n").filter(Boolean);
     }
   } else {
-    const logResult = runSafe("git log --oneline --no-merges");
+    const logResult = runSafe(`git log ${commitRange} --oneline --no-merges`);
     if (logResult.ok && logResult.output) {
       commitLog = logResult.output.split("\n").filter(Boolean);
       commitCount = commitLog.length;
@@ -522,9 +1247,15 @@ function versionContext() {
   const result = {
     git: {
       branch: currentBranch,
+      branchType,
       isClean,
       dirtyFiles,
       hasOrigin,
+      baseBranch: comparison.baseBranch,
+      baseRef: comparison.baseRef,
+      mergeBase: comparison.mergeBase,
+      comparisonRange: comparison.comparisonRange,
+      mergeBaseStrategy: comparison.mergeBaseStrategy,
     },
     version: {
       system: versionSystem,
@@ -797,7 +1528,7 @@ function scan() {
   } else if (branchType === "spike") {
     // spike/ branches are for research/PoC — warn but allow PR if user insists
     warnings.push(
-      `⚠️  '${currentBranch}' is a spike branch (research/PoC). Spike branches are not usually merged. Are you sure you want to create a PR?`,
+      `WARNING: '${currentBranch}' is a spike branch (research/PoC). Spike branches are not usually merged. Are you sure you want to create a PR?`,
     );
   } else if (branchType === "unknown") {
     isAbort = true;
@@ -833,36 +1564,12 @@ function scan() {
   const remoteUrl = remoteResult.ok ? remoteResult.output : "";
   const { name: platform, commitUrlPattern } = detectPlatform(remoteUrl);
 
-  let baseBranch = prodBase || "main";
-  if (!isIntegrationPR) {
-    baseBranch = devBase || prodBase || "main";
-  }
-
-  const baseExistsLocal = runSafe(`git rev-parse --verify ${baseBranch}`);
-  const baseExistsRemote = runSafe(
-    `git rev-parse --verify origin/${baseBranch}`,
-  );
-  if (!baseExistsLocal.ok && !baseExistsRemote.ok) {
-    for (const b of ["main", "master", "develop", "development"]) {
-      const rl = runSafe(`git rev-parse --verify ${b}`);
-      const rr = runSafe(`git rev-parse --verify origin/${b}`);
-      if (rl.ok || rr.ok) {
-        baseBranch = b;
-        break;
-      }
-    }
-  }
-
-  const baseRef = (() => {
-    const local = runSafe(`git rev-parse --verify ${baseBranch}`);
-    if (local.ok) return baseBranch;
-    const remote = runSafe(`git rev-parse --verify origin/${baseBranch}`);
-    if (remote.ok) return `origin/${baseBranch}`;
-    return baseBranch;
-  })();
+  const comparison = resolveComparisonContext(branchType, devBase, prodBase);
+  const { baseBranch, baseRef, mergeBase, comparisonRange, mergeBaseStrategy } =
+    comparison;
 
   const logResult = runSafe(
-    `git log ${baseRef}..HEAD --format="%H|%h|%s" 2>/dev/null || git log --oneline -20 --format="%H|%h|%s"`,
+    `git log ${comparisonRange} --format="%H|%h|%s" 2>/dev/null || git log --oneline -20 --format="%H|%h|%s"`,
   );
   const rawCommits = logResult.ok
     ? logResult.output.split("\n").filter(Boolean)
@@ -888,7 +1595,7 @@ function scan() {
   }
 
   const statResult = runSafe(
-    `git diff --stat ${baseRef}..HEAD 2>/dev/null || git diff --stat HEAD~${Math.max(totalCommits, 1)} HEAD`,
+    `git diff --stat ${comparisonRange} 2>/dev/null || git diff --stat HEAD~${Math.max(totalCommits, 1)} HEAD`,
   );
   let filesChanged = 0;
   let linesAdded = 0;
@@ -904,7 +1611,7 @@ function scan() {
   }
 
   const filesResult = runSafe(
-    `git diff --name-only ${baseRef}..HEAD 2>/dev/null || git diff --name-only HEAD~${Math.max(totalCommits, 1)} HEAD`,
+    `git diff --name-only ${comparisonRange} 2>/dev/null || git diff --name-only HEAD~${Math.max(totalCommits, 1)} HEAD`,
   );
   const changedFiles = filesResult.ok
     ? filesResult.output.split("\n").filter(Boolean)
@@ -930,7 +1637,7 @@ function scan() {
   }));
 
   const breakingResult = runSafe(
-    `git log ${baseRef}..HEAD --grep="BREAKING CHANGE" --format="%h|%s" 2>/dev/null || git log --oneline -50 --grep="BREAKING CHANGE" --format="%h|%s"`,
+    `git log ${comparisonRange} --grep="BREAKING CHANGE" --format="%h|%s" 2>/dev/null || git log --oneline -50 --grep="BREAKING CHANGE" --format="%h|%s"`,
   );
   const breakingCommits =
     breakingResult.ok && breakingResult.output
@@ -978,6 +1685,7 @@ function scan() {
     commits,
     totalCommits,
     commitHashesSummary,
+    changedFiles,
     fileStats: { filesChanged, linesAdded, linesDeleted },
     filesByCategory,
     topFiles,
@@ -986,6 +1694,10 @@ function scan() {
     deployment,
     impactArea,
     baseBranch,
+    baseRef,
+    mergeBase,
+    mergeBaseStrategy,
+    comparisonRange,
     lastProductionTag,
   };
 
@@ -1153,30 +1865,41 @@ function checkCicd() {
 
 const flags = parseArgs();
 
-if (flags["scan"]) {
-  scan();
-} else if (flags["check-cicd"]) {
-  checkCicd();
-} else if (flags["push"]) {
-  push();
-} else if (flags["create-pr"]) {
-  createPr(flags);
-} else if (flags["version-context"]) {
-  versionContext();
-} else if (flags["update-version"]) {
-  updateVersion(flags);
-} else if (flags["commit-version"]) {
-  commitVersion(flags);
-} else {
-  process.stderr.write(
-    "Usage:\n" +
-      "  node flow-pr.mjs --scan\n" +
-      "  node flow-pr.mjs --check-cicd\n" +
-      "  node flow-pr.mjs --push\n" +
-      "  node flow-pr.mjs --create-pr --target <branch> --title <title> --body-file <path>\n" +
-      "  node flow-pr.mjs --version-context\n" +
-      "  node flow-pr.mjs --update-version --version X.Y.Z\n" +
-      '  node flow-pr.mjs --commit-version --version X.Y.Z --files "f1,f2,f3"\n',
-  );
+try {
+  if (flags["auto"]) {
+    auto(flags);
+  } else if (flags["scan"]) {
+    scan();
+  } else if (flags["check-cicd"]) {
+    checkCicd();
+  } else if (flags["push"]) {
+    push();
+  } else if (flags["create-pr"]) {
+    createPr(flags);
+  } else if (flags["version-context"]) {
+    versionContext();
+  } else if (flags["update-version"]) {
+    updateVersion(flags);
+  } else if (flags["commit-version"]) {
+    commitVersion(flags);
+  } else if (flags["release-guard"]) {
+    releaseGuard(flags);
+  } else {
+    process.stderr.write(
+      "Usage:\n" +
+        "  node flow-pr.mjs --auto [--dry-run]\n" +
+        "  node flow-pr.mjs --scan\n" +
+        "  node flow-pr.mjs --check-cicd\n" +
+        "  node flow-pr.mjs --push\n" +
+        "  node flow-pr.mjs --create-pr --target <branch> --title <title> --body-file <path>\n" +
+        "  node flow-pr.mjs --version-context\n" +
+        "  node flow-pr.mjs --update-version --version X.Y.Z\n" +
+        '  node flow-pr.mjs --commit-version --version X.Y.Z --files "f1,f2,f3"\n' +
+        "  node flow-pr.mjs --release-guard --source <branch> --target <branch> --is-clean true --version X.Y.Z\n",
+    );
+    process.exit(1);
+  }
+} catch (error) {
+  process.stderr.write(`${error.message}\n`);
   process.exit(1);
 }

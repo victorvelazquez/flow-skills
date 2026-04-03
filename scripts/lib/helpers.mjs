@@ -15,7 +15,7 @@ import fs from "fs";
  * Run a shell command synchronously; throw on non-zero exit.
  * @param {string} cmd
  * @param {object} [opts] — passed to execSync (e.g. { cwd })
- * @returns {string} trimmed stdout
+ * @returns {string} stdout with trailing whitespace removed (leading whitespace preserved)
  */
 export function run(cmd, opts = {}) {
   try {
@@ -24,7 +24,7 @@ export function run(cmd, opts = {}) {
       stdio: ["pipe", "pipe", "pipe"],
       cwd: process.cwd(),
       ...opts,
-    }).trim();
+    }).trimEnd();
   } catch (err) {
     const msg = (err.stderr || err.message || String(err)).trim();
     throw new Error(msg);
