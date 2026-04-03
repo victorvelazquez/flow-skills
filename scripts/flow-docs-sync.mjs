@@ -4,6 +4,7 @@
  * Node.js ESM, zero external dependencies, cross-platform (Windows + Linux/macOS)
  *
  * Modes:
+ *   --auto [--dry-run]  Resolve docs sync context in one entrypoint → JSON
  *   --snapshot       Scan codebase and emit state snapshot → JSON
  *   --diff           Compare snapshot to .flow-skills/cache/docs-analysis.json → JSON
  *   --update-cache   Write current snapshot to .flow-skills/cache/docs-analysis.json
@@ -257,6 +258,95 @@ function buildSnapshot() {
         f.includes(".test.") || f.includes(".spec.") || f.includes("__tests__"),
     ),
   };
+}
+
+function auto(flags) {
+  const dryRun = flags["dry-run"] === true;
+  const cwd = process.cwd();
+  const cachePath = path.join(
+    cwd,
+    ".flow-skills",
+    "cache",
+    "docs-analysis.json",
+  );
+  const cacheExists = fs.existsSync(cachePath);
+
+  let diffResult;
+
+  if (!cacheExists) {
+    const current = buildSnapshot();
+    diffResult = {
+      cacheExists: false,
+      changed: [
+        {
+          file: "docs/components.md",
+          reason: "No cache found — full documentation sync required",
+          changes: ["Initial snapshot"],
+        },
+        {
+          file: "docs/state-management.md",
+          reason: "No cache found — full documentation sync required",
+          changes: ["Initial snapshot"],
+        },
+        {
+          file: "docs/architecture.md",
+          reason: "No cache found — full documentation sync required",
+          changes: ["Initial snapshot"],
+        },
+        {
+          file: "docs/styling.md",
+          reason: "No cache found — full documentation sync required",
+          changes: ["Initial snapshot"],
+        },
+        {
+          file: "docs/testing.md",
+          reason: "No cache found — full documentation sync required",
+          changes: ["Initial snapshot"],
+        },
+        {
+          file: "ai-instructions.md",
+          reason: "No cache found — full documentation sync required",
+          changes: ["Initial snapshot"],
+        },
+      ],
+      unchanged: [],
+      current,
+    };
+  } else {
+    const oldStdoutWrite = process.stdout.write;
+    let captured = "";
+    process.stdout.write = (chunk) => {
+      captured += chunk;
+      return true;
+    };
+    try {
+      diff();
+    } finally {
+      process.stdout.write = oldStdoutWrite;
+    }
+    diffResult = JSON.parse(captured);
+  }
+
+  const result = {
+    success: true,
+    mode: "auto",
+    dryRun,
+    cacheExists: diffResult.cacheExists,
+    changed: diffResult.changed,
+    unchanged: diffResult.unchanged,
+    current: diffResult.current,
+    nextAction: diffResult.changed.length === 0 ? "noop" : "llm-update-docs",
+    cacheUpdateRequired: diffResult.changed.length > 0,
+  };
+
+  if (dryRun) {
+    result.preview = {
+      filesToUpdate: diffResult.changed.map((entry) => entry.file),
+      unchanged: diffResult.unchanged,
+    };
+  }
+
+  process.stdout.write(JSON.stringify(result, null, 2) + "\n");
 }
 
 // ─── --snapshot ───────────────────────────────────────────────────────────────
@@ -572,6 +662,8 @@ const flags = parseArgs();
 
 if (flags["snapshot"]) {
   snapshot();
+} else if (flags["auto"]) {
+  auto(flags);
 } else if (flags["diff"]) {
   diff();
 } else if (flags["update-cache"]) {
@@ -579,6 +671,7 @@ if (flags["snapshot"]) {
 } else {
   process.stderr.write(
     "Usage:\n" +
+      "  node flow-docs-sync.mjs --auto [--dry-run]\n" +
       "  node flow-docs-sync.mjs --snapshot\n" +
       "  node flow-docs-sync.mjs --diff\n" +
       "  node flow-docs-sync.mjs --update-cache\n",

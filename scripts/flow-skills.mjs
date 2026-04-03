@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 /**
- * flow-skills.mjs — flow-skills-specific context and automation
+ * flow-skills.mjs — local sync helper for the flow-skills repository
  * Node.js ESM, zero external dependencies, cross-platform (Windows + Linux/macOS)
  *
  * Modes:
- *   --context      Detect mode + gather git/version context → JSON
+ *   --auto [--dry-run]  Resolve sync/update/install context in one entrypoint → JSON
+ *   --context      Detect mode + gather local sync context → JSON
  *   --run-export   Run install.mjs --export, return exported file list → JSON
  *   --update       Run git pull + node install.mjs → JSON result
  */
@@ -30,31 +31,6 @@ function parseRemoteUrl(remoteUrl) {
   );
   if (httpsMatch) return { owner: httpsMatch[1], repo: httpsMatch[2] };
   return { owner: null, repo: null };
-}
-
-// ─── Suggested bump computation ───────────────────────────────────────────────
-// HINT ONLY — LLM must validate against commit semantics before accepting.
-// A commit like "chore: add new skill" may warrant MINOR even without feat: prefix.
-
-function computeSuggestedBump(commitLog) {
-  for (const line of commitLog) {
-    // MAJOR: BREAKING CHANGE in body, or ! after type (e.g. feat!:)
-    if (/BREAKING[\s-]CHANGE/i.test(line) || /^\w+[^:]*!:/.test(line))
-      return "MAJOR";
-  }
-  for (const line of commitLog) {
-    // MINOR: feat(...) or feat:
-    if (/feat[\(:]/i.test(line)) return "MINOR";
-  }
-  return "PATCH";
-}
-
-function computeSuggestedVersion(current, bump) {
-  const parts = current.split(".").map(Number);
-  const [major, minor, patch] = parts;
-  if (bump === "MAJOR") return `${major + 1}.0.0`;
-  if (bump === "MINOR") return `${major}.${minor + 1}.0`;
-  return `${major}.${minor}.${patch + 1}`;
 }
 
 // ─── --context ────────────────────────────────────────────────────────────────
@@ -117,34 +93,6 @@ function getContext() {
       ? aheadResult.output.split("\n").filter(Boolean).length
       : 0;
 
-  // Last tag + commits since tag
-  let lastTag = "v0.0.0";
-  const describeResult = runSafe("git describe --tags --abbrev=0");
-  if (describeResult.ok && describeResult.output) {
-    lastTag = describeResult.output.trim() || "v0.0.0";
-  } else {
-    // Fallback: try listing tags sorted by version
-    const tagFallback = runSafe("git tag --sort=-version:refname");
-    if (tagFallback.ok && tagFallback.output) {
-      const firstTag = tagFallback.output.split("\n").filter(Boolean)[0];
-      if (firstTag) lastTag = firstTag;
-    }
-  }
-
-  let commitsSinceTag = [];
-  const logResult = runSafe(`git log ${lastTag}..HEAD --oneline --no-merges`);
-  if (logResult.ok && logResult.output) {
-    commitsSinceTag = logResult.output.split("\n").filter(Boolean);
-  }
-
-  // Version from package.json
-  const pkg = readJsonFile("package.json");
-  const currentVersion = pkg && pkg.version ? pkg.version : "0.0.0";
-
-  // Suggested bump and version (HINT ONLY)
-  const suggestedBump = computeSuggestedBump(commitsSinceTag);
-  const suggestedVersion = computeSuggestedVersion(currentVersion, suggestedBump);
-
   // Mode detection — check for pending export changes via dry-run
   const installPath = path.join(process.cwd(), "install.mjs");
   const dryRunResult = runSafe(`node "${installPath}" --export --dry-run`);
@@ -166,7 +114,7 @@ function getContext() {
 
   // Mode priority: install < synced < update < publish
   let mode = "synced";
-  let modeReason = "Local and remote are in sync";
+  let modeReason = "Local opencode and flow-skills repo are in sync";
 
   if (hasPendingExport) {
     mode = "publish";
@@ -178,13 +126,6 @@ function getContext() {
     mode = "publish";
     modeReason = `Local has ${aheadCommits} commit(s) not yet pushed to remote`;
   }
-
-  // PR URL (pre-built for suggestedVersion; recalculate if version overridden)
-  const isGitHub = remoteUrl && remoteUrl.includes("github.com");
-  const prUrl =
-    owner && repo && isGitHub
-      ? `https://github.com/${owner}/${repo}/compare/release/v${suggestedVersion}?expand=1`
-      : null;
 
   const result = {
     mode,
@@ -199,17 +140,10 @@ function getContext() {
       upstreamCommits,
       aheadCommits,
     },
-    version: {
-      current: currentVersion,
-      lastTag,
-      commitsSinceTag,
-      // HINT ONLY: suggestedBump is computed from commit prefix patterns only.
-      // The LLM MUST validate this against commit semantics before accepting.
-      // A commit like "chore: add new skill" may warrant MINOR even without feat: prefix.
-      suggestedBump,
-      suggestedVersion,
+    sync: {
+      pendingExport: hasPendingExport,
+      exportDryRunDetected: hasPendingExport,
     },
-    prUrl,
   };
 
   process.stdout.write(JSON.stringify(result, null, 2) + "\n");
@@ -319,12 +253,92 @@ function runUpdate() {
   );
 }
 
+function auto(flags) {
+  const dryRun = flags["dry-run"] === true;
+  const oldStdoutWrite = process.stdout.write;
+
+  const captureJson = (fn) => {
+    let captured = "";
+    process.stdout.write = (chunk) => {
+      captured += chunk;
+      return true;
+    };
+    try {
+      fn();
+    } finally {
+      process.stdout.write = oldStdoutWrite;
+    }
+    return JSON.parse(captured);
+  };
+
+  const context = captureJson(() => getContext());
+  const result = {
+    success: true,
+    mode: "auto",
+    dryRun,
+    context,
+    actionPlan: null,
+    nextAction: "review-context",
+  };
+
+  if (context.mode === "publish") {
+    if (dryRun) {
+      result.actionPlan = {
+        publish: true,
+        export: "skipped-dry-run",
+        next: "run-flow-commit-after-export",
+      };
+      result.nextAction = "review-local-sync-plan";
+    } else {
+      const exported = captureJson(() => runExport());
+      result.export = exported;
+      result.actionPlan = {
+        publish: true,
+        exportedFiles: exported.files,
+        next: exported.nothing ? "noop" : "run-flow-commit-after-export",
+      };
+      result.nextAction = exported.nothing
+        ? "noop"
+        : "run-flow-commit-after-export";
+    }
+  } else if (context.mode === "update") {
+    if (dryRun) {
+      result.actionPlan = {
+        update: true,
+        pull: "skipped-dry-run",
+        install: "skipped-dry-run",
+      };
+      result.nextAction = "review-update-plan";
+    } else {
+      result.update = captureJson(() => runUpdate());
+      result.actionPlan = {
+        update: true,
+        ok: result.update.ok,
+      };
+      result.nextAction = result.update.ok ? "done" : "handle-update-error";
+    }
+  } else if (context.mode === "install") {
+    result.actionPlan = {
+      install: true,
+      next: "manual-install-required",
+    };
+    result.nextAction = "manual-install-required";
+  } else {
+    result.actionPlan = { synced: true };
+    result.nextAction = "noop";
+  }
+
+  process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+}
+
 // ─── Entry point ──────────────────────────────────────────────────────────────
 
 const flags = parseArgs();
 
 if (flags["context"]) {
   getContext();
+} else if (flags["auto"]) {
+  auto(flags);
 } else if (flags["run-export"]) {
   runExport();
 } else if (flags["update"]) {
@@ -332,9 +346,13 @@ if (flags["context"]) {
 } else {
   process.stderr.write(
     "Usage:\n" +
+      "  node flow-skills.mjs --auto [--dry-run]\n" +
       "  node flow-skills.mjs --context\n" +
       "  node flow-skills.mjs --run-export\n" +
-      "  node flow-skills.mjs --update\n",
+      "  node flow-skills.mjs --update\n\n" +
+      "Notes:\n" +
+      "  - publish mode only syncs local changes into the local flow-skills repo\n" +
+      "  - to publish remotely, continue with /flow-commit and /flow-pr inside Tools/flow-skills\n",
   );
   process.exit(1);
 }
