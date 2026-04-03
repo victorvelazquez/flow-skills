@@ -1,135 +1,81 @@
 ---
 name: flow-branch
-description: Interactive branch switcher — lists local+remote branches sorted by date, switch with pull prompt, delete local branches. Zero-AI git branch manager.
+description: Interactive branch switcher — uses the runtime script as the source of truth for listing, checkout, and local branch deletion. Trigger: /flow-branch command.
 trigger: /flow-branch command
 ---
 
 # /flow-branch
 
-> Zero-AI command. No analysis, no decisions. Follow the steps exactly.
+Trigger: user runs `/flow-branch`
 
----
+## Script Path
 
-## PROTECTED BRANCHES
-
-Never allow deletion of: `main`, `master`, `dev`, `development`
-
----
-
-## Step 1 — Fetch and build branch list
-
-Run:
-
-```
-git fetch origin
-git branch -a --sort=-committerdate --format=%(refname:short)|%(committerdate:relative)
+```bash
+node -e "const os=require('os'),path=require('path');console.log(path.join(os.homedir(),'.config','opencode','scripts','flow-branch.mjs'))"
 ```
 
-Parse the output and build two sets:
+Store as `$SCRIPT`.
 
-- **locals**: all lines NOT starting with `origin/` (strip `*` prefix if present)
-- **remotes**: all lines starting with `origin/`, strip the `origin/` prefix for comparison
+## Default Behavior
 
-Classify each unique branch name:
+The script is the source of truth. Prefer the runtime flow over manual branch logic.
 
-- **local+remote** = exists in both locals and remotes
-- **local only** = exists in locals but NOT in remotes
-- **remote only** = exists in remotes but NOT in locals
+- Branch list: `--auto-list`
+- Checkout: `--checkout --branch <name>`
+- Delete local branch: `--delete --branch <name>`
+- Force delete only after the normal delete fails and the user explicitly confirms
 
-Build the final list:
+## Primary Commands
 
-1. `development` always first (if it exists), type `local+remote`
-2. Then remaining branches sorted by most recent committerdate
-3. Max 10 per type (local+remote, local only, remote only) — combined total max 30 entries
-4. Assign sequential numbers starting at 1
+### List branches
 
-Format each line as:
-
-```
-  N. <branch-name>        <type>        —  <relative-date>
+```bash
+node "$SCRIPT" --auto-list
 ```
 
-Where `<type>` is one of: `local+remote`, `local only`, `remote only`
+### Checkout a branch
 
-Append this line at the bottom:
-
-```
-Para eliminar una rama local escribe D<número> en el chat (ej: D3, D7)
+```bash
+node "$SCRIPT" --checkout --branch <name>
 ```
 
-Show the numbered list to the user as plain text, then immediately show a `question` picker with the same branches as selectable options (format: `N. <branch-name> — <type>`).
+### Delete a local branch
 
----
-
-## Step 2a — User selects a branch from the picker
-
-Identify the branch type from the list built in Step 1.
-
-**If `local+remote`:**
-
-```
-git checkout <branch>
-git rev-list HEAD..origin/<branch> --count
+```bash
+node "$SCRIPT" --delete --branch <name>
 ```
 
-- If count > 0: ask with `question`:
-  > "Hay `<count>` commits nuevos en origin/<branch>. ¿Qué hacemos?"
-  > Options: "Descargar ahora (git pull)" | "Continuar sin actualizar"
-  - If "Descargar ahora": run `git pull origin <branch>`, show output.
-  - If "Continuar sin actualizar": continue, no pull.
-- If count == 0: inform "Ya estás actualizado." Done.
+### Force delete after user approval
 
-**If `local only`:**
-
-```
-git checkout <branch>
+```bash
+node "$SCRIPT" --delete --branch <name> --force
 ```
 
-Show output. Done.
+## What the script handles
 
-**If `remote only`:**
+- `git fetch origin`
+- branch inventory and classification (`local+remote`, `local only`, `remote only`)
+- protected branch checks
+- current-branch deletion guard
+- checkout behavior for local and remote-only branches
+- update count for local+remote branches
 
-```
-git checkout --track origin/<branch>
-```
+## What the agent still does
 
-Show output. Done.
+- present the branch list nicely
+- let the user choose a branch or delete action
+- ask whether to pull when the selected branch has remote updates
+- ask whether to force delete only if normal delete fails because the branch is not merged
 
----
+## Response Rules
 
-## Step 2b — User types D<n> in the chat
+- If listing succeeds, show the available branches clearly
+- If checkout succeeds and `updateCount > 0`, ask whether to pull
+- If normal delete fails because the branch is not merged, ask whether to force delete
+- If the script fails for another reason, show the error and ask what to do
 
-Extract the number N from the input (e.g. `D4` → N=4).
+## Restrictions
 
-Look up branch name and type from the list built in Step 1.
-
-**Validations (in order):**
-
-1. If N is out of range: inform "Número fuera de rango." → go to Step 1 (reload list).
-2. If type is `remote only`: inform "Solo se pueden eliminar ramas locales." → go to Step 1.
-3. If branch name is in protected list (`main`, `master`, `dev`, `development`): inform "La rama `<branch>` está protegida y no puede eliminarse." → go to Step 1.
-4. If branch is the current active branch: inform "No puedes eliminar la rama en la que estás." → go to Step 1.
-
-**If all validations pass**, ask with `question`:
-
-> "¿Eliminar rama local `<branch>`? Esta acción no se puede deshacer."
-> Options: "Sí, eliminar" | "Cancelar"
-
-- If "Cancelar": go to Step 1 (reload list).
-- If "Sí, eliminar":
-  ```
-  git branch -d <branch>
-  ```
-
-  - If command succeeds: inform "Rama `<branch>` eliminada." → go to Step 1 (reload list).
-  - If command fails (not fully merged): ask with `question`:
-    > "La rama `<branch>` no está mergeada. ¿Forzar eliminación?"
-    > Options: "Sí, forzar (git branch -D)" | "Cancelar"
-    - If "Sí, forzar": run `git branch -D <branch>`, inform result → go to Step 1 (reload list).
-    - If "Cancelar": go to Step 1 (reload list).
-
----
-
-## Step 1 — Reload list
-
-Any time the instructions say "go to Step 1 (reload list)", re-run the full Step 1 from scratch (fetch + classify + show list + picker).
+- NEVER allow deletion of protected branches: `main`, `master`, `dev`, `development`
+- NEVER force delete without explicit user approval
+- NEVER re-implement branch classification logic in the prompt when the script can do it
