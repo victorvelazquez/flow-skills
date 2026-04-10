@@ -11,17 +11,17 @@
  *   --create-pr --target <branch> --title <title> --body-file <path>
  *                                                     Create a GitHub PR via `gh pr create`
  *   --auto --title-override "feat(scope): semantic title"
- *          --pr-body-file <path> --jira-file <path>   Optional safe content overrides for the auto flow
+ *          --pr-body-file <path>                       Optional safe content overrides for the auto flow
  *   --version-context                                 Gather semver + git context for integration PR version bump
- *   --update-version --version X.Y.Z                 Run npm version --no-git-tag-version + auto-update releaseDate + env templates
- *   --commit-version --version X.Y.Z --files "f1,f2" git add + commit (no tag, no push — CI handles tagging)
+ *   --update-version --version X.Y.Z                 Update the project's configured version source + releaseDate/env templates
+ *   --commit-version --version X.Y.Z --files "f1,f2" git add + commit version files
+ *   --create-tag --version X.Y.Z                     Create annotated git tag when the project release flow requires it
  */
 
-import { runSafe, parseArgs, exists, readJsonFile } from "./lib/helpers.mjs";
+import { runSafe, runWithStdin, parseArgs, exists, readJsonFile } from "./lib/helpers.mjs";
 import process from "process";
 import path from "path";
 import fs from "fs";
-import os from "os";
 
 // ─── Branch type constants ────────────────────────────────────────────────────
 
@@ -414,34 +414,6 @@ function buildPrDescription(scanResult, options = {}) {
     .join("\n");
 }
 
-function buildJiraComment(scanResult, options = {}) {
-  const version = options.version;
-  const title = scanResult.isIntegrationPR
-    ? `### 🚀 Release: versión ${version}`
-    : `### 🚀 ${scanResult.branchType.toUpperCase()}: ${buildTitleFallbackSubject(scanResult)}`;
-
-  const summary = scanResult.isIntegrationPR
-    ? `**Se preparó una integración a producción desde ${scanResult.currentBranch} hacia ${scanResult.targetBranches.join(", ")} con bump de versión a ${version}.**`
-    : `**Se dejó listo el PR de ${scanResult.currentBranch} hacia ${scanResult.targetBranches.join(", ")} con un resumen funcional más claro para revisión y validación.**`;
-
-  return [
-    title,
-    "",
-    summary,
-    "",
-    "### Cómo validar",
-    `- Revisar el PR generado hacia ${scanResult.targetBranches.join(", ")}`,
-    "- Validar el alcance funcional según el resumen y los archivos impactados",
-    "",
-    "### Evidencia",
-    "| Dato | Valor |",
-    "| --- | --- |",
-    `| Rama | ${scanResult.currentBranch} |`,
-    `| Destino | ${scanResult.targetBranches.join(", ")} |`,
-    `| Commits | ${scanResult.totalCommits} |`,
-    `| Impacto | ${scanResult.impactArea} |`,
-  ].join("\n");
-}
 
 function resolveGitRef(branchName, preferRemote = true) {
   if (!branchName) return null;
@@ -494,11 +466,77 @@ function resolveComparisonContext(branchType, devBase, prodBase) {
   };
 }
 
-function createTempBodyFile(content) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "flow-pr-"));
-  const filePath = path.join(dir, "pr-body.md");
-  fs.writeFileSync(filePath, content, "utf8");
-  return filePath;
+function isValidSemver(value) {
+  return /^\d+\.\d+\.\d+$/.test(String(value || "").trim());
+}
+
+function toIsoUtcSeconds(date = new Date()) {
+  return date.toISOString().replace(/\.\d{3}Z$/, "Z");
+}
+
+function detectVersionStrategy() {
+  const srcVersion = readJsonFile("src/version.json");
+  if (srcVersion && isValidSemver(srcVersion.version)) {
+    return {
+      system: "version-json",
+      currentVersion: String(srcVersion.version).trim(),
+      files: [
+        {
+          file: "src/version.json",
+          version: String(srcVersion.version).trim(),
+          releaseDate: srcVersion.releaseDate || null,
+        },
+      ],
+      sourceFile: "src/version.json",
+      shouldUpdateChangelog: false,
+      shouldCreateAnnotatedTag: true,
+    };
+  }
+
+  const pkg = readJsonFile("package.json");
+  if (pkg && isValidSemver(pkg.version)) {
+    return {
+      system: "npm",
+      currentVersion: String(pkg.version).trim(),
+      files: [
+        {
+          file: "package.json",
+          version: String(pkg.version).trim(),
+          releaseDate: pkg.releaseDate || null,
+        },
+      ],
+      sourceFile: "package.json",
+      shouldUpdateChangelog: true,
+      shouldCreateAnnotatedTag: false,
+    };
+  }
+
+  const bower = readJsonFile("bower.json");
+  if (bower && isValidSemver(bower.version)) {
+    return {
+      system: "bower",
+      currentVersion: String(bower.version).trim(),
+      files: [
+        {
+          file: "bower.json",
+          version: String(bower.version).trim(),
+          releaseDate: bower.releaseDate || null,
+        },
+      ],
+      sourceFile: "bower.json",
+      shouldUpdateChangelog: true,
+      shouldCreateAnnotatedTag: false,
+    };
+  }
+
+  return {
+    system: null,
+    currentVersion: "0.0.0",
+    files: [],
+    sourceFile: null,
+    shouldUpdateChangelog: exists("CHANGELOG.md"),
+    shouldCreateAnnotatedTag: false,
+  };
 }
 
 // ─── Platform patterns ────────────────────────────────────────────────────────
@@ -797,23 +835,35 @@ function resolveTargets(branchType, devBase, prodBase) {
 
 // ─── --push ───────────────────────────────────────────────────────────────────
 
-function push() {
+function push(flags = {}) {
+  const includeTags = hasTruthyFlag(flags["tags"]);
   const branchResult = runSafe("git branch --show-current");
   const branch = branchResult.ok ? branchResult.output : "unknown";
 
   // Usar -u para setear upstream tracking (primera vez)
   const pushResult = runSafe(`git push -u origin "${branch}"`);
 
+  let tagPushResult = null;
+  if (pushResult.ok && includeTags) {
+    tagPushResult = runSafe("git push origin --tags");
+  }
+
   const result = {
-    success: pushResult.ok,
+    success: pushResult.ok && (!includeTags || tagPushResult?.ok),
     branch,
     remote: "origin",
+    includeTags,
     output: pushResult.output,
-    error: pushResult.ok ? null : pushResult.output,
+    tagPush: tagPushResult,
+    error: !pushResult.ok
+      ? pushResult.output
+      : includeTags && !tagPushResult?.ok
+        ? tagPushResult.output
+        : null,
   };
 
-  if (!pushResult.ok) {
-    process.stderr.write(`Push failed: ${pushResult.output}\n`);
+  if (!result.success) {
+    process.stderr.write(`Push failed: ${result.error}\n`);
     process.stdout.write(JSON.stringify(result, null, 2) + "\n");
     process.exit(1);
   }
@@ -822,6 +872,30 @@ function push() {
 }
 
 // ─── --create-pr ──────────────────────────────────────────────────────────────
+
+function createPrViaGh(target, title, body) {
+  const escapedTitle = title.replace(/"/g, '\\"');
+  const cmd = `gh pr create --base "${target}" --title "${escapedTitle}" --body-file -`;
+  const result = runWithStdin(cmd, body);
+
+  // gh retorna error con URL si el PR ya existe
+  if (!result.ok && result.output.includes("already exists")) {
+    const urlMatch = result.output.match(/https:\/\/github\.com\/[^\s]+/);
+    if (urlMatch) {
+      return { success: true, prUrl: urlMatch[0], target, alreadyExists: true, output: result.output, error: null };
+    }
+  }
+
+  const urlMatch = result.output.match(/https:\/\/github\.com\/[^\s]+/);
+  return {
+    success: result.ok,
+    prUrl: urlMatch ? urlMatch[0] : null,
+    target,
+    alreadyExists: false,
+    output: result.output,
+    error: result.ok ? null : result.output,
+  };
+}
 
 function createPr(flags) {
   const target = flags["target"];
@@ -835,47 +909,11 @@ function createPr(flags) {
     process.exit(1);
   }
 
-  // Construir comando gh — escapar comillas en el título
-  const escapedTitle = title.replace(/"/g, '\\"');
-  const cmd = `gh pr create --base "${target}" --title "${escapedTitle}" --body-file "${bodyFile}"`;
-  const result = runSafe(cmd);
+  const body = fs.readFileSync(path.resolve(bodyFile), "utf8");
+  const result = createPrViaGh(target, title, body);
 
-  // gh retorna error con URL si el PR ya existe
-  if (!result.ok && result.output.includes("already exists")) {
-    const urlMatch = result.output.match(/https:\/\/github\.com\/[^\s]+/);
-    if (urlMatch) {
-      process.stdout.write(
-        JSON.stringify({
-          success: true,
-          prUrl: urlMatch[0],
-          target,
-          alreadyExists: true,
-          output: result.output,
-          error: null,
-        }) + "\n",
-      );
-      return;
-    }
-  }
-
-  // Extraer URL del output exitoso
-  const urlMatch = result.output.match(/https:\/\/github\.com\/[^\s]+/);
-  const prUrl = urlMatch ? urlMatch[0] : null;
-
-  process.stdout.write(
-    JSON.stringify({
-      success: result.ok,
-      prUrl,
-      target,
-      alreadyExists: false,
-      output: result.output,
-      error: result.ok ? null : result.output,
-    }) + "\n",
-  );
-
-  if (!result.ok) {
-    process.exit(1);
-  }
+  process.stdout.write(JSON.stringify(result) + "\n");
+  if (!result.success && !result.alreadyExists) process.exit(1);
 }
 
 // ─── --release-guard ─────────────────────────────────────────────────────────
@@ -909,6 +947,13 @@ function releaseGuard(flags) {
     reasons.push("resolved version is missing or invalid");
   }
 
+  if (newVersion) {
+    const tagExists = runSafe(`git rev-parse --verify refs/tags/v${newVersion}`);
+    if (tagExists.ok) {
+      reasons.push(`tag 'v${newVersion}' already exists`);
+    }
+  }
+
   const result = {
     success: reasons.length === 0,
     source,
@@ -930,10 +975,6 @@ function auto(flags = {}) {
   const prBodyOverride = readOptionalTextFile(
     flags["pr-body-file"],
     "PR body override",
-  );
-  const jiraOverride = readOptionalTextFile(
-    flags["jira-file"],
-    "Jira comment override",
   );
   const scanResult = runSelfMode(["--scan"]);
 
@@ -958,13 +999,19 @@ function auto(flags = {}) {
   let versionAfter = null;
   let changelogEntry = null;
   let cicdObservations = null;
+  let versionSystem = null;
+  let tagCreated = false;
+  let tagName = null;
+  let shouldPushTags = false;
 
   if (scanResult.isIntegrationPR) {
     cicdObservations = runSelfMode(["--check-cicd"]);
     const versionContextResult = runSelfMode(["--version-context"]);
 
+    versionSystem = versionContextResult.version.system;
     versionBefore = versionContextResult.version.current;
     versionAfter = versionContextResult.version.suggestedVersion;
+    shouldPushTags = Boolean(versionContextResult.version.shouldCreateAnnotatedTag);
 
     runSelfMode([
       "--release-guard",
@@ -985,16 +1032,18 @@ function auto(flags = {}) {
         versionAfter,
       ]);
 
-      const changelog = updateChangelog(
-        versionAfter,
-        versionContextResult.commits.log,
-      );
-      changelogEntry = changelog.entry;
+      if (versionContextResult.version.shouldUpdateChangelog) {
+        const changelog = updateChangelog(
+          versionAfter,
+          versionContextResult.commits.log,
+        );
+        changelogEntry = changelog.entry;
+      }
 
       const filesToCommit = [
-        ...versionUpdateResult.updatedByNpm,
+        ...(versionUpdateResult.updatedFiles || versionUpdateResult.updatedByNpm || []),
         ...versionUpdateResult.updatedEnvFiles,
-        changelog.file,
+        versionContextResult.version.shouldUpdateChangelog ? "CHANGELOG.md" : null,
       ];
 
       const uniqueFiles = [...new Set(filesToCommit.filter(Boolean))];
@@ -1006,6 +1055,16 @@ function auto(flags = {}) {
         "--files",
         uniqueFiles.join(","),
       ]);
+
+      if (shouldPushTags) {
+        const tagResult = runSelfMode([
+          "--create-tag",
+          "--version",
+          versionAfter,
+        ]);
+        tagCreated = tagResult.success;
+        tagName = tagResult.tag;
+      }
     }
   }
 
@@ -1016,8 +1075,13 @@ function auto(flags = {}) {
         remote: "origin",
         output: "DRY RUN: push skipped",
         error: null,
+        includeTags: shouldPushTags,
+        tagPush: null,
       }
-    : runSelfMode(["--push"]);
+    : runSelfMode([
+        "--push",
+        ...(shouldPushTags ? ["--tags", "true"] : []),
+      ]);
 
   const finalScan = dryRun ? scanResult : runSelfMode(["--scan"]);
   finalScan.versionBefore = versionBefore;
@@ -1033,12 +1097,6 @@ function auto(flags = {}) {
   const prDescription =
     prBodyOverride ||
     buildPrDescription(finalScan, {
-      version: versionAfter,
-      title: defaultTitle,
-    });
-  const jiraComment =
-    jiraOverride ||
-    buildJiraComment(finalScan, {
       version: versionAfter,
       title: defaultTitle,
     });
@@ -1069,15 +1127,7 @@ function auto(flags = {}) {
           output: "DRY RUN: PR creation skipped",
           error: null,
         }
-      : runSelfMode([
-          "--create-pr",
-          "--target",
-          targetBranch,
-          "--title",
-          title,
-          "--body-file",
-          createTempBodyFile(prDescription),
-        ]);
+      : createPrViaGh(targetBranch, title, prDescription);
 
     prResults.push({
       target: targetBranch,
@@ -1100,15 +1150,17 @@ function auto(flags = {}) {
     pushed: pushResult.success,
     push: pushResult,
     version: finalScan.isIntegrationPR
-      ? {
-          before: versionBefore,
-          after: versionAfter,
-          changelogUpdated: dryRun ? false : Boolean(changelogEntry),
-        }
+        ? {
+            before: versionBefore,
+            after: versionAfter,
+            system: versionSystem,
+            changelogUpdated: dryRun ? false : Boolean(changelogEntry),
+            tagCreated: dryRun ? false : tagCreated,
+            tagName: dryRun ? null : tagName,
+          }
       : null,
     cicdObservations,
     prDescription,
-    jiraComment,
     prs: prResults,
   };
 
@@ -1204,25 +1256,10 @@ function versionContext() {
   }
 
   // ── Version file detection ────────────────────────────────────────────────
-  let currentVersion = "0.0.0";
-  let versionSystem = null;
-  const versionFiles = [];
-
-  const pkg = readJsonFile("package.json");
-  if (pkg && pkg.version) {
-    currentVersion = pkg.version;
-    versionSystem = "npm";
-    versionFiles.push({ file: "package.json", version: pkg.version });
-  }
-
-  const bower = readJsonFile("bower.json");
-  if (bower && bower.version) {
-    if (!versionSystem) {
-      currentVersion = bower.version;
-      versionSystem = "bower";
-    }
-    versionFiles.push({ file: "bower.json", version: bower.version });
-  }
+  const versionStrategy = detectVersionStrategy();
+  const currentVersion = versionStrategy.currentVersion;
+  const versionSystem = versionStrategy.system;
+  const versionFiles = versionStrategy.files;
 
   // ── Calcular versión sugerida ─────────────────────────────────────────────
   const [maj, min, pat] = currentVersion.split(".").map(Number);
@@ -1262,7 +1299,10 @@ function versionContext() {
       current: currentVersion,
       lastTag,
       files: versionFiles,
+      sourceFile: versionStrategy.sourceFile,
       additionalFiles,
+      shouldUpdateChangelog: versionStrategy.shouldUpdateChangelog,
+      shouldCreateAnnotatedTag: versionStrategy.shouldCreateAnnotatedTag,
       suggestedBump,
       suggestedVersion,
     },
@@ -1279,7 +1319,7 @@ function versionContext() {
 // ─── --update-version ────────────────────────────────────────────────────────
 //
 // Side Effects:
-//   - Runs `npm version X --no-git-tag-version` → modifica package.json + package-lock.json
+//   - Updates the detected version source (e.g. src/version.json or package.json)
 //   - NO hace commit, tag, ni push
 
 function updateVersion(flags) {
@@ -1296,9 +1336,42 @@ function updateVersion(flags) {
     process.exit(1);
   }
 
+  const versionStrategy = detectVersionStrategy();
+
+  if (versionStrategy.system === "version-json") {
+    const versionFilePath = versionStrategy.sourceFile || "src/version.json";
+    const versionFile = readJsonFile(versionFilePath) || {};
+    const updatedVersionFile = {
+      ...versionFile,
+      version: newVersion,
+      releaseDate: toIsoUtcSeconds(),
+      changelog: Array.isArray(versionFile.changelog) ? versionFile.changelog : [],
+    };
+
+    fs.writeFileSync(
+      versionFilePath,
+      JSON.stringify(updatedVersionFile, null, 2) + "\n",
+      "utf8",
+    );
+
+    const result = {
+      success: true,
+      system: "version-json",
+      version: newVersion,
+      releaseDateUpdated: true,
+      updatedFiles: [versionFilePath],
+      updatedByNpm: [],
+      updatedEnvFiles: [],
+      additionalUpdates: [],
+    };
+
+    process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+    return;
+  }
+
   if (!exists("package.json")) {
     process.stderr.write(
-      "Error: package.json not found in working directory\n",
+      "Error: no supported version source found in working directory\n",
     );
     process.exit(1);
   }
@@ -1413,9 +1486,14 @@ function updateVersion(flags) {
 
   const result = {
     success: true,
+    system: "npm",
     npmOutput: npmResult.output,
     version: newVersion,
     releaseDateUpdated,
+    updatedFiles: [
+      "package.json",
+      exists("package-lock.json") ? "package-lock.json" : null,
+    ].filter(Boolean),
     updatedByNpm: [
       "package.json",
       exists("package-lock.json") ? "package-lock.json" : null,
@@ -1427,12 +1505,48 @@ function updateVersion(flags) {
   process.stdout.write(JSON.stringify(result, null, 2) + "\n");
 }
 
+// ─── --create-tag ─────────────────────────────────────────────────────────────
+
+function createTag(flags) {
+  const version = flags["version"];
+  if (!version) {
+    process.stderr.write("Error: --create-tag requires --version X.Y.Z\n");
+    process.exit(1);
+  }
+
+  const tagName = `v${version}`;
+  const existingTag = runSafe(`git rev-parse --verify refs/tags/${tagName}`);
+  if (existingTag.ok) {
+    process.stderr.write(`Error: tag '${tagName}' already exists\n`);
+    process.exit(1);
+  }
+
+  const tagMessage = `Release ${tagName} - ${new Date().toISOString().split("T")[0]}`;
+  const tagResult = runSafe(
+    `git tag -a ${quoteShellArg(tagName)} -m ${quoteShellArg(tagMessage)}`,
+  );
+
+  if (!tagResult.ok) {
+    process.stderr.write(`git tag failed: ${tagResult.output}\n`);
+    process.exit(1);
+  }
+
+  const result = {
+    success: true,
+    version,
+    tag: tagName,
+    message: tagMessage,
+  };
+
+  process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+}
+
 // ─── --commit-version ────────────────────────────────────────────────────────
 //
 // Side Effects:
 //   - git add <files>
 //   - git commit -m "chore(release): bump version to X.Y.Z"
-//   NO crea tag ni hace push — el tag lo crea CI/CD después del merge a main
+//   NO crea tag ni hace push
 
 function commitVersion(flags) {
   const version = flags["version"];
@@ -1496,7 +1610,7 @@ function commitVersion(flags) {
     success: true,
     version,
     steps,
-    note: "Tag will be created by CI/CD after merge to main.",
+    note: "Commit created. Tagging/push are handled by the caller flow.",
   };
 
   process.stdout.write(JSON.stringify(result, null, 2) + "\n");
@@ -1732,7 +1846,7 @@ function checkCicd() {
       for (const m of jobMatches) jobs.push(m[1]);
       const hasBuildArgs = /BUILD_ARGS/i.test(content);
       const hasVersionCalc =
-        /package\.json.*version|node -p.*version|jq.*version/i.test(content);
+        /package\.json.*version|src\/version\.json|version\.json|node -p.*version|jq.*version/i.test(content);
       const hasTagJob =
         /\btag\b/i.test(content) && jobs.some((j) => /tag/i.test(j));
       result.cicd.push({
@@ -1789,6 +1903,16 @@ function checkCicd() {
       fields: {
         version: pkg.version || null,
         releaseDate: pkg.releaseDate || null,
+      },
+    });
+  }
+  const srcVersion = readJsonFile("src/version.json");
+  if (srcVersion) {
+    result.versionFiles.push({
+      file: "src/version.json",
+      fields: {
+        version: srcVersion.version || null,
+        releaseDate: srcVersion.releaseDate || null,
       },
     });
   }
@@ -1873,7 +1997,7 @@ try {
   } else if (flags["check-cicd"]) {
     checkCicd();
   } else if (flags["push"]) {
-    push();
+    push(flags);
   } else if (flags["create-pr"]) {
     createPr(flags);
   } else if (flags["version-context"]) {
@@ -1882,6 +2006,8 @@ try {
     updateVersion(flags);
   } else if (flags["commit-version"]) {
     commitVersion(flags);
+  } else if (flags["create-tag"]) {
+    createTag(flags);
   } else if (flags["release-guard"]) {
     releaseGuard(flags);
   } else {
@@ -1895,6 +2021,7 @@ try {
         "  node flow-pr.mjs --version-context\n" +
         "  node flow-pr.mjs --update-version --version X.Y.Z\n" +
         '  node flow-pr.mjs --commit-version --version X.Y.Z --files "f1,f2,f3"\n' +
+        "  node flow-pr.mjs --create-tag --version X.Y.Z\n" +
         "  node flow-pr.mjs --release-guard --source <branch> --target <branch> --is-clean true --version X.Y.Z\n",
     );
     process.exit(1);

@@ -45,6 +45,27 @@ export function runSafe(cmd, opts = {}) {
   }
 }
 
+/**
+ * run() with stdin input — passes `input` string to the command via stdin.
+ * Never throws — returns { ok: boolean, output: string }.
+ * @param {string} cmd
+ * @param {string} input — string to pipe into the command's stdin
+ * @returns {{ ok: boolean, output: string }}
+ */
+export function runWithStdin(cmd, input) {
+  try {
+    const output = execSync(cmd, {
+      encoding: "utf8",
+      stdio: ["pipe", "pipe", "pipe"],
+      cwd: process.cwd(),
+      input,
+    }).trimEnd();
+    return { ok: true, output };
+  } catch (err) {
+    return { ok: false, output: (err.stderr || err.message || String(err)).trim() };
+  }
+}
+
 // ─── Argument parsing ─────────────────────────────────────────────────────────
 
 /**

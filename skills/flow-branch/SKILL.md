@@ -10,20 +10,15 @@ Trigger: user runs `/flow-branch`
 
 ## Script Path
 
-```bash
-node -e "const os=require('os'),path=require('path');console.log(path.join(os.homedir(),'.config','opencode','scripts','flow-branch.mjs'))"
+```
+~/.config/opencode/scripts/flow-branch.mjs
 ```
 
-Store as `$SCRIPT`.
+Resolve once at session start:
 
-## Default Behavior
-
-The script is the source of truth. Prefer the runtime flow over manual branch logic.
-
-- Branch list: `--auto-list`
-- Checkout: `--checkout --branch <name>`
-- Delete local branch: `--delete --branch <name>`
-- Force delete only after the normal delete fails and the user explicitly confirms
+```bash
+SCRIPT="$HOME/.config/opencode/scripts/flow-branch.mjs"
+```
 
 ## Primary Commands
 
@@ -33,10 +28,19 @@ The script is the source of truth. Prefer the runtime flow over manual branch lo
 node "$SCRIPT" --auto-list
 ```
 
-### Checkout a branch
+Print the `display` field from the JSON response verbatim — no reformatting needed.
+Then ask the user which branch to switch to, or if they want to delete one.
+
+### Checkout a branch (no pending updates expected)
 
 ```bash
 node "$SCRIPT" --checkout --branch <name>
+```
+
+### Checkout and pull in one step (when user confirms pull upfront, or after seeing updateCount)
+
+```bash
+node "$SCRIPT" --checkout --branch <name> --pull
 ```
 
 ### Delete a local branch
@@ -54,28 +58,33 @@ node "$SCRIPT" --delete --branch <name> --force
 ## What the script handles
 
 - `git fetch origin`
-- branch inventory and classification (`local+remote`, `local only`, `remote only`)
-- protected branch checks
-- current-branch deletion guard
-- checkout behavior for local and remote-only branches
-- update count for local+remote branches
+- Branch inventory and classification (`local+remote`, `local only`, `remote only`)
+- Protected branch enforcement
+- Current-branch deletion guard
+- Update count for `local+remote` branches
+- Pull execution when `--pull` is passed
+- Pre-formatted `display` table (print as-is)
 
 ## What the agent still does
 
-- present the branch list nicely
-- let the user choose a branch or delete action
-- ask whether to pull when the selected branch has remote updates
-- ask whether to force delete only if normal delete fails because the branch is not merged
+- Print `display` from `--auto-list` response
+- Ask the user which branch or action to take
+- If `nextAction === "ask-pull"`: ask whether to pull, then re-run checkout with `--pull`
+- If `nextAction === "ask-force-delete"`: ask whether to force delete, then re-run with `--force`
+- If `nextAction === "pull-error"` or `"error"`: show error and ask what to do
 
 ## Response Rules
 
-- If listing succeeds, show the available branches clearly
-- If checkout succeeds and `updateCount > 0`, ask whether to pull
-- If normal delete fails because the branch is not merged, ask whether to force delete
-- If the script fails for another reason, show the error and ask what to do
+- **List:** print `display` verbatim, then ask for selection
+- **Checkout + `nextAction === "done"`:** confirm success
+- **Checkout + `nextAction === "ask-pull"`:** say "hay `updateCount` commits nuevos — ¿hacemos pull?" and re-run with `--pull` if yes
+- **Delete + `nextAction === "done"`:** confirm deletion
+- **Delete + `nextAction === "ask-force-delete"`:** say "la rama no está mergeada — ¿forzamos el delete?" and re-run with `--force` if yes
+- **Any error:** show `error` field and ask what to do
+
+> **Hint for users:** Para eliminar una rama local elegí la opción delete y confirmá.
 
 ## Restrictions
 
-- NEVER allow deletion of protected branches: `main`, `master`, `dev`, `development`
 - NEVER force delete without explicit user approval
-- NEVER re-implement branch classification logic in the prompt when the script can do it
+- NEVER re-implement branch classification or display logic — the script provides both
