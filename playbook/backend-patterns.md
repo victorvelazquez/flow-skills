@@ -106,9 +106,9 @@ src/
 
 ```typescript
 // items.module.ts
-import { Module } from '@nestjs/common';
-import { ItemsController } from './items.controller';
-import { ItemsService } from './items.service';
+import { Module } from "@nestjs/common";
+import { ItemsController } from "./items.controller";
+import { ItemsService } from "./items.service";
 
 @Module({
   controllers: [ItemsController],
@@ -134,57 +134,60 @@ import {
   ParseUUIDPipe,
   HttpCode,
   HttpStatus,
-} from '@nestjs/common';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
-import { ItemsService } from './items.service';
-import { CreateItemDto } from './dto/create-item.dto';
-import { UpdateItemDto } from './dto/update-item.dto';
-import { ItemFiltersDto } from './dto/item-filters.dto';
-import { Auth } from '@/common/decorators/auth.decorator';
-import { AuditAction } from '@/common/decorators/audit-action.decorator';
-import { Role } from '@/common/constants/roles.enum';
+} from "@nestjs/common";
+import { ApiTags, ApiOperation } from "@nestjs/swagger";
+import { ItemsService } from "./items.service";
+import { CreateItemDto } from "./dto/create-item.dto";
+import { UpdateItemDto } from "./dto/update-item.dto";
+import { ItemFiltersDto } from "./dto/item-filters.dto";
+import { Auth } from "@/common/decorators/auth.decorator";
+import { AuditAction } from "@/common/decorators/audit-action.decorator";
+import { Role } from "@/common/constants/roles.enum";
 
-@ApiTags('Items')
-@Controller('v1/items')
+@ApiTags("Items")
+@Controller("v1/items")
 export class ItemsController {
   constructor(private readonly itemsService: ItemsService) {}
 
   @Post()
   @Auth(Role.ADMIN)
-  @AuditAction('ITEM_CREATE')
-  @ApiOperation({ summary: 'Create a new item' })
+  @AuditAction("ITEM_CREATE")
+  @ApiOperation({ summary: "Create a new item" })
   async create(@Body() dto: CreateItemDto) {
     return this.itemsService.create(dto);
   }
 
   @Get()
   @Auth(Role.ADMIN)
-  @ApiOperation({ summary: 'List items with pagination' })
+  @ApiOperation({ summary: "List items with pagination" })
   async findAll(@Query() filters: ItemFiltersDto) {
     return this.itemsService.findAll(filters);
   }
 
-  @Get(':id')
+  @Get(":id")
   @Auth(Role.ADMIN)
-  @ApiOperation({ summary: 'Get item by ID' })
-  async findOne(@Param('id', ParseUUIDPipe) id: string) {
+  @ApiOperation({ summary: "Get item by ID" })
+  async findOne(@Param("id", ParseUUIDPipe) id: string) {
     return this.itemsService.findById(id);
   }
 
-  @Patch(':id')
+  @Patch(":id")
   @Auth(Role.ADMIN)
-  @AuditAction('ITEM_UPDATE')
-  @ApiOperation({ summary: 'Update item' })
-  async update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateItemDto) {
+  @AuditAction("ITEM_UPDATE")
+  @ApiOperation({ summary: "Update item" })
+  async update(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body() dto: UpdateItemDto,
+  ) {
     return this.itemsService.update(id, dto);
   }
 
-  @Delete(':id')
+  @Delete(":id")
   @Auth(Role.ADMIN)
-  @AuditAction('ITEM_DELETE')
+  @AuditAction("ITEM_DELETE")
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Delete item' })
-  async remove(@Param('id', ParseUUIDPipe) id: string) {
+  @ApiOperation({ summary: "Delete item" })
+  async remove(@Param("id", ParseUUIDPipe) id: string) {
     return this.itemsService.remove(id);
   }
 }
@@ -194,8 +197,8 @@ export class ItemsController {
 
 ```typescript
 // cats.module.ts
-import { Module, forwardRef } from '@nestjs/common';
-import { DogsModule } from '../dogs/dogs.module';
+import { Module, forwardRef } from "@nestjs/common";
+import { DogsModule } from "../dogs/dogs.module";
 
 @Module({
   imports: [forwardRef(() => DogsModule)],
@@ -230,12 +233,14 @@ app.useGlobalPipes(
     forbidNonWhitelisted: true, // error si llegan campos extra
     transform: true, // convierte tipos automáticamente
     transformOptions: { enableImplicitConversion: true },
-    disableErrorMessages: process.env.NODE_ENV === 'production',
+    disableErrorMessages: process.env.NODE_ENV === "production",
     exceptionFactory: (errors) => {
-      const messages = errors.flatMap((err) => Object.values(err.constraints ?? {}));
+      const messages = errors.flatMap((err) =>
+        Object.values(err.constraints ?? {}),
+      );
       throw new DomainException(
         ErrorCodes.VAL_001,
-        messages.join('; '),
+        messages.join("; "),
         HttpStatus.UNPROCESSABLE_ENTITY,
         { fields: errors.map((e) => e.property) },
       );
@@ -256,18 +261,18 @@ import {
   MinLength,
   MaxLength,
   Matches,
-} from 'class-validator';
-import { Transform } from 'class-transformer';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+} from "class-validator";
+import { Transform } from "class-transformer";
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 
 export class CreateItemDto {
-  @ApiProperty({ example: 'My Item' })
+  @ApiProperty({ example: "My Item" })
   @IsString()
   @MinLength(2)
   @MaxLength(120)
   name: string;
 
-  @ApiProperty({ example: 'user@example.com' })
+  @ApiProperty({ example: "user@example.com" })
   @IsEmail()
   @Transform(({ value }: { value: string }) => value.toLowerCase().trim())
   email: string;
@@ -282,7 +287,7 @@ export class CreateItemDto {
   @IsString()
   @MinLength(8)
   @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, {
-    message: 'Password must contain uppercase, lowercase and numbers',
+    message: "Password must contain uppercase, lowercase and numbers",
   })
   password?: string;
 }
@@ -292,19 +297,21 @@ export class CreateItemDto {
 
 ```typescript
 // update-item.dto.ts
-import { PartialType, OmitType } from '@nestjs/swagger';
-import { CreateItemDto } from './create-item.dto';
+import { PartialType, OmitType } from "@nestjs/swagger";
+import { CreateItemDto } from "./create-item.dto";
 
 // PartialType hace todos los campos opcionales
 // OmitType excluye campos que no deben actualizarse
-export class UpdateItemDto extends PartialType(OmitType(CreateItemDto, ['email'] as const)) {}
+export class UpdateItemDto extends PartialType(
+  OmitType(CreateItemDto, ["email"] as const),
+) {}
 ```
 
 ### DTO de respuesta
 
 ```typescript
 // item-response.dto.ts
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 
 export class ItemResponseDto {
   @ApiProperty() id: string;
@@ -320,8 +327,14 @@ export class ItemResponseDto {
 
 ```typescript
 // create-order.dto.ts
-import { IsEnum, IsOptional, IsString, ValidateIf, ValidateNested } from 'class-validator';
-import { Type } from 'class-transformer';
+import {
+  IsEnum,
+  IsOptional,
+  IsString,
+  ValidateIf,
+  ValidateNested,
+} from "class-validator";
+import { Type } from "class-transformer";
 
 class CardDetailsDto {
   @IsString() cardNumber: string;
@@ -347,16 +360,29 @@ export class CreateOrderDto {
 ### Tipos mapeados avanzados
 
 ```typescript
-import { IntersectionType, OmitType, PartialType, PickType } from '@nestjs/swagger';
+import {
+  IntersectionType,
+  OmitType,
+  PartialType,
+  PickType,
+} from "@nestjs/swagger";
 
 // Solo campos específicos
-export class ItemSummaryDto extends PickType(CreateItemDto, ['name', 'email'] as const) {}
+export class ItemSummaryDto extends PickType(CreateItemDto, [
+  "name",
+  "email",
+] as const) {}
 
 // Todos excepto algunos
-export class PublicItemDto extends OmitType(CreateItemDto, ['email'] as const) {}
+export class PublicItemDto extends OmitType(CreateItemDto, [
+  "email",
+] as const) {}
 
 // Combinación de dos DTOs
-export class FilterItemsDto extends IntersectionType(PartialType(CreateItemDto), PaginationDto) {}
+export class FilterItemsDto extends IntersectionType(
+  PartialType(CreateItemDto),
+  PaginationDto,
+) {}
 ```
 
 ### Validador personalizado — IsSafeString
@@ -369,14 +395,14 @@ import {
   ValidatorConstraint,
   ValidatorConstraintInterface,
   registerDecorator,
-} from 'class-validator';
+} from "class-validator";
 
 const SAFE_STRING_PATTERN = /^[a-zA-Z0-9\s\-_.@]+$/;
 
-@ValidatorConstraint({ name: 'isSafeString', async: false })
+@ValidatorConstraint({ name: "isSafeString", async: false })
 export class IsSafeStringConstraint implements ValidatorConstraintInterface {
   validate(value: unknown): boolean {
-    return typeof value === 'string' && SAFE_STRING_PATTERN.test(value);
+    return typeof value === "string" && SAFE_STRING_PATTERN.test(value);
   }
   defaultMessage(args: ValidationArguments): string {
     return `${args.property} contains invalid characters`;
@@ -400,13 +426,13 @@ export function IsSafeString(options?: ValidationOptions) {
 
 ```typescript
 // src/common/decorators/is-valid-phone.decorator.ts
-@ValidatorConstraint({ name: 'isValidPhoneNumber', async: false })
+@ValidatorConstraint({ name: "isValidPhoneNumber", async: false })
 class IsValidPhoneConstraint implements ValidatorConstraintInterface {
   validate(value: unknown): boolean {
-    return typeof value === 'string' && /^\+[1-9]\d{7,14}$/.test(value);
+    return typeof value === "string" && /^\+[1-9]\d{7,14}$/.test(value);
   }
   defaultMessage(): string {
-    return 'Phone must be in E.164 format (e.g. +5491112345678)';
+    return "Phone must be in E.164 format (e.g. +5491112345678)";
   }
 }
 
@@ -428,14 +454,14 @@ export function IsValidPhoneNumber(options?: ValidationOptions) {
 ```typescript
 // src/common/decorators/parse-boolean.decorator.ts
 // Workaround: enableImplicitConversion tiene bug con booleans en query params
-import { applyDecorators } from '@nestjs/common';
-import { Transform } from 'class-transformer';
+import { applyDecorators } from "@nestjs/common";
+import { Transform } from "class-transformer";
 
 export function ParseBoolean() {
   return applyDecorators(
     Transform(({ value }: { value: unknown }) => {
-      if (value === 'true' || value === true) return true;
-      if (value === 'false' || value === false) return false;
+      if (value === "true" || value === true) return true;
+      if (value === "false" || value === false) return false;
       return value;
     }),
   );
@@ -512,8 +538,8 @@ export interface PaginatedResponse<T> {
 
 ```typescript
 // src/common/dto/paginated-response.dto.ts
-import { ApiProperty } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { ApiProperty } from "@nestjs/swagger";
+import { Type } from "class-transformer";
 
 export class PaginatedResponseDto<T> {
   @ApiProperty({ isArray: true })
@@ -528,7 +554,12 @@ export class PaginatedResponseDto<T> {
     this.meta = meta;
   }
 
-  static create<T>(data: T[], page: number, limit: number, total: number): PaginatedResponseDto<T> {
+  static create<T>(
+    data: T[],
+    page: number,
+    limit: number,
+    total: number,
+  ): PaginatedResponseDto<T> {
     const totalPages = Math.ceil(total / limit);
     return new PaginatedResponseDto(data, {
       total,
@@ -555,12 +586,17 @@ export class PaginatedResponseDto<T> {
 
 ```typescript
 // src/common/interceptors/response.interceptor.ts
-import { Injectable, NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common';
-import { Observable } from 'rxjs';
-import { map } from 'rxjs/operators';
-import { Reflector } from '@nestjs/core';
-import { SKIP_RESPONSE_TRANSFORM_KEY } from '@/common/decorators/skip-response-transform.decorator';
-import { RequestContextService } from '@/common/services/request-context.service';
+import {
+  Injectable,
+  NestInterceptor,
+  ExecutionContext,
+  CallHandler,
+} from "@nestjs/common";
+import { Observable } from "rxjs";
+import { map } from "rxjs/operators";
+import { Reflector } from "@nestjs/core";
+import { SKIP_RESPONSE_TRANSFORM_KEY } from "@/common/decorators/skip-response-transform.decorator";
+import { RequestContextService } from "@/common/services/request-context.service";
 
 @Injectable()
 export class ResponseInterceptor implements NestInterceptor {
@@ -570,10 +606,10 @@ export class ResponseInterceptor implements NestInterceptor {
   ) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
-    const skip = this.reflector.getAllAndOverride<boolean>(SKIP_RESPONSE_TRANSFORM_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
+    const skip = this.reflector.getAllAndOverride<boolean>(
+      SKIP_RESPONSE_TRANSFORM_KEY,
+      [context.getHandler(), context.getClass()],
+    );
     if (skip) return next.handle();
 
     const requestId = this.requestContext.getRequestId();
@@ -581,19 +617,34 @@ export class ResponseInterceptor implements NestInterceptor {
     return next.handle().pipe(
       map((data: unknown) => {
         if (this.isEnvelopedResponse(data)) {
-          const enveloped = data as { data: unknown; meta: Record<string, unknown> };
+          const enveloped = data as {
+            data: unknown;
+            meta: Record<string, unknown>;
+          };
           return {
             data: enveloped.data,
-            meta: { ...enveloped.meta, timestamp: new Date().toISOString(), requestId },
+            meta: {
+              ...enveloped.meta,
+              timestamp: new Date().toISOString(),
+              requestId,
+            },
           };
         }
-        return { data, meta: { timestamp: new Date().toISOString(), requestId } };
+        return {
+          data,
+          meta: { timestamp: new Date().toISOString(), requestId },
+        };
       }),
     );
   }
 
   private isEnvelopedResponse(data: unknown): boolean {
-    return typeof data === 'object' && data !== null && 'data' in data && 'meta' in data;
+    return (
+      typeof data === "object" &&
+      data !== null &&
+      "data" in data &&
+      "meta" in data
+    );
   }
 }
 ```
@@ -633,13 +684,13 @@ async token() { ... }
 
 ```typescript
 // src/common/dto/pagination.dto.ts
-import { IsOptional, IsInt, Min, Max, IsString, IsEnum } from 'class-validator';
-import { Type } from 'class-transformer';
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { IsOptional, IsInt, Min, Max, IsString, IsEnum } from "class-validator";
+import { Type } from "class-transformer";
+import { ApiPropertyOptional } from "@nestjs/swagger";
 
 export enum SortDirection {
-  ASC = 'asc',
-  DESC = 'desc',
+  ASC = "asc",
+  DESC = "desc",
 }
 
 export class PaginationDto {
@@ -675,7 +726,10 @@ export class PaginationDto {
 ```typescript
 // src/common/dto/pagination.dto.ts (continuación)
 export class PaginationHelper {
-  static getSkipTake(page: number, limit: number): { skip: number; take: number } {
+  static getSkipTake(
+    page: number,
+    limit: number,
+  ): { skip: number; take: number } {
     return { skip: (page - 1) * limit, take: limit };
   }
 }
@@ -685,9 +739,9 @@ export class PaginationHelper {
 
 ```typescript
 // src/modules/items/dto/item-filters.dto.ts
-import { IsOptional, IsString, IsEnum } from 'class-validator';
-import { ApiPropertyOptional } from '@nestjs/swagger';
-import { PaginationDto } from '@/common/dto/pagination.dto';
+import { IsOptional, IsString, IsEnum } from "class-validator";
+import { ApiPropertyOptional } from "@nestjs/swagger";
+import { PaginationDto } from "@/common/dto/pagination.dto";
 
 export class ItemFiltersDto extends PaginationDto {
   @ApiPropertyOptional()
@@ -811,7 +865,7 @@ async findAllWithCursor(dto: CursorPaginationDto) {
 
 ```typescript
 // src/common/exceptions/domain.exception.ts
-import { HttpException, HttpStatus } from '@nestjs/common';
+import { HttpException, HttpStatus } from "@nestjs/common";
 
 export class DomainException extends HttpException {
   constructor(
@@ -831,18 +885,18 @@ export class DomainException extends HttpException {
 // src/common/constants/error-codes.ts
 export const ErrorCodes = {
   // Auth
-  AUTH_001: 'AUTH_001', // Invalid credentials
-  AUTH_002: 'AUTH_002', // Token expired
-  AUTH_003: 'AUTH_003', // Token invalid
-  AUTH_004: 'AUTH_004', // Refresh token expired
-  AUTH_005: 'AUTH_005', // Refresh token invalid
+  AUTH_001: "AUTH_001", // Invalid credentials
+  AUTH_002: "AUTH_002", // Token expired
+  AUTH_003: "AUTH_003", // Token invalid
+  AUTH_004: "AUTH_004", // Refresh token expired
+  AUTH_005: "AUTH_005", // Refresh token invalid
   // Item (reemplazar por dominio real)
-  ITEM_001: 'ITEM_001', // Not found
-  ITEM_002: 'ITEM_002', // Already exists
+  ITEM_001: "ITEM_001", // Not found
+  ITEM_002: "ITEM_002", // Already exists
   // Generic
-  VAL_001: 'VAL_001', // Validation error
-  SYS_004: 'SYS_004', // Too many requests
-  SYS_001: 'SYS_001', // Internal server error
+  VAL_001: "VAL_001", // Validation error
+  SYS_004: "SYS_004", // Too many requests
+  SYS_001: "SYS_001", // Internal server error
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
@@ -852,7 +906,7 @@ export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
 
 ```typescript
 // src/common/filters/all-exceptions.filter.ts
-import { randomUUID } from 'node:crypto';
+import { randomUUID } from "node:crypto";
 import {
   ArgumentsHost,
   Catch,
@@ -860,9 +914,9 @@ import {
   HttpException,
   HttpStatus,
   Logger,
-} from '@nestjs/common';
-import { HttpAdapterHost } from '@nestjs/core';
-import { DomainException } from '@/common/exceptions/domain.exception';
+} from "@nestjs/common";
+import { HttpAdapterHost } from "@nestjs/core";
+import { DomainException } from "@/common/exceptions/domain.exception";
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -875,16 +929,20 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const ctx = host.switchToHttp();
     const request = ctx.getRequest<{ requestId?: string }>();
     const requestId = request.requestId ?? randomUUID();
-    const isProd = process.env.NODE_ENV === 'production';
+    const isProd = process.env.NODE_ENV === "production";
 
     let statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
-    let message = 'Internal server error';
-    let code = 'SYS_001';
+    let message = "Internal server error";
+    let code = "SYS_001";
     let details: unknown = null;
 
     if (exception instanceof DomainException) {
       statusCode = exception.getStatus();
-      const res = exception.getResponse() as { message: string; code: string; details?: unknown };
+      const res = exception.getResponse() as {
+        message: string;
+        code: string;
+        details?: unknown;
+      };
       message = res.message;
       code = res.code;
       details = res.details ?? null;
@@ -896,7 +954,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     } else if (exception instanceof HttpException) {
       statusCode = exception.getStatus();
       const res = exception.getResponse() as Record<string, unknown>;
-      message = (res.message as string) ?? 'Exception';
+      message = (res.message as string) ?? "Exception";
       code = `HTTP_${statusCode}`;
     } else {
       this.logger.error(
@@ -971,15 +1029,15 @@ async someOperation(id: string): Promise<void> {
 
 ```typescript
 // src/common/guards/jwt-auth.guard.ts
-import { Injectable, ExecutionContext, HttpStatus } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
-import { Reflector } from '@nestjs/core';
-import { IS_PUBLIC_KEY } from '@/common/decorators/public.decorator';
-import { DomainException } from '@/common/exceptions/domain.exception';
-import { ErrorCodes } from '@/common/constants/error-codes';
+import { Injectable, ExecutionContext, HttpStatus } from "@nestjs/common";
+import { AuthGuard } from "@nestjs/passport";
+import { Reflector } from "@nestjs/core";
+import { IS_PUBLIC_KEY } from "@/common/decorators/public.decorator";
+import { DomainException } from "@/common/exceptions/domain.exception";
+import { ErrorCodes } from "@/common/constants/error-codes";
 
 @Injectable()
-export class JwtAuthGuard extends AuthGuard('jwt') {
+export class JwtAuthGuard extends AuthGuard("jwt") {
   constructor(private readonly reflector: Reflector) {
     super();
   }
@@ -995,20 +1053,24 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
 
   handleRequest<T>(err: Error | null, user: T): T {
     if (err || !user) {
-      const msg = err instanceof Error ? err.message : '';
-      if (msg.includes('jwt expired')) {
-        throw new DomainException(ErrorCodes.AUTH_004, 'Token expired', HttpStatus.UNAUTHORIZED);
+      const msg = err instanceof Error ? err.message : "";
+      if (msg.includes("jwt expired")) {
+        throw new DomainException(
+          ErrorCodes.AUTH_004,
+          "Token expired",
+          HttpStatus.UNAUTHORIZED,
+        );
       }
-      if (msg.includes('invalid signature')) {
+      if (msg.includes("invalid signature")) {
         throw new DomainException(
           ErrorCodes.AUTH_005,
-          'Invalid token signature',
+          "Invalid token signature",
           HttpStatus.UNAUTHORIZED,
         );
       }
       throw new DomainException(
         ErrorCodes.AUTH_002,
-        'Authentication required',
+        "Authentication required",
         HttpStatus.UNAUTHORIZED,
       );
     }
@@ -1021,10 +1083,15 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
 
 ```typescript
 // src/common/guards/roles.guard.ts
-import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
-import { ROLES_KEY } from '@/common/decorators/roles.decorator';
-import { Role } from '@/common/constants/roles.enum';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+} from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
+import { ROLES_KEY } from "@/common/decorators/roles.decorator";
+import { Role } from "@/common/constants/roles.enum";
 
 @Injectable()
 export class RolesGuard implements CanActivate {
@@ -1044,14 +1111,20 @@ export class RolesGuard implements CanActivate {
     ]);
     if (!required || required.length === 0) return true;
 
-    const { user } = context.switchToHttp().getRequest<{ user: { roles: string[] } }>();
-    if (!user) throw new ForbiddenException('User not authenticated');
+    const { user } = context
+      .switchToHttp()
+      .getRequest<{ user: { roles: string[] } }>();
+    if (!user) throw new ForbiddenException("User not authenticated");
 
-    const userLevel = Math.max(...user.roles.map((r) => this.hierarchy[r] ?? 0));
-    const requiredLevel = Math.min(...required.map((r) => this.hierarchy[r] ?? Infinity));
+    const userLevel = Math.max(
+      ...user.roles.map((r) => this.hierarchy[r] ?? 0),
+    );
+    const requiredLevel = Math.min(
+      ...required.map((r) => this.hierarchy[r] ?? Infinity),
+    );
 
     if (userLevel < requiredLevel) {
-      throw new ForbiddenException(`Required roles: ${required.join(', ')}`);
+      throw new ForbiddenException(`Required roles: ${required.join(", ")}`);
     }
     return true;
   }
@@ -1072,10 +1145,10 @@ providers: [
 
 ```typescript
 // src/common/strategies/jwt.strategy.ts
-import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { PassportStrategy } from '@nestjs/passport';
-import { ExtractJwt, Strategy, StrategyOptions } from 'passport-jwt';
+import { Injectable, UnauthorizedException } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { PassportStrategy } from "@nestjs/passport";
+import { ExtractJwt, Strategy, StrategyOptions } from "passport-jwt";
 
 export interface JwtPayload {
   sub: string;
@@ -1088,21 +1161,21 @@ export interface JwtPayload {
 }
 
 @Injectable()
-export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
+export class JwtStrategy extends PassportStrategy(Strategy, "jwt") {
   constructor(configService: ConfigService) {
-    const rawKey = configService.getOrThrow<string>('app.jwt.publicKey');
+    const rawKey = configService.getOrThrow<string>("app.jwt.publicKey");
 
     // Formatear como PEM si viene como base64 sin headers
-    const publicKey = rawKey.includes('BEGIN PUBLIC KEY')
+    const publicKey = rawKey.includes("BEGIN PUBLIC KEY")
       ? rawKey
-      : `-----BEGIN PUBLIC KEY-----\n${(rawKey.replace(/\s+/g, '').match(/.{1,64}/g) ?? []).join('\n')}\n-----END PUBLIC KEY-----`;
+      : `-----BEGIN PUBLIC KEY-----\n${(rawKey.replace(/\s+/g, "").match(/.{1,64}/g) ?? []).join("\n")}\n-----END PUBLIC KEY-----`;
 
     const options: StrategyOptions = {
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       secretOrKey: publicKey,
-      algorithms: ['RS256'],
-      issuer: configService.getOrThrow<string>('app.jwt.issuer'),
-      audience: configService.getOrThrow<string>('app.jwt.audience'),
+      algorithms: ["RS256"],
+      issuer: configService.getOrThrow<string>("app.jwt.issuer"),
+      audience: configService.getOrThrow<string>("app.jwt.audience"),
       ignoreExpiration: false,
     };
     super(options);
@@ -1110,7 +1183,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
 
   validate(payload: JwtPayload): JwtPayload {
     if (!payload.sub || !payload.email) {
-      throw new UnauthorizedException('Invalid JWT payload');
+      throw new UnauthorizedException("Invalid JWT payload");
     }
     return payload;
   }
@@ -1123,9 +1196,14 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
 >
 > ```typescript
 > // auth/guards/jwt-auth.guard.ts
-> import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
-> import { JwtService } from '@nestjs/jwt';
-> import { FastifyRequest } from 'fastify';
+> import {
+>   CanActivate,
+>   ExecutionContext,
+>   Injectable,
+>   UnauthorizedException,
+> } from "@nestjs/common";
+> import { JwtService } from "@nestjs/jwt";
+> import { FastifyRequest } from "fastify";
 >
 > @Injectable()
 > export class JwtAuthGuard implements CanActivate {
@@ -1139,7 +1217,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
 >
 >     try {
 >       const payload = await this.jwtService.verifyAsync(token);
->       request['user'] = payload;
+>       request["user"] = payload;
 >       return true;
 >     } catch {
 >       throw new UnauthorizedException();
@@ -1147,8 +1225,8 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
 >   }
 >
 >   private extractToken(request: FastifyRequest): string | null {
->     const [type, token] = request.headers.authorization?.split(' ') ?? [];
->     return type === 'Bearer' ? token : null;
+>     const [type, token] = request.headers.authorization?.split(" ") ?? [];
+>     return type === "Bearer" ? token : null;
 >   }
 > }
 > ```
@@ -1160,18 +1238,18 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
 
 ```typescript
 // src/common/guards/throttler.guard.ts
-import { Injectable } from '@nestjs/common';
-import { ThrottlerGuard } from '@nestjs/throttler';
-import { DomainException } from '@/common/exceptions/domain.exception';
-import { ErrorCodes } from '@/common/constants/error-codes';
-import { HttpStatus } from '@nestjs/common';
+import { Injectable } from "@nestjs/common";
+import { ThrottlerGuard } from "@nestjs/throttler";
+import { DomainException } from "@/common/exceptions/domain.exception";
+import { ErrorCodes } from "@/common/constants/error-codes";
+import { HttpStatus } from "@nestjs/common";
 
 @Injectable()
 export class CustomThrottlerGuard extends ThrottlerGuard {
   protected throwThrottlingException(): never {
     throw new DomainException(
       ErrorCodes.SYS_004,
-      'Too many requests. Please try again later.',
+      "Too many requests. Please try again later.",
       HttpStatus.TOO_MANY_REQUESTS,
     );
   }
@@ -1195,12 +1273,25 @@ export class CustomThrottlerGuard extends ThrottlerGuard {
 
 ```typescript
 // src/common/interceptors/request-logging.interceptor.ts
-import { Injectable, NestInterceptor, ExecutionContext, CallHandler, Logger } from '@nestjs/common';
-import { Observable } from 'rxjs';
-import { tap } from 'rxjs/operators';
+import {
+  Injectable,
+  NestInterceptor,
+  ExecutionContext,
+  CallHandler,
+  Logger,
+} from "@nestjs/common";
+import { Observable } from "rxjs";
+import { tap } from "rxjs/operators";
 
 const SLOW_REQUEST_THRESHOLD_MS = 1000;
-const SENSITIVE_FIELDS = ['password', 'token', 'secret', 'authorization', 'apiKey', 'privateKey'];
+const SENSITIVE_FIELDS = [
+  "password",
+  "token",
+  "secret",
+  "authorization",
+  "apiKey",
+  "privateKey",
+];
 
 @Injectable()
 export class RequestLoggingInterceptor implements NestInterceptor {
@@ -1215,11 +1306,11 @@ export class RequestLoggingInterceptor implements NestInterceptor {
       requestId?: string;
     }>();
     const { method, url, body, requestId } = req;
-    const userId = req.user?.sub ?? 'anonymous';
+    const userId = req.user?.sub ?? "anonymous";
     const start = Date.now();
 
     this.logger.log({
-      message: 'HTTP Request',
+      message: "HTTP Request",
       method,
       url,
       userId,
@@ -1239,16 +1330,16 @@ export class RequestLoggingInterceptor implements NestInterceptor {
           if (duration > SLOW_REQUEST_THRESHOLD_MS) {
             this.logger.warn({ ...logData, slow: true });
           } else {
-            this.logger.log({ message: 'HTTP Response', ...logData });
+            this.logger.log({ message: "HTTP Response", ...logData });
           }
         },
         error: (err: { message?: string; status?: number }) => {
           this.logger.error({
-            message: 'HTTP Error',
+            message: "HTTP Error",
             method,
             url,
             requestId,
-            error: err.message ?? 'Unknown',
+            error: err.message ?? "Unknown",
             statusCode: err.status ?? 500,
             duration: Date.now() - start,
           });
@@ -1257,11 +1348,13 @@ export class RequestLoggingInterceptor implements NestInterceptor {
     );
   }
 
-  private sanitize(body: Record<string, unknown>): Record<string, unknown> | null {
+  private sanitize(
+    body: Record<string, unknown>,
+  ): Record<string, unknown> | null {
     if (!body || Object.keys(body).length === 0) return null;
     const copy = { ...body };
     for (const field of SENSITIVE_FIELDS) {
-      if (field in copy) copy[field] = '[REDACTED]';
+      if (field in copy) copy[field] = "[REDACTED]";
     }
     return copy;
   }
@@ -1272,11 +1365,17 @@ export class RequestLoggingInterceptor implements NestInterceptor {
 
 ```typescript
 // src/common/interceptors/audit-log.interceptor.ts
-import { Injectable, NestInterceptor, ExecutionContext, CallHandler, Logger } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
-import { Observable } from 'rxjs';
-import { tap } from 'rxjs/operators';
-import { AUDIT_ACTION_KEY } from '@/common/decorators/audit-action.decorator';
+import {
+  Injectable,
+  NestInterceptor,
+  ExecutionContext,
+  CallHandler,
+  Logger,
+} from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
+import { Observable } from "rxjs";
+import { tap } from "rxjs/operators";
+import { AUDIT_ACTION_KEY } from "@/common/decorators/audit-action.decorator";
 
 @Injectable()
 export class AuditLogInterceptor implements NestInterceptor {
@@ -1288,7 +1387,10 @@ export class AuditLogInterceptor implements NestInterceptor {
   ) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
-    const action = this.reflector.get<string>(AUDIT_ACTION_KEY, context.getHandler());
+    const action = this.reflector.get<string>(
+      AUDIT_ACTION_KEY,
+      context.getHandler(),
+    );
     if (!action) return next.handle();
 
     const request = context.switchToHttp().getRequest();
@@ -1303,9 +1405,11 @@ export class AuditLogInterceptor implements NestInterceptor {
               action,
               userId: user?.id,
               ipAddress: request.ip,
-              userAgent: request.headers['user-agent'],
+              userAgent: request.headers["user-agent"],
             })
-            .catch((err: unknown) => this.logger.error('Audit log failed', err));
+            .catch((err: unknown) =>
+              this.logger.error("Audit log failed", err),
+            );
         },
       }),
     );
@@ -1327,24 +1431,25 @@ export class AuditLogInterceptor implements NestInterceptor {
 
 ```typescript
 // src/common/decorators/public.decorator.ts
-import { SetMetadata } from '@nestjs/common';
-export const IS_PUBLIC_KEY = 'isPublic';
+import { SetMetadata } from "@nestjs/common";
+export const IS_PUBLIC_KEY = "isPublic";
 export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
 
 // src/common/decorators/roles.decorator.ts
-import { SetMetadata } from '@nestjs/common';
-import { Role } from '@/common/constants/roles.enum';
-export const ROLES_KEY = 'roles';
+import { SetMetadata } from "@nestjs/common";
+import { Role } from "@/common/constants/roles.enum";
+export const ROLES_KEY = "roles";
 export const Roles = (...roles: Role[]) => SetMetadata(ROLES_KEY, roles);
 
 // src/common/decorators/audit-action.decorator.ts
-import { SetMetadata } from '@nestjs/common';
-export const AUDIT_ACTION_KEY = 'audit_action';
-export const AuditAction = (action: string) => SetMetadata(AUDIT_ACTION_KEY, action);
+import { SetMetadata } from "@nestjs/common";
+export const AUDIT_ACTION_KEY = "audit_action";
+export const AuditAction = (action: string) =>
+  SetMetadata(AUDIT_ACTION_KEY, action);
 
 // src/common/decorators/current-user.decorator.ts
-import { createParamDecorator, ExecutionContext } from '@nestjs/common';
-import { JwtPayload } from '@/common/strategies/jwt.strategy';
+import { createParamDecorator, ExecutionContext } from "@nestjs/common";
+import { JwtPayload } from "@/common/strategies/jwt.strategy";
 
 export const CurrentUser = createParamDecorator(
   (field: keyof JwtPayload | undefined, ctx: ExecutionContext) => {
@@ -1362,11 +1467,13 @@ export const AuthUser = createParamDecorator(
 );
 
 // src/common/decorators/tenant-id.decorator.ts
-export const TenantId = createParamDecorator((_data: unknown, ctx: ExecutionContext): string => {
-  const request = ctx.switchToHttp().getRequest<{ tenantId?: string }>();
-  if (!request.tenantId) throw new Error('tenantId not found in request');
-  return request.tenantId;
-});
+export const TenantId = createParamDecorator(
+  (_data: unknown, ctx: ExecutionContext): string => {
+    const request = ctx.switchToHttp().getRequest<{ tenantId?: string }>();
+    if (!request.tenantId) throw new Error("tenantId not found in request");
+    return request.tenantId;
+  },
+);
 // @TenantId() tenantId: string
 ```
 
@@ -1376,19 +1483,19 @@ Combina JWT guard, roles guard, Swagger bearer auth y ApiUnauthorizedResponse en
 
 ```typescript
 // src/common/decorators/auth.decorator.ts
-import { UseGuards, applyDecorators } from '@nestjs/common';
-import { ApiBearerAuth, ApiUnauthorizedResponse } from '@nestjs/swagger';
-import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
-import { RolesGuard } from '@/common/guards/roles.guard';
-import { Roles } from './roles.decorator';
-import { Role } from '@/common/constants/roles.enum';
+import { UseGuards, applyDecorators } from "@nestjs/common";
+import { ApiBearerAuth, ApiUnauthorizedResponse } from "@nestjs/swagger";
+import { JwtAuthGuard } from "@/common/guards/jwt-auth.guard";
+import { RolesGuard } from "@/common/guards/roles.guard";
+import { Roles } from "./roles.decorator";
+import { Role } from "@/common/constants/roles.enum";
 
 export function Auth(...roles: Role[]) {
   return applyDecorators(
     Roles(...roles),
     UseGuards(JwtAuthGuard, RolesGuard),
-    ApiBearerAuth('JWT'),
-    ApiUnauthorizedResponse({ description: 'Unauthorized' }),
+    ApiBearerAuth("JWT"),
+    ApiUnauthorizedResponse({ description: "Unauthorized" }),
   );
 }
 
@@ -1414,9 +1521,15 @@ export class ItemsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findById(id: string): Promise<ItemResponseDto> {
-    const item = await this.prisma.item.findFirst({ where: { id, deletedAt: null } });
+    const item = await this.prisma.item.findFirst({
+      where: { id, deletedAt: null },
+    });
     if (!item) {
-      throw new DomainException(ErrorCodes.ITEM_001, 'Item not found', HttpStatus.NOT_FOUND);
+      throw new DomainException(
+        ErrorCodes.ITEM_001,
+        "Item not found",
+        HttpStatus.NOT_FOUND,
+      );
     }
     return this.mapToResponseDto(item);
   }
@@ -1518,11 +1631,11 @@ async transferOwnership(fromId: string, toId: string): Promise<void> {
 
 ```typescript
 // src/modules/items/items.repository.ts
-import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
-import { PrismaService } from '@/prisma/prisma.service';
-import { ItemFiltersDto } from './dto/item-filters.dto';
-import { PaginationHelper } from '@/common/dto/pagination.dto';
+import { Injectable } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
+import { PrismaService } from "@/prisma/prisma.service";
+import { ItemFiltersDto } from "./dto/item-filters.dto";
+import { PaginationHelper } from "@/common/dto/pagination.dto";
 
 @Injectable()
 export class ItemsRepository {
@@ -1530,12 +1643,23 @@ export class ItemsRepository {
 
   async findMany(filters: ItemFiltersDto) {
     const where = this.buildWhere(filters);
-    const { skip, take } = PaginationHelper.getSkipTake(filters.page, filters.limit);
-    const orderBy = { [filters.sortBy ?? 'createdAt']: filters.sortDirection ?? 'desc' };
+    const { skip, take } = PaginationHelper.getSkipTake(
+      filters.page,
+      filters.limit,
+    );
+    const orderBy = {
+      [filters.sortBy ?? "createdAt"]: filters.sortDirection ?? "desc",
+    };
 
     return Promise.all([
       this.prisma.item.count({ where }),
-      this.prisma.item.findMany({ where, skip, take, orderBy, include: { category: true } }),
+      this.prisma.item.findMany({
+        where,
+        skip,
+        take,
+        orderBy,
+        include: { category: true },
+      }),
     ]);
   }
 
@@ -1552,8 +1676,8 @@ export class ItemsRepository {
       ...(filters.status && { status: filters.status }),
       ...(filters.search && {
         OR: [
-          { name: { contains: filters.search, mode: 'insensitive' } },
-          { email: { contains: filters.search, mode: 'insensitive' } },
+          { name: { contains: filters.search, mode: "insensitive" } },
+          { email: { contains: filters.search, mode: "insensitive" } },
         ],
       }),
     };
@@ -1580,11 +1704,16 @@ No extiende `PrismaClient`. Usa composición con `@prisma/adapter-pg` para conne
 
 ```typescript
 // src/prisma/prisma.service.ts
-import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
-import { PrismaPg } from '@prisma/adapter-pg';
-import { Pool } from 'pg';
-import { ConfigService } from '@nestjs/config';
+import {
+  Injectable,
+  OnModuleInit,
+  OnModuleDestroy,
+  Logger,
+} from "@nestjs/common";
+import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
+import { ConfigService } from "@nestjs/config";
 
 @Injectable()
 export class PrismaService implements OnModuleInit, OnModuleDestroy {
@@ -1592,8 +1721,10 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   private readonly prisma: PrismaClient;
 
   constructor(private readonly configService: ConfigService) {
-    const databaseUrl = this.configService.getOrThrow<string>('app.database.url');
-    const sslEnabled = this.configService.get<boolean>('app.database.sslEnabled') ?? false;
+    const databaseUrl =
+      this.configService.getOrThrow<string>("app.database.url");
+    const sslEnabled =
+      this.configService.get<boolean>("app.database.sslEnabled") ?? false;
 
     const pool = new Pool({
       connectionString: databaseUrl,
@@ -1608,9 +1739,9 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   async onModuleInit(): Promise<void> {
     try {
       await this.prisma.$connect();
-      this.logger.log('Database connection established');
+      this.logger.log("Database connection established");
     } catch (error) {
-      this.logger.error('Failed to connect to database', error);
+      this.logger.error("Failed to connect to database", error);
       process.exit(1); // Fail fast
     }
   }
@@ -1640,8 +1771,8 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
 
 ```typescript
 // src/prisma/prisma.module.ts
-import { Global, Module } from '@nestjs/common';
-import { PrismaService } from './prisma.service';
+import { Global, Module } from "@nestjs/common";
+import { PrismaService } from "./prisma.service";
 
 @Global()
 @Module({
@@ -1657,6 +1788,7 @@ export class PrismaModule {}
 > - `process.exit(1)` en `onModuleInit` es intencional — sin DB no tiene sentido iniciar.
 > - Agregar un getter por cada modelo del schema. Si se omite, el modelo es inaccesible.
 > - `$transaction` debe exponerse con `.bind(this.prisma)` para mantener el contexto.
+> - **Scripts standalone** (fuera del contexto NestJS, e.g. `prisma/scripts/*.ts`): NO usar `new PrismaClient()` sin argumentos — Prisma 7.x requiere el driver adapter. Usar el mismo patrón `PrismaPg + Pool`, y llamar `pool.end()` en el `finally`.
 
 ---
 
@@ -1668,18 +1800,18 @@ export class PrismaModule {}
 
 ```typescript
 // src/common/middleware/request-id.middleware.ts
-import { Injectable, NestMiddleware } from '@nestjs/common';
-import { randomUUID } from 'crypto';
-import { RequestContextService } from '@/common/services/request-context.service';
+import { Injectable, NestMiddleware } from "@nestjs/common";
+import { randomUUID } from "crypto";
+import { RequestContextService } from "@/common/services/request-context.service";
 
 @Injectable()
 export class RequestIdMiddleware implements NestMiddleware {
   constructor(private readonly requestContext: RequestContextService) {}
 
   use(req: any, res: any, next: () => void): void {
-    const requestId = (req.headers['x-request-id'] as string) ?? randomUUID();
+    const requestId = (req.headers["x-request-id"] as string) ?? randomUUID();
     req.requestId = requestId;
-    res.setHeader('x-request-id', requestId);
+    res.setHeader("x-request-id", requestId);
     this.requestContext.run({ requestId }, next);
   }
 }
@@ -1689,8 +1821,8 @@ export class RequestIdMiddleware implements NestMiddleware {
 
 ```typescript
 // src/common/services/request-context.service.ts
-import { Injectable } from '@nestjs/common';
-import { AsyncLocalStorage } from 'async_hooks';
+import { Injectable } from "@nestjs/common";
+import { AsyncLocalStorage } from "async_hooks";
 
 interface RequestContext {
   requestId: string;
@@ -1727,23 +1859,27 @@ Reemplaza Winston. Pino nativo + pino-pretty en dev + JSON en prod + child logge
 
 ```typescript
 // src/common/services/pino-logger.service.ts
-import { Injectable, LoggerService } from '@nestjs/common';
-import pino, { Logger } from 'pino';
-import { RequestContextService } from './request-context.service';
+import { Injectable, LoggerService } from "@nestjs/common";
+import pino, { Logger } from "pino";
+import { RequestContextService } from "./request-context.service";
 
 @Injectable()
 export class PinoLoggerService implements LoggerService {
   private readonly logger: Logger;
 
   constructor(private readonly requestContext: RequestContextService) {
-    const isDev = process.env.NODE_ENV !== 'production';
+    const isDev = process.env.NODE_ENV !== "production";
 
     this.logger = pino({
-      level: process.env.LOG_LEVEL ?? 'info',
+      level: process.env.LOG_LEVEL ?? "info",
       ...(isDev && {
         transport: {
-          target: 'pino-pretty',
-          options: { colorize: true, translateTime: 'HH:MM:ss', ignore: 'pid,hostname' },
+          target: "pino-pretty",
+          options: {
+            colorize: true,
+            translateTime: "HH:MM:ss",
+            ignore: "pid,hostname",
+          },
         },
       }),
     });
@@ -1758,23 +1894,35 @@ export class PinoLoggerService implements LoggerService {
     };
   }
 
-  log(message: string | Record<string, unknown>, meta?: Record<string, unknown>): void {
-    const payload = typeof message === 'object' ? message : { message };
+  log(
+    message: string | Record<string, unknown>,
+    meta?: Record<string, unknown>,
+  ): void {
+    const payload = typeof message === "object" ? message : { message };
     this.logger.info(this.withContext({ ...payload, ...meta }));
   }
 
-  error(message: string | Record<string, unknown>, meta?: Record<string, unknown>): void {
-    const payload = typeof message === 'object' ? message : { message };
+  error(
+    message: string | Record<string, unknown>,
+    meta?: Record<string, unknown>,
+  ): void {
+    const payload = typeof message === "object" ? message : { message };
     this.logger.error(this.withContext({ ...payload, ...meta }));
   }
 
-  warn(message: string | Record<string, unknown>, meta?: Record<string, unknown>): void {
-    const payload = typeof message === 'object' ? message : { message };
+  warn(
+    message: string | Record<string, unknown>,
+    meta?: Record<string, unknown>,
+  ): void {
+    const payload = typeof message === "object" ? message : { message };
     this.logger.warn(this.withContext({ ...payload, ...meta }));
   }
 
-  debug(message: string | Record<string, unknown>, meta?: Record<string, unknown>): void {
-    const payload = typeof message === 'object' ? message : { message };
+  debug(
+    message: string | Record<string, unknown>,
+    meta?: Record<string, unknown>,
+  ): void {
+    const payload = typeof message === "object" ? message : { message };
     this.logger.debug(this.withContext({ ...payload, ...meta }));
   }
 
@@ -1791,7 +1939,7 @@ export class PinoLoggerService implements LoggerService {
 // app.module.ts
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
-    consumer.apply(RequestIdMiddleware).forRoutes('*');
+    consumer.apply(RequestIdMiddleware).forRoutes("*");
   }
 }
 ```
@@ -1801,10 +1949,10 @@ export class AppModule implements NestModule {
 ```typescript
 // src/common/utils/security.utils.ts
 export function obfuscateEmail(email: string): string {
-  return email.replace(/(.{2})(.*)(@.*)/, '$1***$3');
+  return email.replace(/(.{2})(.*)(@.*)/, "$1***$3");
 }
 export function obfuscatePhone(phone: string): string {
-  return phone.replace(/(\+\d{2})(\d+)(\d{4})/, '$1***$3');
+  return phone.replace(/(\+\d{2})(\d+)(\d{4})/, "$1***$3");
 }
 export function obfuscateToken(token: string): string {
   return `${token.substring(0, 8)}...${token.substring(token.length - 4)}`;
@@ -1828,21 +1976,21 @@ export function obfuscateToken(token: string): string {
 
 ```typescript
 // src/config/app.config.ts
-import { registerAs } from '@nestjs/config';
+import { registerAs } from "@nestjs/config";
 
-export const appConfig = registerAs('app', () => ({
-  nodeEnv: process.env.NODE_ENV ?? 'development',
-  port: parseInt(process.env.PORT ?? '3000', 10),
-  logLevel: process.env.LOG_LEVEL ?? 'info',
+export const appConfig = registerAs("app", () => ({
+  nodeEnv: process.env.NODE_ENV ?? "development",
+  port: parseInt(process.env.PORT ?? "3000", 10),
+  logLevel: process.env.LOG_LEVEL ?? "info",
 
   database: {
     url: process.env.DATABASE_URL,
-    sslEnabled: process.env.DB_SSL_ENABLED === 'true',
+    sslEnabled: process.env.DB_SSL_ENABLED === "true",
   },
 
   redis: {
-    host: process.env.REDIS_HOST ?? 'localhost',
-    port: parseInt(process.env.REDIS_PORT ?? '6379', 10),
+    host: process.env.REDIS_HOST ?? "localhost",
+    port: parseInt(process.env.REDIS_PORT ?? "6379", 10),
     password: process.env.REDIS_PASSWORD,
   },
 
@@ -1850,15 +1998,17 @@ export const appConfig = registerAs('app', () => ({
     publicKey: process.env.JWT_PUBLIC_KEY,
     issuer: process.env.JWT_ISSUER,
     audience: process.env.JWT_AUDIENCE,
-    accessTokenTtl: parseInt(process.env.JWT_ACCESS_TTL ?? '900', 10),
+    accessTokenTtl: parseInt(process.env.JWT_ACCESS_TTL ?? "900", 10),
   },
 
   cors: {
-    origins: process.env.CORS_ORIGINS?.split(',').map((o) => o.trim()) ?? ['http://localhost:3000'],
+    origins: process.env.CORS_ORIGINS?.split(",").map((o) => o.trim()) ?? [
+      "http://localhost:3000",
+    ],
   },
 
   storage: {
-    provider: process.env.STORAGE_PROVIDER ?? 'local',
+    provider: process.env.STORAGE_PROVIDER ?? "local",
     s3Bucket: process.env.AWS_S3_BUCKET,
     s3Region: process.env.AWS_REGION,
   },
@@ -1871,12 +2021,16 @@ export type AppConfig = ReturnType<typeof appConfig>;
 
 ```typescript
 // src/config/env.validation.ts
-import * as Joi from 'joi';
+import * as Joi from "joi";
 
 export const envValidationSchema = Joi.object({
-  NODE_ENV: Joi.string().valid('development', 'staging', 'production', 'test').required(),
+  NODE_ENV: Joi.string()
+    .valid("development", "staging", "production", "test")
+    .required(),
   PORT: Joi.number().default(3000),
-  LOG_LEVEL: Joi.string().valid('error', 'warn', 'info', 'debug').default('info'),
+  LOG_LEVEL: Joi.string()
+    .valid("error", "warn", "info", "debug")
+    .default("info"),
   DATABASE_URL: Joi.string().required(),
   DB_SSL_ENABLED: Joi.boolean().default(false),
   REDIS_HOST: Joi.string().required(),
@@ -1887,9 +2041,15 @@ export const envValidationSchema = Joi.object({
   JWT_AUDIENCE: Joi.string().required(),
   JWT_ACCESS_TTL: Joi.number().default(900),
   CORS_ORIGINS: Joi.string().optional(),
-  STORAGE_PROVIDER: Joi.string().valid('local', 's3').default('local'),
-  AWS_S3_BUCKET: Joi.string().when('STORAGE_PROVIDER', { is: 's3', then: Joi.required() }),
-  AWS_REGION: Joi.string().when('STORAGE_PROVIDER', { is: 's3', then: Joi.required() }),
+  STORAGE_PROVIDER: Joi.string().valid("local", "s3").default("local"),
+  AWS_S3_BUCKET: Joi.string().when("STORAGE_PROVIDER", {
+    is: "s3",
+    then: Joi.required(),
+  }),
+  AWS_REGION: Joi.string().when("STORAGE_PROVIDER", {
+    is: "s3",
+    then: Joi.required(),
+  }),
 });
 ```
 
@@ -1957,14 +2117,14 @@ CacheModule.registerAsync({
 
 ```typescript
 // Uso en un service
-import { Inject } from '@nestjs/common';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import { Cache } from 'cache-manager';
+import { Inject } from "@nestjs/common";
+import { CACHE_MANAGER } from "@nestjs/cache-manager";
+import { Cache } from "cache-manager";
 
 @Injectable()
 export class ItemsService {
   private readonly TTL = 5 * 60 * 1000; // 5 min
-  private readonly PREFIX = 'items';
+  private readonly PREFIX = "items";
 
   constructor(
     private readonly prisma: PrismaService,
@@ -1980,7 +2140,9 @@ export class ItemsService {
     const cached = await this.cache.get<ItemResponseDto[]>(key);
     if (cached) return cached;
 
-    const items = await this.prisma.item.findMany({ where: { orgId, deletedAt: null } });
+    const items = await this.prisma.item.findMany({
+      where: { orgId, deletedAt: null },
+    });
     const response = items.map(this.mapToResponseDto);
     await this.cache.set(key, response, this.TTL);
     return response;
@@ -2011,22 +2173,24 @@ export class ItemsService {
 ```typescript
 // src/common/utils/sanitize.utils.ts
 const SENSITIVE_KEYS = [
-  'password',
-  'token',
-  'refreshToken',
-  'accessToken',
-  'secret',
-  'apiKey',
-  'privateKey',
+  "password",
+  "token",
+  "refreshToken",
+  "accessToken",
+  "secret",
+  "apiKey",
+  "privateKey",
 ];
 
 export function sanitizeData(data: unknown): unknown {
-  if (typeof data !== 'object' || data === null) return data;
+  if (typeof data !== "object" || data === null) return data;
   if (Array.isArray(data)) return data.map(sanitizeData);
   return Object.fromEntries(
     Object.entries(data as Record<string, unknown>).map(([key, value]) => {
-      const isSensitive = SENSITIVE_KEYS.some((k) => key.toLowerCase().includes(k.toLowerCase()));
-      return [key, isSensitive ? '[REDACTED]' : sanitizeData(value)];
+      const isSensitive = SENSITIVE_KEYS.some((k) =>
+        key.toLowerCase().includes(k.toLowerCase()),
+      );
+      return [key, isSensitive ? "[REDACTED]" : sanitizeData(value)];
     }),
   );
 }
@@ -2034,18 +2198,18 @@ export function sanitizeData(data: unknown): unknown {
 
 ```typescript
 // src/common/utils/cookie.utils.ts — HttpOnly cookies para refresh tokens (web)
-import { CookieOptions } from 'express';
+import { CookieOptions } from "express";
 
-export const REFRESH_TOKEN_COOKIE = 'refresh_token';
+export const REFRESH_TOKEN_COOKIE = "refresh_token";
 
 export function getRefreshTokenCookieOptions(): CookieOptions {
-  const isProd = process.env.NODE_ENV === 'production';
+  const isProd = process.env.NODE_ENV === "production";
   return {
     httpOnly: true,
     secure: isProd,
-    sameSite: isProd ? 'strict' : 'lax',
+    sameSite: isProd ? "strict" : "lax",
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
-    path: '/api/v1/auth', // limitar scope
+    path: "/api/v1/auth", // limitar scope
   };
 }
 ```
@@ -2065,14 +2229,18 @@ export function getRefreshTokenCookieOptions(): CookieOptions {
 
 ```typescript
 // src/health/health.controller.ts
-import { Controller, Get } from '@nestjs/common';
-import { HealthCheck, HealthCheckService, MemoryHealthIndicator } from '@nestjs/terminus';
-import { SkipThrottle } from '@nestjs/throttler';
-import { Public } from '@/common/decorators/public.decorator';
-import { SkipResponseTransform } from '@/common/decorators/skip-response-transform.decorator';
-import { PrismaHealthIndicator } from './prisma-health.indicator';
+import { Controller, Get } from "@nestjs/common";
+import {
+  HealthCheck,
+  HealthCheckService,
+  MemoryHealthIndicator,
+} from "@nestjs/terminus";
+import { SkipThrottle } from "@nestjs/throttler";
+import { Public } from "@/common/decorators/public.decorator";
+import { SkipResponseTransform } from "@/common/decorators/skip-response-transform.decorator";
+import { PrismaHealthIndicator } from "./prisma-health.indicator";
 
-@Controller('health')
+@Controller("health")
 @SkipThrottle()
 @Public()
 @SkipResponseTransform()
@@ -2085,15 +2253,15 @@ export class HealthController {
 
   @Get()
   liveness() {
-    return { status: 'ok', timestamp: new Date().toISOString() };
+    return { status: "ok", timestamp: new Date().toISOString() };
   }
 
-  @Get('ready')
+  @Get("ready")
   @HealthCheck()
   readiness() {
     return this.health.check([
-      () => this.prismaHealth.pingCheck('database'),
-      () => this.memory.checkHeap('memory_heap', 150 * 1024 * 1024),
+      () => this.prismaHealth.pingCheck("database"),
+      () => this.memory.checkHeap("memory_heap", 150 * 1024 * 1024),
     ]);
   }
 }
@@ -2101,9 +2269,13 @@ export class HealthController {
 
 ```typescript
 // src/health/prisma-health.indicator.ts
-import { Injectable } from '@nestjs/common';
-import { HealthIndicator, HealthIndicatorResult, HealthCheckError } from '@nestjs/terminus';
-import { PrismaService } from '@/prisma/prisma.service';
+import { Injectable } from "@nestjs/common";
+import {
+  HealthIndicator,
+  HealthIndicatorResult,
+  HealthCheckError,
+} from "@nestjs/terminus";
+import { PrismaService } from "@/prisma/prisma.service";
 
 @Injectable()
 export class PrismaHealthIndicator extends HealthIndicator {
@@ -2116,7 +2288,10 @@ export class PrismaHealthIndicator extends HealthIndicator {
       await this.prisma.$transaction([]);
       return this.getStatus(key, true);
     } catch {
-      throw new HealthCheckError('Database check failed', this.getStatus(key, false));
+      throw new HealthCheckError(
+        "Database check failed",
+        this.getStatus(key, false),
+      );
     }
   }
 }
@@ -2146,7 +2321,7 @@ export interface IStorageService {
   delete(key: string): Promise<void>;
   getUrl(key: string): string;
 }
-export const STORAGE_SERVICE = 'STORAGE_SERVICE';
+export const STORAGE_SERVICE = "STORAGE_SERVICE";
 
 // src/storage/storage.module.ts
 @Module({
@@ -2154,8 +2329,10 @@ export const STORAGE_SERVICE = 'STORAGE_SERVICE';
     {
       provide: STORAGE_SERVICE,
       useFactory: (configService: ConfigService) => {
-        const provider = configService.get<string>('app.storage.provider');
-        return provider === 's3' ? new S3StorageService(configService) : new LocalStorageService();
+        const provider = configService.get<string>("app.storage.provider");
+        return provider === "s3"
+          ? new S3StorageService(configService)
+          : new LocalStorageService();
       },
       inject: [ConfigService],
     },
@@ -2189,50 +2366,50 @@ async uploadFile(
 
 ```typescript
 // main.ts — registrar el plugin de Fastify
-import multipart from '@fastify/multipart';
+import multipart from "@fastify/multipart";
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
     new FastifyAdapter(),
   );
-  
+
   await app.register(multipart, {
     limits: {
       fileSize: 10 * 1024 * 1024, // 10MB
       files: 1,
     },
   });
-  
-  await app.listen(3000, '0.0.0.0');
+
+  await app.listen(3000, "0.0.0.0");
 }
 ```
 
 ```typescript
 // upload.controller.ts — leer el archivo con FastifyRequest
-import { Controller, Post, Req, BadRequestException } from '@nestjs/common';
-import { FastifyRequest } from 'fastify';
-import { MultipartFile } from '@fastify/multipart';
+import { Controller, Post, Req, BadRequestException } from "@nestjs/common";
+import { FastifyRequest } from "fastify";
+import { MultipartFile } from "@fastify/multipart";
 
-@Controller('upload')
+@Controller("upload")
 export class UploadController {
   @Post()
   async uploadFile(@Req() req: FastifyRequest) {
     const data = await req.file();
-    
+
     if (!data) {
-      throw new BadRequestException('No file uploaded');
+      throw new BadRequestException("No file uploaded");
     }
-    
+
     const file: MultipartFile = data;
     const buffer = await file.toBuffer();
-    
+
     // Validar tipo y tamaño
-    const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
+    const allowedTypes = ["image/jpeg", "image/png", "application/pdf"];
     if (!allowedTypes.includes(file.mimetype)) {
-      throw new BadRequestException('File type not allowed');
+      throw new BadRequestException("File type not allowed");
     }
-    
+
     // Procesar el buffer (subir a S3, guardar en disco, etc.)
     return { filename: file.filename, size: buffer.length };
   }
@@ -2244,17 +2421,18 @@ export class UploadController {
 @Post('multiple')
 async uploadMultiple(@Req() req: FastifyRequest) {
   const files: MultipartFile[] = [];
-  
+
   for await (const part of req.files()) {
     files.push(part);
   }
-  
+
   const buffers = await Promise.all(files.map(f => f.toBuffer()));
   return { count: files.length };
 }
 ```
 
 > Package requerido: `@fastify/multipart`
+>
 > ```bash
 > pnpm add @fastify/multipart
 > pnpm add -D @types/node
@@ -2270,8 +2448,8 @@ async uploadMultiple(@Req() req: FastifyRequest) {
 
 ```typescript
 // src/tenant/tenant.service.ts
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '@/prisma/prisma.service';
+import { Injectable } from "@nestjs/common";
+import { PrismaService } from "@/prisma/prisma.service";
 
 @Injectable()
 export class TenantService {
@@ -2279,16 +2457,19 @@ export class TenantService {
 
   async setSearchPath(tenantId: string): Promise<void> {
     // Validar UUID para prevenir SQL injection
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(tenantId)) {
       throw new Error(`Invalid tenant ID format: ${tenantId}`);
     }
-    const schema = `tenant_${tenantId.replace(/-/g, '_')}`;
-    await this.prisma.$executeRawUnsafe(`SET search_path TO "${schema}", public`);
+    const schema = `tenant_${tenantId.replace(/-/g, "_")}`;
+    await this.prisma.$executeRawUnsafe(
+      `SET search_path TO "${schema}", public`,
+    );
   }
 
   async resetSearchPath(): Promise<void> {
-    await this.prisma.$executeRawUnsafe('SET search_path TO public');
+    await this.prisma.$executeRawUnsafe("SET search_path TO public");
   }
 }
 ```
@@ -2303,12 +2484,12 @@ import {
   ExecutionContext,
   Injectable,
   NestInterceptor,
-} from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
-import { Observable } from 'rxjs';
-import { TenantService } from './tenant.service';
+} from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
+import { Observable } from "rxjs";
+import { TenantService } from "./tenant.service";
 
-export const NO_TENANT_KEY = 'noTenant';
+export const NO_TENANT_KEY = "noTenant";
 export const NoTenant = () => SetMetadata(NO_TENANT_KEY, true);
 
 @Injectable()
@@ -2318,7 +2499,10 @@ export class TenantInterceptor implements NestInterceptor {
     private readonly tenantService: TenantService,
   ) {}
 
-  async intercept(context: ExecutionContext, next: CallHandler): Promise<Observable<unknown>> {
+  async intercept(
+    context: ExecutionContext,
+    next: CallHandler,
+  ): Promise<Observable<unknown>> {
     const noTenant = this.reflector.getAllAndOverride<boolean>(NO_TENANT_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -2326,7 +2510,8 @@ export class TenantInterceptor implements NestInterceptor {
     if (noTenant) return next.handle();
 
     const request = context.switchToHttp().getRequest<{ tenantId?: string }>();
-    if (!request.tenantId) throw new BadRequestException('tenantId is required');
+    if (!request.tenantId)
+      throw new BadRequestException("tenantId is required");
 
     await this.tenantService.setSearchPath(request.tenantId);
     return next.handle();
@@ -2344,10 +2529,10 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
-import { PrismaService } from '@/prisma/prisma.service';
-import { NO_TENANT_KEY } from './tenant.interceptor';
+} from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
+import { PrismaService } from "@/prisma/prisma.service";
+import { NO_TENANT_KEY } from "./tenant.interceptor";
 
 @Injectable()
 export class TenantGuard implements CanActivate {
@@ -2364,11 +2549,13 @@ export class TenantGuard implements CanActivate {
     if (noTenant) return true;
 
     const request = context.switchToHttp().getRequest<{ tenantId?: string }>();
-    if (!request.tenantId) throw new ForbiddenException('tenantId is required');
+    if (!request.tenantId) throw new ForbiddenException("tenantId is required");
 
-    const org = await this.prisma.organization.findFirst({ where: { id: request.tenantId } });
-    if (!org) throw new NotFoundException('Tenant not found');
-    if (!org.isActive) throw new ForbiddenException('Tenant is inactive');
+    const org = await this.prisma.organization.findFirst({
+      where: { id: request.tenantId },
+    });
+    if (!org) throw new NotFoundException("Tenant not found");
+    if (!org.isActive) throw new ForbiddenException("Tenant is inactive");
 
     return true;
   }
@@ -2393,9 +2580,9 @@ export class TenantGuard implements CanActivate {
 
 ```typescript
 // src/workers/workers.module.ts
-import { BullModule } from '@nestjs/bullmq';
-import { Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { BullModule } from "@nestjs/bullmq";
+import { Module } from "@nestjs/common";
+import { ConfigModule, ConfigService } from "@nestjs/config";
 
 @Module({
   imports: [
@@ -2404,9 +2591,9 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
       inject: [ConfigService],
       useFactory: (cs: ConfigService) => ({
         connection: {
-          host: cs.get<string>('app.redis.host', 'localhost'),
-          port: cs.get<number>('app.redis.port', 6379),
-          password: cs.get<string>('app.redis.password'),
+          host: cs.get<string>("app.redis.host", "localhost"),
+          port: cs.get<number>("app.redis.port", 6379),
+          password: cs.get<string>("app.redis.password"),
           db: 0, // DB 0 para queues (DB 1 para caché — ver backend-stack.md)
           connectTimeout: 2000,
           maxRetriesPerRequest: 0,
@@ -2414,13 +2601,13 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
         },
         defaultJobOptions: {
           attempts: 3,
-          backoff: { type: 'exponential', delay: 5000 },
+          backoff: { type: "exponential", delay: 5000 },
           removeOnComplete: { age: 3600, count: 1000 },
           removeOnFail: { age: 86400 },
         },
       }),
     }),
-    BullModule.registerQueue({ name: 'my-queue' }),
+    BullModule.registerQueue({ name: "my-queue" }),
   ],
   providers: [ItemDeliveryWorker],
   exports: [BullModule],
@@ -2432,16 +2619,16 @@ export class WorkersModule {}
 
 ```typescript
 // src/workers/item-delivery.worker.ts
-import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Injectable, Logger } from '@nestjs/common';
-import type { Job } from 'bullmq';
+import { Processor, WorkerHost } from "@nestjs/bullmq";
+import { Injectable, Logger } from "@nestjs/common";
+import type { Job } from "bullmq";
 
 export interface MyJobData {
   itemId: string;
   userId: string;
 }
 
-@Processor('my-queue')
+@Processor("my-queue")
 @Injectable()
 export class ItemDeliveryWorker extends WorkerHost {
   private readonly logger = new Logger(ItemDeliveryWorker.name);
@@ -2471,16 +2658,18 @@ export class ItemDeliveryWorker extends WorkerHost {
 ### Enqueue desde service
 
 ```typescript
-import { InjectQueue } from '@nestjs/bullmq';
-import { Queue } from 'bullmq';
+import { InjectQueue } from "@nestjs/bullmq";
+import { Queue } from "bullmq";
 
 @Injectable()
 export class ItemsService {
-  constructor(@InjectQueue('my-queue') private readonly queue: Queue<MyJobData>) {}
+  constructor(
+    @InjectQueue("my-queue") private readonly queue: Queue<MyJobData>,
+  ) {}
 
   async processAsync(itemId: string, userId: string): Promise<void> {
     await this.queue.add(
-      'process-item',
+      "process-item",
       { itemId, userId },
       {
         jobId: `item-${itemId}`, // deduplicación — BullMQ no encola si ya existe
@@ -2508,7 +2697,7 @@ export class ItemsService {
 
 ```typescript
 // src/common/test/mock-prisma.ts
-import { PrismaService } from '@/prisma/prisma.service';
+import { PrismaService } from "@/prisma/prisma.service";
 
 export type MockPrismaService = {
   [K in keyof PrismaService]: jest.Mocked<PrismaService[K]>;
@@ -2541,15 +2730,15 @@ export const createMockPrismaService = (): MockPrismaService =>
 export const createMockConfigService = () => ({
   get: jest.fn((key: string, defaultValue?: unknown) => {
     const config: Record<string, unknown> = {
-      'app.database.url': 'postgresql://localhost/test',
-      'app.jwt.issuer': 'https://auth.example.com',
-      'app.redis.host': 'localhost',
+      "app.database.url": "postgresql://localhost/test",
+      "app.jwt.issuer": "https://auth.example.com",
+      "app.redis.host": "localhost",
     };
     return config[key] ?? defaultValue;
   }),
   getOrThrow: jest.fn((key: string) => {
     const config: Record<string, unknown> = {
-      'app.jwt.publicKey': 'test-public-key',
+      "app.jwt.publicKey": "test-public-key",
     };
     if (!(key in config)) throw new Error(`Config key ${key} not found`);
     return config[key];
@@ -2561,10 +2750,12 @@ export const createMockConfigService = () => ({
 
 ```typescript
 // src/modules/items/__tests__/items.factory.ts
-import { faker } from '@faker-js/faker';
-import { CreateItemDto } from '../dto/create-item.dto';
+import { faker } from "@faker-js/faker";
+import { CreateItemDto } from "../dto/create-item.dto";
 
-export function createItemDto(overrides: Partial<CreateItemDto> = {}): CreateItemDto {
+export function createItemDto(
+  overrides: Partial<CreateItemDto> = {},
+): CreateItemDto {
   return {
     name: faker.commerce.productName(),
     email: faker.internet.email(),
@@ -2591,30 +2782,33 @@ export function itemEntity(overrides: Partial<PrismaItem> = {}): PrismaItem {
 
 ```typescript
 // src/modules/items/__tests__/items.service.spec.ts
-import { Test, TestingModule } from '@nestjs/testing';
-import { HttpStatus } from '@nestjs/common';
-import { ItemsService } from '../items.service';
-import { PrismaService } from '@/prisma/prisma.service';
-import { createMockPrismaService } from '@/common/test/mock-prisma';
-import { ErrorCodes } from '@/common/constants/error-codes';
-import { itemEntity, createItemDto } from './items.factory';
+import { Test, TestingModule } from "@nestjs/testing";
+import { HttpStatus } from "@nestjs/common";
+import { ItemsService } from "../items.service";
+import { PrismaService } from "@/prisma/prisma.service";
+import { createMockPrismaService } from "@/common/test/mock-prisma";
+import { ErrorCodes } from "@/common/constants/error-codes";
+import { itemEntity, createItemDto } from "./items.factory";
 
-describe('ItemsService', () => {
+describe("ItemsService", () => {
   let service: ItemsService;
   let mockPrisma: ReturnType<typeof createMockPrismaService>;
 
   beforeEach(async () => {
     mockPrisma = createMockPrismaService();
     const module: TestingModule = await Test.createTestingModule({
-      providers: [ItemsService, { provide: PrismaService, useValue: mockPrisma }],
+      providers: [
+        ItemsService,
+        { provide: PrismaService, useValue: mockPrisma },
+      ],
     }).compile();
     service = module.get<ItemsService>(ItemsService);
   });
 
   afterEach(() => jest.clearAllMocks());
 
-  describe('findById', () => {
-    it('should return item DTO when found', async () => {
+  describe("findById", () => {
+    it("should return item DTO when found", async () => {
       const item = itemEntity();
       mockPrisma.item.findFirst.mockResolvedValue(item);
 
@@ -2627,10 +2821,10 @@ describe('ItemsService', () => {
       });
     });
 
-    it('should throw ITEM_001 when not found', async () => {
+    it("should throw ITEM_001 when not found", async () => {
       mockPrisma.item.findFirst.mockResolvedValue(null);
 
-      await expect(service.findById('non-existent')).rejects.toMatchObject({
+      await expect(service.findById("non-existent")).rejects.toMatchObject({
         code: ErrorCodes.ITEM_001,
       });
     });
@@ -2642,12 +2836,12 @@ describe('ItemsService', () => {
 
 ```typescript
 // test/items.e2e-spec.ts
-import { INestApplication, ValidationPipe } from '@nestjs/common';
-import { Test, TestingModule } from '@nestjs/testing';
-import * as request from 'supertest';
-import { AppModule } from '@/app.module';
+import { INestApplication, ValidationPipe } from "@nestjs/common";
+import { Test, TestingModule } from "@nestjs/testing";
+import * as request from "supertest";
+import { AppModule } from "@/app.module";
 
-describe('ItemsController (e2e)', () => {
+describe("ItemsController (e2e)", () => {
   let app: INestApplication;
   let authToken: string;
 
@@ -2657,17 +2851,19 @@ describe('ItemsController (e2e)', () => {
     }).compile();
 
     app = module.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, transform: true }),
+    );
     await app.init();
     authToken = await getTestAuthToken(app);
   });
 
   afterAll(() => app.close());
 
-  it('GET /v1/items → 200 + paginación', async () => {
+  it("GET /v1/items → 200 + paginación", async () => {
     const { body } = await request(app.getHttpServer())
-      .get('/v1/items')
-      .set('Authorization', `Bearer ${authToken}`)
+      .get("/v1/items")
+      .set("Authorization", `Bearer ${authToken}`)
       .expect(200);
 
     expect(body.data).toBeInstanceOf(Array);
@@ -2679,11 +2875,11 @@ describe('ItemsController (e2e)', () => {
     });
   });
 
-  it('POST /v1/items → 400 si body inválido', async () => {
+  it("POST /v1/items → 400 si body inválido", async () => {
     const { body } = await request(app.getHttpServer())
-      .post('/v1/items')
-      .set('Authorization', `Bearer ${authToken}`)
-      .send({ name: '' })
+      .post("/v1/items")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ name: "" })
       .expect(422);
 
     expect(body.error.code).toBe(ErrorCodes.VAL_001);
@@ -2694,14 +2890,14 @@ describe('ItemsController (e2e)', () => {
 ### Tests de tiempo determinístico
 
 ```typescript
-describe('token expiration', () => {
+describe("token expiration", () => {
   beforeEach(() => {
     jest.useFakeTimers();
-    jest.setSystemTime(new Date('2026-01-01T12:00:00Z'));
+    jest.setSystemTime(new Date("2026-01-01T12:00:00Z"));
   });
   afterEach(() => jest.useRealTimers());
 
-  it('should detect expired token after TTL', () => {
+  it("should detect expired token after TTL", () => {
     jest.advanceTimersByTime(901 * 1000); // 15 min + 1 seg
     expect(service.isTokenExpired(token)).toBe(true);
   });
@@ -2724,17 +2920,20 @@ describe('token expiration', () => {
 
 ```typescript
 // src/main.ts
-import { Logger, ValidationPipe } from '@nestjs/common';
-import { NestFactory } from '@nestjs/core';
-import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
-import { HttpAdapterHost } from '@nestjs/core';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { AppModule } from './app.module';
-import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
-import { RequestLoggingInterceptor } from './common/interceptors/request-logging.interceptor';
-import { DomainException } from './common/exceptions/domain.exception';
-import { ErrorCodes } from './common/constants/error-codes';
-import { HttpStatus } from '@nestjs/common';
+import { Logger, ValidationPipe } from "@nestjs/common";
+import { NestFactory } from "@nestjs/core";
+import {
+  FastifyAdapter,
+  NestFastifyApplication,
+} from "@nestjs/platform-fastify";
+import { HttpAdapterHost } from "@nestjs/core";
+import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
+import { AppModule } from "./app.module";
+import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
+import { RequestLoggingInterceptor } from "./common/interceptors/request-logging.interceptor";
+import { DomainException } from "./common/exceptions/domain.exception";
+import { ErrorCodes } from "./common/constants/error-codes";
+import { HttpStatus } from "@nestjs/common";
 
 let isShuttingDown = false;
 
@@ -2750,53 +2949,66 @@ async function bootstrap() {
   // Middleware de shutdown: rechazar nuevos requests durante el cierre
   app.use((_req: unknown, res: any, next: () => void) => {
     if (isShuttingDown) {
-      res.status(503).json({ message: 'Service is shutting down', code: 'SERVICE_UNAVAILABLE' });
+      res
+        .status(503)
+        .json({
+          message: "Service is shutting down",
+          code: "SERVICE_UNAVAILABLE",
+        });
       return;
     }
     next();
   });
 
-  process.on('SIGTERM', () => {
+  process.on("SIGTERM", () => {
     isShuttingDown = true;
   });
 
   // 1. CORS
-  const corsOrigins = process.env.CORS_ORIGINS?.split(',').map((o) => o.trim()) ?? [
-    'http://localhost:3000',
-  ];
+  const corsOrigins = process.env.CORS_ORIGINS?.split(",").map((o) =>
+    o.trim(),
+  ) ?? ["http://localhost:3000"];
   app.enableCors({
     origin: corsOrigins,
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    methods: "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS",
     credentials: true,
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-request-id', 'x-idempotency-key'],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "x-request-id",
+      "x-idempotency-key",
+    ],
   });
 
   // 2. Helmet
-  await app.register(import('@fastify/helmet'), {
+  await app.register(import("@fastify/helmet"), {
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
         scriptSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", 'data:', 'https:'],
+        imgSrc: ["'self'", "data:", "https:"],
       },
     },
     crossOriginEmbedderPolicy: false,
   });
 
   // 3. Global prefix (excluye raíz para health checks sin prefijo)
-  app.setGlobalPrefix('api', { exclude: ['/'] });
+  app.setGlobalPrefix("api", { exclude: ["/"] });
 
   // 4. Swagger (solo fuera de producción)
-  if (process.env.NODE_ENV !== 'production') {
+  if (process.env.NODE_ENV !== "production") {
     const config = new DocumentBuilder()
-      .setTitle('My API')
-      .setVersion(process.env.npm_package_version ?? '1.0.0')
-      .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }, 'JWT')
+      .setTitle("My API")
+      .setVersion(process.env.npm_package_version ?? "1.0.0")
+      .addBearerAuth(
+        { type: "http", scheme: "bearer", bearerFormat: "JWT" },
+        "JWT",
+      )
       .build();
     const document = SwaggerModule.createDocument(app, config);
-    SwaggerModule.setup('api/docs', app, document, {
-      swaggerOptions: { persistAuthorization: true, tagsSorter: 'alpha' },
+    SwaggerModule.setup("api/docs", app, document, {
+      swaggerOptions: { persistAuthorization: true, tagsSorter: "alpha" },
     });
   }
 
@@ -2807,12 +3019,14 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
       transform: true,
       transformOptions: { enableImplicitConversion: true },
-      disableErrorMessages: process.env.NODE_ENV === 'production',
+      disableErrorMessages: process.env.NODE_ENV === "production",
       exceptionFactory: (errors) => {
-        const messages = errors.flatMap((err) => Object.values(err.constraints ?? {}));
+        const messages = errors.flatMap((err) =>
+          Object.values(err.constraints ?? {}),
+        );
         throw new DomainException(
           ErrorCodes.VAL_001,
-          messages.join('; '),
+          messages.join("; "),
           HttpStatus.UNPROCESSABLE_ENTITY,
           { fields: errors.map((e) => e.property) },
         );
@@ -2828,14 +3042,18 @@ async function bootstrap() {
   app.useGlobalFilters(new AllExceptionsFilter(httpAdapterHost));
 
   // 8. Iniciar servidor
-  const port = parseInt(process.env.PORT ?? '3000', 10);
-  await app.listen(port, '0.0.0.0');
+  const port = parseInt(process.env.PORT ?? "3000", 10);
+  await app.listen(port, "0.0.0.0");
 
-  new Logger('Bootstrap').log(`Application started on port ${port} [${process.env.NODE_ENV}]`);
+  new Logger("Bootstrap").log(
+    `Application started on port ${port} [${process.env.NODE_ENV}]`,
+  );
 }
 
 bootstrap().catch((err: unknown) => {
-  new Logger('Bootstrap').error(err instanceof Error ? err.message : String(err));
+  new Logger("Bootstrap").error(
+    err instanceof Error ? err.message : String(err),
+  );
   process.exit(1);
 });
 ```
@@ -3016,11 +3234,11 @@ findOne(@Param('id', ParseUUIDPipe) id: string) { ... }
 
 ### Stack recomendado
 
-| Servicio | Mejor para | Free tier |
-|----------|------------|-----------|
-| **Resend** | Proyectos nuevos — API moderna, TypeScript-first | 3k emails/mes |
-| **SendGrid** | Proyectos enterprise con volumen alto | 100/día |
-| **AWS SES** | Ya en AWS ecosystem, costo muy bajo a escala | 62k/mes desde EC2 |
+| Servicio     | Mejor para                                       | Free tier         |
+| ------------ | ------------------------------------------------ | ----------------- |
+| **Resend**   | Proyectos nuevos — API moderna, TypeScript-first | 3k emails/mes     |
+| **SendGrid** | Proyectos enterprise con volumen alto            | 100/día           |
+| **AWS SES**  | Ya en AWS ecosystem, costo muy bajo a escala     | 62k/mes desde EC2 |
 
 **Decisión**: Resend para proyectos nuevos. AWS SES si ya estás en AWS.
 
@@ -3033,11 +3251,11 @@ pnpm add -D @types/nodemailer
 
 ```typescript
 // mail/mail.module.ts
-import { MailerModule } from '@nestjs-modules/mailer';
-import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handlebars.adapter';
-import { Module } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { join } from 'path';
+import { MailerModule } from "@nestjs-modules/mailer";
+import { HandlebarsAdapter } from "@nestjs-modules/mailer/dist/adapters/handlebars.adapter";
+import { Module } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { join } from "path";
 
 @Module({
   imports: [
@@ -3045,19 +3263,19 @@ import { join } from 'path';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         transport: {
-          host: 'smtp.resend.com',
+          host: "smtp.resend.com",
           port: 465,
           secure: true,
           auth: {
-            user: 'resend',
-            pass: config.get('app.resend.apiKey'),
+            user: "resend",
+            pass: config.get("app.resend.apiKey"),
           },
         },
         defaults: {
-          from: `"${config.get('app.name')}" <noreply@${config.get('app.domain')}>`,
+          from: `"${config.get("app.name")}" <noreply@${config.get("app.domain")}>`,
         },
         template: {
-          dir: join(__dirname, 'templates'),
+          dir: join(__dirname, "templates"),
           adapter: new HandlebarsAdapter(),
           options: { strict: true },
         },
@@ -3071,8 +3289,8 @@ export class MailModule {}
 
 ```typescript
 // mail/mail.service.ts
-import { MailerService } from '@nestjs-modules/mailer';
-import { Injectable } from '@nestjs/common';
+import { MailerService } from "@nestjs-modules/mailer";
+import { Injectable } from "@nestjs/common";
 
 export interface WelcomeEmailContext {
   name: string;
@@ -3086,8 +3304,8 @@ export class MailService {
   async sendWelcome(to: string, context: WelcomeEmailContext): Promise<void> {
     await this.mailer.sendMail({
       to,
-      subject: 'Verificá tu cuenta',
-      template: 'welcome', // templates/welcome.hbs
+      subject: "Verificá tu cuenta",
+      template: "welcome", // templates/welcome.hbs
       context,
     });
   }
@@ -3095,9 +3313,9 @@ export class MailService {
   async sendPasswordReset(to: string, resetUrl: string): Promise<void> {
     await this.mailer.sendMail({
       to,
-      subject: 'Recuperá tu contraseña',
-      template: 'password-reset',
-      context: { resetUrl, expiresIn: '1 hora' },
+      subject: "Recuperá tu contraseña",
+      template: "password-reset",
+      context: { resetUrl, expiresIn: "1 hora" },
     });
   }
 }
@@ -3109,15 +3327,15 @@ No envíes emails síncronamente en el request — si el servicio de email falla
 
 ```typescript
 // mail/mail.processor.ts
-import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Job } from 'bullmq';
-import { MailService } from './mail.service';
+import { Processor, WorkerHost } from "@nestjs/bullmq";
+import { Job } from "bullmq";
+import { MailService } from "./mail.service";
 
-export const MAIL_QUEUE = 'mail';
+export const MAIL_QUEUE = "mail";
 
 export type MailJob =
-  | { type: 'welcome'; to: string; name: string; verificationUrl: string }
-  | { type: 'password-reset'; to: string; resetUrl: string };
+  | { type: "welcome"; to: string; name: string; verificationUrl: string }
+  | { type: "password-reset"; to: string; resetUrl: string };
 
 @Processor(MAIL_QUEUE)
 export class MailProcessor extends WorkerHost {
@@ -3127,14 +3345,17 @@ export class MailProcessor extends WorkerHost {
 
   async process(job: Job<MailJob>): Promise<void> {
     switch (job.data.type) {
-      case 'welcome':
+      case "welcome":
         await this.mailService.sendWelcome(job.data.to, {
           name: job.data.name,
           verificationUrl: job.data.verificationUrl,
         });
         break;
-      case 'password-reset':
-        await this.mailService.sendPasswordReset(job.data.to, job.data.resetUrl);
+      case "password-reset":
+        await this.mailService.sendPasswordReset(
+          job.data.to,
+          job.data.resetUrl,
+        );
         break;
     }
   }
@@ -3159,11 +3380,11 @@ En lugar de Handlebars, podés usar [React Email](https://react.email) para crea
 
 ```typescript
 // Render a HTML y pasar a mailer
-import { render } from '@react-email/render';
-import { WelcomeEmail } from './templates/welcome-email';
+import { render } from "@react-email/render";
+import { WelcomeEmail } from "./templates/welcome-email";
 
 const html = await render(WelcomeEmail({ name, verificationUrl }));
-await this.mailer.sendMail({ to, subject: '...', html });
+await this.mailer.sendMail({ to, subject: "...", html });
 ```
 
 > 📌 **Gotcha**: Los templates de React Email se renderizan en el servidor. Si usás monorepo, ponelos en un package compartido `@repo/emails`.
@@ -3178,10 +3399,10 @@ await this.mailer.sendMail({ to, subject: '...', html });
 
 ### Cuándo usar qué
 
-| Tecnología | Cuándo | Casos de uso |
-|------------|--------|--------------|
-| **SSE** | Flujo unidireccional servidor → cliente | Notificaciones, feeds, progreso de jobs |
-| **WebSockets** | Comunicación bidireccional | Chat, colaboración en tiempo real, juegos |
+| Tecnología     | Cuándo                                  | Casos de uso                              |
+| -------------- | --------------------------------------- | ----------------------------------------- |
+| **SSE**        | Flujo unidireccional servidor → cliente | Notificaciones, feeds, progreso de jobs   |
+| **WebSockets** | Comunicación bidireccional              | Chat, colaboración en tiempo real, juegos |
 
 > 📌 Para dashboards admin, **SSE es suficiente en el 80% de los casos** y es mucho más simple (HTTP nativo, sin upgrade de protocolo, funciona con proxies/load balancers sin config extra).
 
@@ -3191,18 +3412,25 @@ await this.mailer.sendMail({ to, subject: '...', html });
 
 ```typescript
 // notifications/notifications.controller.ts
-import { Controller, Get, Sse, MessageEvent, Param, UseGuards } from '@nestjs/common';
-import { Observable } from 'rxjs';
-import { NotificationsService } from './notifications.service';
-import { JwtAuthGuard } from '@/auth/guards/jwt-auth.guard';
-import { CurrentUser } from '@/auth/decorators/current-user.decorator';
+import {
+  Controller,
+  Get,
+  Sse,
+  MessageEvent,
+  Param,
+  UseGuards,
+} from "@nestjs/common";
+import { Observable } from "rxjs";
+import { NotificationsService } from "./notifications.service";
+import { JwtAuthGuard } from "@/auth/guards/jwt-auth.guard";
+import { CurrentUser } from "@/auth/decorators/current-user.decorator";
 
-@Controller('notifications')
+@Controller("notifications")
 @UseGuards(JwtAuthGuard)
 export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
-  @Get('stream')
+  @Get("stream")
   @Sse()
   stream(@CurrentUser() user: JwtPayload): Observable<MessageEvent> {
     return this.notificationsService.getStream(user.sub);
@@ -3212,9 +3440,9 @@ export class NotificationsController {
 
 ```typescript
 // notifications/notifications.service.ts
-import { Injectable } from '@nestjs/common';
-import { Observable, Subject } from 'rxjs';
-import { filter, map } from 'rxjs/operators';
+import { Injectable } from "@nestjs/common";
+import { Observable, Subject } from "rxjs";
+import { filter, map } from "rxjs/operators";
 
 interface Notification {
   userId: string;
@@ -3250,12 +3478,15 @@ export class OrdersService {
   constructor(private readonly notifications: NotificationsService) {}
 
   async updateOrderStatus(orderId: string, status: string, userId: string) {
-    await this.prisma.order.update({ where: { id: orderId }, data: { status } });
-    
+    await this.prisma.order.update({
+      where: { id: orderId },
+      data: { status },
+    });
+
     // Notificar al usuario en tiempo real
     this.notifications.emit({
       userId,
-      type: 'order.status_changed',
+      type: "order.status_changed",
       payload: { orderId, status },
     });
   }
@@ -3266,21 +3497,19 @@ export class OrdersService {
 
 ```typescript
 // Con Redis Pub/Sub para multi-pod
-import { Redis } from 'ioredis';
+import { Redis } from "ioredis";
 
 @Injectable()
 export class NotificationsService implements OnModuleInit, OnModuleDestroy {
   private readonly events$ = new Subject<Notification>();
   private subscriber: Redis;
 
-  constructor(
-    @InjectRedis() private readonly redis: Redis,
-  ) {}
+  constructor(@InjectRedis() private readonly redis: Redis) {}
 
   async onModuleInit() {
     this.subscriber = this.redis.duplicate();
-    await this.subscriber.subscribe('notifications');
-    this.subscriber.on('message', (_, message) => {
+    await this.subscriber.subscribe("notifications");
+    this.subscriber.on("message", (_, message) => {
       this.events$.next(JSON.parse(message));
     });
   }
@@ -3290,7 +3519,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
   }
 
   async emit(notification: Notification): Promise<void> {
-    await this.redis.publish('notifications', JSON.stringify(notification));
+    await this.redis.publish("notifications", JSON.stringify(notification));
   }
 
   getStream(userId: string): Observable<MessageEvent> {
@@ -3316,14 +3545,14 @@ import {
   ConnectedSocket,
   OnGatewayConnection,
   OnGatewayDisconnect,
-} from '@nestjs/websockets';
-import { Server, Socket } from 'socket.io';
-import { UseGuards } from '@nestjs/common';
-import { WsJwtGuard } from '@/auth/guards/ws-jwt.guard';
+} from "@nestjs/websockets";
+import { Server, Socket } from "socket.io";
+import { UseGuards } from "@nestjs/common";
+import { WsJwtGuard } from "@/auth/guards/ws-jwt.guard";
 
 @WebSocketGateway({
   cors: { origin: process.env.FRONTEND_URL, credentials: true },
-  namespace: '/ws',
+  namespace: "/ws",
 })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
@@ -3345,7 +3574,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     console.log(`Client disconnected: ${client.id}`);
   }
 
-  @SubscribeMessage('message')
+  @SubscribeMessage("message")
   @UseGuards(WsJwtGuard)
   async handleMessage(
     @ConnectedSocket() client: Socket,
@@ -3355,9 +3584,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       userId: client.data.userId,
       ...data,
     });
-    
+
     // Emitir a todos en la sala
-    this.server.to(`room:${data.roomId}`).emit('message', message);
+    this.server.to(`room:${data.roomId}`).emit("message", message);
   }
 
   // Emitir desde otros servicios
@@ -3396,7 +3625,7 @@ async getOrder(@Param('id') id: string) {
 
 ```typescript
 // common/policies/policies.types.ts
-export type PolicyAction = 'read' | 'create' | 'update' | 'delete' | 'manage';
+export type PolicyAction = "read" | "create" | "update" | "delete" | "manage";
 
 export interface PolicyAbility {
   can(action: PolicyAction, subject: unknown): boolean;
@@ -3409,11 +3638,16 @@ export interface PolicyHandler {
 
 ```typescript
 // common/guards/policies.guard.ts
-import { CanActivate, ExecutionContext, Injectable, ForbiddenException } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
-import { AbilityFactory } from '../abilities/ability.factory';
+import {
+  CanActivate,
+  ExecutionContext,
+  Injectable,
+  ForbiddenException,
+} from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
+import { AbilityFactory } from "../abilities/ability.factory";
 
-export const CHECK_POLICIES_KEY = 'check_policies';
+export const CHECK_POLICIES_KEY = "check_policies";
 export const CheckPolicies = (...handlers: PolicyHandler[]) =>
   SetMetadata(CHECK_POLICIES_KEY, handlers);
 
@@ -3436,7 +3670,7 @@ export class PoliciesGuard implements CanActivate {
     const ability = await this.abilityFactory.createForUser(request.user);
 
     const allowed = handlers.every((handler) => handler.handle(ability));
-    if (!allowed) throw new ForbiddenException('AUTHZ_002');
+    if (!allowed) throw new ForbiddenException("AUTHZ_002");
 
     return true;
   }
@@ -3445,23 +3679,29 @@ export class PoliciesGuard implements CanActivate {
 
 ```typescript
 // modules/orders/policies/order.policies.ts
-import { PolicyHandler, PolicyAbility } from '@common/policies/policies.types';
-import { Order } from '../domain/order.entity';
+import { PolicyHandler, PolicyAbility } from "@common/policies/policies.types";
+import { Order } from "../domain/order.entity";
 
 // Política: solo el owner o un admin puede ver la orden
 export class ReadOrderPolicy implements PolicyHandler {
-  constructor(private readonly order: Order, private readonly userId: string) {}
+  constructor(
+    private readonly order: Order,
+    private readonly userId: string,
+  ) {}
 
   handle(ability: PolicyAbility): boolean {
-    return this.order.userId === this.userId || ability.can('manage', 'Order');
+    return this.order.userId === this.userId || ability.can("manage", "Order");
   }
 }
 
 export class UpdateOrderPolicy implements PolicyHandler {
-  constructor(private readonly order: Order, private readonly userId: string) {}
+  constructor(
+    private readonly order: Order,
+    private readonly userId: string,
+  ) {}
 
   handle(ability: PolicyAbility): boolean {
-    return this.order.userId === this.userId && ability.can('update', 'Order');
+    return this.order.userId === this.userId && ability.can("update", "Order");
   }
 }
 ```
@@ -3475,12 +3715,12 @@ async getOrder(
   @CurrentUser() user: JwtPayload,
 ) {
   const order = await this.ordersService.findById(id);
-  
+
   // Verificar ownership manualmente en el service/controller
   if (order.userId !== user.sub && user.role !== 'ADMIN') {
     throw new ForbiddenException('AUTHZ_002');
   }
-  
+
   return order;
 }
 ```
@@ -3493,28 +3733,36 @@ Para proyectos sin CASL/Casbin, el ownership check directo en el service es más
 // modules/orders/orders.service.ts
 @Injectable()
 export class OrdersService {
-  async findByIdForUser(id: string, userId: string, userRole: string): Promise<Order> {
+  async findByIdForUser(
+    id: string,
+    userId: string,
+    userRole: string,
+  ): Promise<Order> {
     const order = await this.prisma.order.findUnique({ where: { id } });
-    
+
     if (!order) {
-      throw new NotFoundException('RESOURCE_001');
+      throw new NotFoundException("RESOURCE_001");
     }
-    
+
     // Solo el owner o admins pueden ver la orden
     const isOwner = order.userId === userId;
-    const isAdmin = ['ADMIN', 'ROOT'].includes(userRole);
-    
+    const isAdmin = ["ADMIN", "ROOT"].includes(userRole);
+
     if (!isOwner && !isAdmin) {
-      throw new ForbiddenException('AUTHZ_002');
+      throw new ForbiddenException("AUTHZ_002");
     }
-    
+
     return order;
   }
 
-  async updateForUser(id: string, dto: UpdateOrderDto, userId: string): Promise<Order> {
+  async updateForUser(
+    id: string,
+    dto: UpdateOrderDto,
+    userId: string,
+  ): Promise<Order> {
     // Primero verificar ownership
-    await this.findByIdForUser(id, userId, 'USER'); // fuerza verificación de ownership
-    
+    await this.findByIdForUser(id, userId, "USER"); // fuerza verificación de ownership
+
     return this.prisma.order.update({
       where: { id },
       data: dto,
@@ -3546,14 +3794,14 @@ async getOrder(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
 
 ```typescript
 // prisma/seed.ts
-import { PrismaClient } from '@prisma/client';
-import { faker } from '@faker-js/faker';
-import * as argon2 from 'argon2';
+import { PrismaClient } from "@prisma/client";
+import { faker } from "@faker-js/faker";
+import * as argon2 from "argon2";
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 Seeding database...');
+  console.log("🌱 Seeding database...");
 
   // Limpiar en orden correcto (respetar foreign keys)
   await prisma.order.deleteMany();
@@ -3561,14 +3809,14 @@ async function main() {
   await prisma.user.deleteMany();
 
   // Crear usuarios
-  const passwordHash = await argon2.hash('password123');
+  const passwordHash = await argon2.hash("password123");
 
   const adminUser = await prisma.user.create({
     data: {
-      email: 'admin@example.com',
-      name: 'Admin User',
+      email: "admin@example.com",
+      name: "Admin User",
       password: passwordHash,
-      role: 'ADMIN',
+      role: "ADMIN",
     },
   });
 
@@ -3579,7 +3827,7 @@ async function main() {
           email: faker.internet.email(),
           name: faker.person.fullName(),
           password: passwordHash,
-          role: 'USER',
+          role: "USER",
         },
       }),
     ),
@@ -3596,7 +3844,7 @@ async function main() {
           description: faker.commerce.productDescription(),
           price: parseFloat(faker.commerce.price({ min: 10, max: 500 })),
           stock: faker.number.int({ min: 0, max: 100 }),
-          status: faker.helpers.arrayElement(['active', 'inactive']),
+          status: faker.helpers.arrayElement(["active", "inactive"]),
         },
       }),
     ),
@@ -3615,13 +3863,20 @@ async function main() {
       return prisma.order.create({
         data: {
           userId: user.id,
-          status: faker.helpers.arrayElement(['pending', 'processing', 'completed', 'cancelled']),
+          status: faker.helpers.arrayElement([
+            "pending",
+            "processing",
+            "completed",
+            "cancelled",
+          ]),
           items: {
-            create: [{
-              productId: product.id,
-              quantity,
-              unitPrice: product.price,
-            }],
+            create: [
+              {
+                productId: product.id,
+                quantity,
+                unitPrice: product.price,
+              },
+            ],
           },
           total: product.price * quantity,
         },
@@ -3630,12 +3885,12 @@ async function main() {
   );
 
   console.log(`✅ Created ${orders.length} orders`);
-  console.log('🎉 Seeding complete!');
+  console.log("🎉 Seeding complete!");
 }
 
 main()
   .catch((e) => {
-    console.error('❌ Seed failed:', e);
+    console.error("❌ Seed failed:", e);
     process.exit(1);
   })
   .finally(async () => {
@@ -3671,8 +3926,8 @@ pnpm prisma db seed
 
 ```typescript
 // prisma/seed.ts — detectar entorno
-const isCI = process.env.CI === 'true';
-const isStagingReset = process.env.SEED_STAGING === 'true';
+const isCI = process.env.CI === "true";
+const isStagingReset = process.env.SEED_STAGING === "true";
 
 async function main() {
   if (isCI) {
@@ -3744,11 +3999,11 @@ export class OrdersRepository {
       });
 
       if (!current) {
-        throw new NotFoundException('RESOURCE_001');
+        throw new NotFoundException("RESOURCE_001");
       }
 
       if (current.version !== expectedVersion) {
-        throw new ConflictException('RESOURCE_005');
+        throw new ConflictException("RESOURCE_005");
       }
 
       // 2. Actualizar incrementando la versión
@@ -3769,7 +4024,7 @@ export class OrdersRepository {
 async update(id: string, dto: UpdateOrderDto, userId: string): Promise<Order> {
   // Verificar ownership primero
   await this.findByIdForUser(id, userId, 'USER');
-  
+
   return this.ordersRepository.updateWithVersion(id, dto, dto.version);
 }
 ```
@@ -3798,10 +4053,12 @@ export class UpdateOrderDto {
 const updateOrder = useMutation({
   mutationFn: (data: UpdateOrderDto) => api.patch(`/orders/${orderId}`, data),
   onError: (error: ApiError) => {
-    if (error.code === 'RESOURCE_005') {
+    if (error.code === "RESOURCE_005") {
       // Invalida el cache para forzar un refetch con la versión actualizada
-      queryClient.invalidateQueries({ queryKey: ['orders', orderId] });
-      toast.error('Alguien más modificó esta orden. Los datos se actualizaron.');
+      queryClient.invalidateQueries({ queryKey: ["orders", orderId] });
+      toast.error(
+        "Alguien más modificó esta orden. Los datos se actualizaron.",
+      );
       return;
     }
     toast.error(getErrorMessage(error.code));
@@ -3815,41 +4072,41 @@ const updateOrder = useMutation({
 // Para UX más fluida: actualizar la UI antes de la respuesta del servidor
 const updateOrder = useMutation({
   mutationFn: (data: UpdateOrderDto) => api.patch(`/orders/${orderId}`, data),
-  
+
   onMutate: async (newData) => {
     // Cancelar queries en vuelo para evitar sobreescrituras
-    await queryClient.cancelQueries({ queryKey: ['orders', orderId] });
-    
+    await queryClient.cancelQueries({ queryKey: ["orders", orderId] });
+
     // Guardar snapshot del valor anterior
-    const previousOrder = queryClient.getQueryData(['orders', orderId]);
-    
+    const previousOrder = queryClient.getQueryData(["orders", orderId]);
+
     // Actualizar optimisticamente
-    queryClient.setQueryData(['orders', orderId], (old: Order) => ({
+    queryClient.setQueryData(["orders", orderId], (old: Order) => ({
       ...old,
       ...newData,
     }));
-    
+
     return { previousOrder };
   },
-  
+
   onError: (error, _, context) => {
     // Rollback en caso de error
-    queryClient.setQueryData(['orders', orderId], context?.previousOrder);
-    
-    if (error.code === 'RESOURCE_005') {
-      toast.error('Conflicto de versión — datos actualizados');
+    queryClient.setQueryData(["orders", orderId], context?.previousOrder);
+
+    if (error.code === "RESOURCE_005") {
+      toast.error("Conflicto de versión — datos actualizados");
     }
   },
-  
+
   onSettled: () => {
     // Siempre refetch para sincronizar con el servidor
-    queryClient.invalidateQueries({ queryKey: ['orders', orderId] });
+    queryClient.invalidateQueries({ queryKey: ["orders", orderId] });
   },
 });
 ```
 
 > 📌 **Cuándo usar optimistic locking**: Recursos que múltiples usuarios pueden editar simultáneamente (documentos, órdenes en proceso, configs compartidas).
-> 
+>
 > 📌 **Cuándo usar locks pesimistas** (`SELECT FOR UPDATE`): Operaciones financieras donde la consistencia es crítica y el tiempo de lock es muy corto (débito de saldo, reserva de stock).
 >
 > ⚠️ **Gotcha**: Si un proceso batch actualiza registros sin incluir el `version`, va a romper el mecanismo de locking para esos registros. Siempre usar `updateWithVersion` para recursos con optimistic locking habilitado.
@@ -3864,15 +4121,15 @@ const updateOrder = useMutation({
 
 ```typescript
 // queue/bull-board.setup.ts
-import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
-import { BullBoardModule } from '@bull-board/nestjs';
-import { FastifyAdapter } from '@bull-board/fastify';
+import { BullMQAdapter } from "@bull-board/api/bullMQAdapter";
+import { BullBoardModule } from "@bull-board/nestjs";
+import { FastifyAdapter } from "@bull-board/fastify";
 
 // En AppModule o QueueModule
 @Module({
   imports: [
     BullBoardModule.forRoot({
-      route: '/admin/queues',
+      route: "/admin/queues",
       adapter: FastifyAdapter,
     }),
     BullBoardModule.forFeature({
@@ -3880,7 +4137,7 @@ import { FastifyAdapter } from '@bull-board/fastify';
       adapter: BullMQAdapter,
     }),
     BullBoardModule.forFeature({
-      name: 'reports',
+      name: "reports",
       adapter: BullMQAdapter,
     }),
     // Agregar todas las queues del proyecto
@@ -3893,8 +4150,11 @@ export class QueueModule {}
 
 ```typescript
 // main.ts — proteger /admin/queues con Basic Auth en producción
-import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
-import fastifyBasicAuth from '@fastify/basic-auth';
+import {
+  FastifyAdapter,
+  NestFastifyApplication,
+} from "@nestjs/platform-fastify";
+import fastifyBasicAuth from "@fastify/basic-auth";
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -3910,19 +4170,19 @@ async function bootstrap() {
       const validUser = process.env.BULL_BOARD_USER;
       const validPass = process.env.BULL_BOARD_PASSWORD;
       if (username !== validUser || password !== validPass) {
-        throw new Error('Unauthorized');
+        throw new Error("Unauthorized");
       }
     },
     authenticate: true,
   });
 
-  fastify.addHook('onRequest', async (request, reply) => {
-    if (request.url.startsWith('/admin/queues')) {
+  fastify.addHook("onRequest", async (request, reply) => {
+    if (request.url.startsWith("/admin/queues")) {
       await (fastify as any).basicAuth(request, reply);
     }
   });
 
-  await app.listen(3000, '0.0.0.0');
+  await app.listen(3000, "0.0.0.0");
 }
 ```
 

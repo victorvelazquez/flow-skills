@@ -3,6 +3,9 @@
 > **Modo**: Playbook activo — las políticas de seguridad técnicas ya están definidas.
 > El playbook cubre: JWT + refresh token, bcrypt/argon2, Helmet, CORS, ThrottlerModule, rate limits por defecto.
 > Esta fase captura solo las decisiones de seguridad que dependen del NEGOCIO y el DOMINIO.
+>
+> **Referencia de playbook resuelta:** usar `PLAYBOOK_REFERENCE_LABEL` cuando la documentación generada deba citar el playbook.
+> Si `PLAYBOOK_SOURCE=shared`, no asumir `playbook/` local ni escribir paths absolutos del sistema.
 
 > **Asumido por defecto del playbook:**
 > - Autenticación: JWT **RS256** — access token 15min (body JSON) + refresh token 7 días (httpOnly cookie) → `api-contract.md §6-7` + `backend-stack.md §JWT`
@@ -125,11 +128,11 @@ Asumido del playbook:
 **Generar automáticamente:**
 
 1. `specs/security.md`
-   - Modelo de autorización + roles
-   - Compliance requerida con impactos
-   - Campos sensibles + estrategia de encriptación
-   - Reglas de acceso especiales
-   - Referencia al playbook para el resto de las políticas
+    - Modelo de autorización + roles
+    - Compliance requerida con impactos
+    - Campos sensibles + estrategia de encriptación
+    - Reglas de acceso especiales
+    - Referencia al playbook para el resto de las políticas usando `PLAYBOOK_REFERENCE_LABEL`
 
 2. Actualizar `ai-instructions.md`
    - Agregar sección de reglas de seguridad del proyecto

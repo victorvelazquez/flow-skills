@@ -2,6 +2,10 @@
 name: flow-branch
 description: Interactive branch switcher — uses the runtime script as the source of truth for listing, checkout, and local branch deletion. Trigger: /flow-branch command.
 trigger: /flow-branch command
+license: Apache-2.0
+metadata:
+  author: Victor Velazquez
+  version: "1.0"
 ---
 
 # /flow-branch

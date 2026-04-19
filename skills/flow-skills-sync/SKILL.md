@@ -2,6 +2,10 @@
 name: flow-skills-sync
 description: Skill manager for the flow-skills repository — uses the runtime script as the source of truth for local sync/update/install context, export, prune, and dry-run planning. Trigger: /flow-skills-sync command.
 trigger: /flow-skills-sync command
+license: Apache-2.0
+metadata:
+  author: Victor Velazquez
+  version: "1.0"
 ---
 
 # flow-skills-sync

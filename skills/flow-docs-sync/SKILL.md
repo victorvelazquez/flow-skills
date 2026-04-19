@@ -2,6 +2,10 @@
 name: flow-docs-sync
 description: Incremental documentation sync — uses the runtime script as the source of truth for snapshot/diff/cache planning, while the agent performs the incremental doc updates. Trigger: /flow-docs-sync command.
 trigger: /flow-docs-sync command
+license: Apache-2.0
+metadata:
+  author: Victor Velazquez
+  version: "1.0"
 ---
 
 # flow-docs-sync

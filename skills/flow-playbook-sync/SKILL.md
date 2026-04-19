@@ -2,6 +2,10 @@
 name: flow-playbook-sync
 description: Bidirectional sync between a project's implementation state and the shared engineering playbook — uses the runtime script as the source of truth for automatic planning, init/reset, and dry-run previews. Trigger: /flow-playbook-sync command, or invoked automatically by flow-pr on completion.
 trigger: /flow-playbook-sync command, or invoked automatically by flow-pr on completion
+license: Apache-2.0
+metadata:
+  author: Victor Velazquez
+  version: "1.0"
 ---
 
 # flow-playbook-sync
