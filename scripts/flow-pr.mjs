@@ -18,7 +18,13 @@
  *   --create-tag --version X.Y.Z                     Create annotated git tag when the project release flow requires it
  */
 
-import { runSafe, runWithStdin, parseArgs, exists, readJsonFile } from "./lib/helpers.mjs";
+import {
+  runSafe,
+  runWithStdin,
+  parseArgs,
+  exists,
+  readJsonFile,
+} from "./lib/helpers.mjs";
 import process from "process";
 import path from "path";
 import fs from "fs";
@@ -236,6 +242,9 @@ function buildPrTitle(scanResult, targetBranch, version = null, options = {}) {
   }
 
   if (scanResult.isIntegrationPR && version) {
+    if (options.cicdUsesSemanticRelease) {
+      return `chore(release): merge development into main`;
+    }
     return `chore(release): bump version to ${version}`;
   }
 
@@ -413,7 +422,6 @@ function buildPrDescription(scanResult, options = {}) {
     .filter(Boolean)
     .join("\n");
 }
-
 
 function resolveGitRef(branchName, preferRemote = true) {
   if (!branchName) return null;
@@ -882,7 +890,14 @@ function createPrViaGh(target, title, body) {
   if (!result.ok && result.output.includes("already exists")) {
     const urlMatch = result.output.match(/https:\/\/github\.com\/[^\s]+/);
     if (urlMatch) {
-      return { success: true, prUrl: urlMatch[0], target, alreadyExists: true, output: result.output, error: null };
+      return {
+        success: true,
+        prUrl: urlMatch[0],
+        target,
+        alreadyExists: true,
+        output: result.output,
+        error: null,
+      };
     }
   }
 
@@ -948,7 +963,9 @@ function releaseGuard(flags) {
   }
 
   if (newVersion) {
-    const tagExists = runSafe(`git rev-parse --verify refs/tags/v${newVersion}`);
+    const tagExists = runSafe(
+      `git rev-parse --verify refs/tags/v${newVersion}`,
+    );
     if (tagExists.ok) {
       reasons.push(`tag 'v${newVersion}' already exists`);
     }
@@ -1003,67 +1020,99 @@ function auto(flags = {}) {
   let tagCreated = false;
   let tagName = null;
   let shouldPushTags = false;
+  let cicdUsesSemanticRelease = false;
 
   if (scanResult.isIntegrationPR) {
     cicdObservations = runSelfMode(["--check-cicd"]);
-    const versionContextResult = runSelfMode(["--version-context"]);
 
+    // Si el CI/CD usa semantic-release, el versioning lo maneja la pipeline —
+    // el script NO debe tocar package.json, CHANGELOG ni crear tags.
+    cicdUsesSemanticRelease = cicdObservations.cicd.some(
+      (c) => c.patterns && c.patterns.hasSemanticRelease,
+    );
+
+    const versionContextResult = runSelfMode(["--version-context"]);
     versionSystem = versionContextResult.version.system;
     versionBefore = versionContextResult.version.current;
-    versionAfter = versionContextResult.version.suggestedVersion;
-    shouldPushTags = Boolean(versionContextResult.version.shouldCreateAnnotatedTag);
 
-    runSelfMode([
-      "--release-guard",
-      "--source",
-      scanResult.currentBranch,
-      "--target",
-      scanResult.targetBranches[0],
-      "--is-clean",
-      String(versionContextResult.git.isClean),
-      "--version",
-      versionAfter,
-    ]);
-
-    if (!dryRun) {
-      const versionUpdateResult = runSelfMode([
-        "--update-version",
-        "--version",
-        versionAfter,
-      ]);
-
-      if (versionContextResult.version.shouldUpdateChangelog) {
-        const changelog = updateChangelog(
-          versionAfter,
-          versionContextResult.commits.log,
-        );
-        changelogEntry = changelog.entry;
-      }
-
-      const filesToCommit = [
-        ...(versionUpdateResult.updatedFiles || versionUpdateResult.updatedByNpm || []),
-        ...versionUpdateResult.updatedEnvFiles,
-        versionContextResult.version.shouldUpdateChangelog ? "CHANGELOG.md" : null,
-      ];
-
-      const uniqueFiles = [...new Set(filesToCommit.filter(Boolean))];
+    if (cicdUsesSemanticRelease) {
+      // Versión sin cambio — la pipeline se encarga del bump real.
+      versionAfter = versionContextResult.version.current;
+      shouldPushTags = false;
 
       runSelfMode([
-        "--commit-version",
+        "--release-guard",
+        "--source",
+        scanResult.currentBranch,
+        "--target",
+        scanResult.targetBranches[0],
+        "--is-clean",
+        String(versionContextResult.git.isClean),
         "--version",
         versionAfter,
-        "--files",
-        uniqueFiles.join(","),
+      ]);
+    } else {
+      versionAfter = versionContextResult.version.suggestedVersion;
+      shouldPushTags = Boolean(
+        versionContextResult.version.shouldCreateAnnotatedTag,
+      );
+
+      runSelfMode([
+        "--release-guard",
+        "--source",
+        scanResult.currentBranch,
+        "--target",
+        scanResult.targetBranches[0],
+        "--is-clean",
+        String(versionContextResult.git.isClean),
+        "--version",
+        versionAfter,
       ]);
 
-      if (shouldPushTags) {
-        const tagResult = runSelfMode([
-          "--create-tag",
+      if (!dryRun) {
+        const versionUpdateResult = runSelfMode([
+          "--update-version",
           "--version",
           versionAfter,
         ]);
-        tagCreated = tagResult.success;
-        tagName = tagResult.tag;
+
+        if (versionContextResult.version.shouldUpdateChangelog) {
+          const changelog = updateChangelog(
+            versionAfter,
+            versionContextResult.commits.log,
+          );
+          changelogEntry = changelog.entry;
+        }
+
+        const filesToCommit = [
+          ...(versionUpdateResult.updatedFiles ||
+            versionUpdateResult.updatedByNpm ||
+            []),
+          ...versionUpdateResult.updatedEnvFiles,
+          versionContextResult.version.shouldUpdateChangelog
+            ? "CHANGELOG.md"
+            : null,
+        ];
+
+        const uniqueFiles = [...new Set(filesToCommit.filter(Boolean))];
+
+        runSelfMode([
+          "--commit-version",
+          "--version",
+          versionAfter,
+          "--files",
+          uniqueFiles.join(","),
+        ]);
+
+        if (shouldPushTags) {
+          const tagResult = runSelfMode([
+            "--create-tag",
+            "--version",
+            versionAfter,
+          ]);
+          tagCreated = tagResult.success;
+          tagName = tagResult.tag;
+        }
       }
     }
   }
@@ -1078,10 +1127,7 @@ function auto(flags = {}) {
         includeTags: shouldPushTags,
         tagPush: null,
       }
-    : runSelfMode([
-        "--push",
-        ...(shouldPushTags ? ["--tags", "true"] : []),
-      ]);
+    : runSelfMode(["--push", ...(shouldPushTags ? ["--tags", "true"] : [])]);
 
   const finalScan = dryRun ? scanResult : runSelfMode(["--scan"]);
   finalScan.versionBefore = versionBefore;
@@ -1117,6 +1163,7 @@ function auto(flags = {}) {
 
     const title = buildPrTitle(finalScan, targetBranch, versionAfter, {
       titleOverride,
+      cicdUsesSemanticRelease,
     });
     const prResult = dryRun
       ? {
@@ -1150,14 +1197,14 @@ function auto(flags = {}) {
     pushed: pushResult.success,
     push: pushResult,
     version: finalScan.isIntegrationPR
-        ? {
-            before: versionBefore,
-            after: versionAfter,
-            system: versionSystem,
-            changelogUpdated: dryRun ? false : Boolean(changelogEntry),
-            tagCreated: dryRun ? false : tagCreated,
-            tagName: dryRun ? null : tagName,
-          }
+      ? {
+          before: versionBefore,
+          after: versionAfter,
+          system: versionSystem,
+          changelogUpdated: dryRun ? false : Boolean(changelogEntry),
+          tagCreated: dryRun ? false : tagCreated,
+          tagName: dryRun ? null : tagName,
+        }
       : null,
     cicdObservations,
     prDescription,
@@ -1345,7 +1392,9 @@ function updateVersion(flags) {
       ...versionFile,
       version: newVersion,
       releaseDate: toIsoUtcSeconds(),
-      changelog: Array.isArray(versionFile.changelog) ? versionFile.changelog : [],
+      changelog: Array.isArray(versionFile.changelog)
+        ? versionFile.changelog
+        : [],
     };
 
     fs.writeFileSync(
@@ -1846,14 +1895,22 @@ function checkCicd() {
       for (const m of jobMatches) jobs.push(m[1]);
       const hasBuildArgs = /BUILD_ARGS/i.test(content);
       const hasVersionCalc =
-        /package\.json.*version|src\/version\.json|version\.json|node -p.*version|jq.*version/i.test(content);
+        /package\.json.*version|src\/version\.json|version\.json|node -p.*version|jq.*version/i.test(
+          content,
+        );
       const hasTagJob =
         /\btag\b/i.test(content) && jobs.some((j) => /tag/i.test(j));
+      const hasSemanticRelease = /semantic-release/i.test(content);
       result.cicd.push({
         file: fullPath,
         platform: "GitHub Actions",
         jobs,
-        patterns: { hasBuildArgs, hasVersionCalc, hasTagJob },
+        patterns: {
+          hasBuildArgs,
+          hasVersionCalc,
+          hasTagJob,
+          hasSemanticRelease,
+        },
       });
     }
   }
