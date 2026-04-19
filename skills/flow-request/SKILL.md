@@ -4,7 +4,7 @@ description: Cross-project contract request protocol — frontend creates backen
 trigger: /flow-request command
 license: Apache-2.0
 metadata:
-  author: gentleman-programming
+  author: Victor Velazquez
   version: "1.0"
 ---
 

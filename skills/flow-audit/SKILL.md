@@ -2,6 +2,10 @@
 name: flow-audit
 description: Stack-agnostic code quality audit — uses the runtime script as the source of truth for tool detection, scope resolution, automated checks, and dry-run previews, while the agent performs the final LLM review. Trigger: /flow-audit command.
 trigger: /flow-audit command
+license: Apache-2.0
+metadata:
+  author: Victor Velazquez
+  version: "1.0"
 ---
 
 # flow-audit

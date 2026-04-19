@@ -3,6 +3,9 @@
 > **Modo**: Playbook activo — los estándares de código, naming, formatting, git workflow,
 > logging y error handling ya están definidos en el playbook.
 > Esta fase captura solo lo que es ESPECÍFICO de este proyecto.
+>
+> **Referencia de playbook resuelta:** usar `PLAYBOOK_REFERENCE_LABEL` en cualquier documento generado que cite el playbook.
+> Si `PLAYBOOK_SOURCE=shared`, no asumir `playbook/` local ni escribir paths absolutos del sistema.
 
 > **Asumido por defecto del playbook:**
 > - Formatting: Prettier + ESLint 9 flat config + TypeScript strict
@@ -96,9 +99,10 @@ Asumido del playbook:
 **Actualizar automáticamente:**
 
 1. `ai-instructions.md`
-   - Agregar sección NEVER rules
-   - Agregar sección ALWAYS rules
-   - Agregar sección Excepciones al playbook
+    - Agregar sección NEVER rules
+    - Agregar sección ALWAYS rules
+    - Agregar sección Excepciones al playbook
+    - Referenciar el playbook mediante `PLAYBOOK_REFERENCE_LABEL` cuando corresponda
 
 ```
 ✅ Actualizado: ai-instructions.md

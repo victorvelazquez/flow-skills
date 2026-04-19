@@ -3,7 +3,7 @@ name: flow-pr
 description: Push branch + create GitHub PR using the runtime script as the source of truth for automatic happy-path execution, production guardrails, and dry-run previews. Trigger: When user runs /flow-pr or wants to submit their work as a pull request.
 license: Apache-2.0
 metadata:
-  author: gentleman-programming
+  author: Victor Velazquez
   version: "3.2"
 ---
 

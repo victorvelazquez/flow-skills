@@ -3,6 +3,9 @@
 > **Modo**: Playbook activo — la estrategia de CI/CD, Docker, testing y observabilidad
 > ya está definida en el playbook.
 > Esta fase captura las decisiones CONCRETAS de deployment de este proyecto específico.
+>
+> **Referencia de playbook resuelta:** usar `PLAYBOOK_REFERENCE_LABEL` cuando la documentación generada deba citar el playbook.
+> Si `PLAYBOOK_SOURCE=shared`, no asumir `playbook/` local ni escribir paths absolutos del sistema.
 
 > **Asumido por defecto del playbook** (ver `infra-stack.md §16`):
 > - CI/CD: GitHub Actions (lint → test → audit → build → push → deploy)
@@ -141,11 +144,11 @@ Asumido del playbook:
 **Generar automáticamente:**
 
 1. `docs/operations.md`
-   - Plataforma de deploy + environments
-   - Estrategia de deploy + rollback
-   - Variables de entorno del proyecto
-   - Alertas y on-call (si aplica)
-   - Referencia al playbook para el resto de decisiones de infra
+    - Plataforma de deploy + environments
+    - Estrategia de deploy + rollback
+    - Variables de entorno del proyecto
+    - Alertas y on-call (si aplica)
+    - Referencia al playbook para el resto de decisiones de infra usando `PLAYBOOK_REFERENCE_LABEL`
 
 2. `.env.example`
    - Variables del playbook + variables del proyecto
@@ -160,7 +163,7 @@ Asumido del playbook:
 
 ---
 
-> **Nota**: En Playbook Mode no hay Phase 7 — las decisiones de DevOps e infra (Docker, K8s, CI/CD pipelines, monitoring, alertas, scaling) ya están definidas en `infra-stack.md §16`. El flujo va directo a Phase 8 (versión playbook).
+> **Nota**: En Playbook Mode no hay Phase 7 — las decisiones de DevOps e infra (Docker, K8s, CI/CD pipelines, monitoring, alertas, scaling) ya están definidas en el playbook (`infra-stack.md §16` si es local, o la sección equivalente en `PLAYBOOK_REFERENCE_LABEL` si es shared). El flujo va directo a Phase 8 (versión playbook).
 
 **Next Phase:** Phase 8 (Playbook) — Final Documentation & Project Setup
 

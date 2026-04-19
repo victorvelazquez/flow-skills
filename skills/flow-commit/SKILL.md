@@ -2,6 +2,10 @@
 name: flow-commit
 description: Universal git commit workflow — uses the runtime script as the source of truth for automatic commits, protected-branch handling, and dry-run previews. Trigger: /flow-commit command.
 trigger: /flow-commit command
+license: Apache-2.0
+metadata:
+  author: Victor Velazquez
+  version: "1.0"
 ---
 
 # flow-commit

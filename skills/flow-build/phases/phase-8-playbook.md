@@ -43,6 +43,9 @@ En Playbook Mode los documentos generados son diferentes a Standalone. Leer solo
    → testing-strategy.md §13-14            (coverage targets y config)
    → infra-stack.md §16                    (deployment standards)
 
+⚠️  Si `PLAYBOOK_SOURCE=shared`, referenciar el playbook usando `PLAYBOOK_REFERENCE_LABEL`.
+No asumir que existe `playbook/` dentro del repo ni escribir paths absolutos del sistema en la documentación generada.
+
 ℹ️  En Playbook Mode NO existen:
    - docs/code-standards.md  (cubierto por el playbook)
    - docs/testing.md         (cubierto por testing-strategy.md del playbook)
@@ -92,7 +95,9 @@ Igual que la phase-8 standalone — seguir el mismo proceso.
 ## Estándares de Código
 
 Este proyecto sigue el **playbook de ingeniería compartido**.
-Ver `playbook/backend-stack.md` y `playbook/backend-patterns.md` para:
+Si `PLAYBOOK_SOURCE=local`, referenciar `playbook/backend-stack.md` y `playbook/backend-patterns.md`.
+Si `PLAYBOOK_SOURCE=shared`, referenciar `PLAYBOOK_REFERENCE_LABEL`.
+Usar esa referencia para:
 - Naming conventions
 - Estructura de archivos
 - Patrones de código (Repository, Guards, Interceptors)
@@ -105,12 +110,13 @@ Seguimos **Conventional Commits**:
 - `docs(scope): descripción` — documentación
 - `refactor(scope): descripción` — refactoring sin cambio de comportamiento
 
-Ver `playbook/backend-stack.md §Base` para el setup completo de Husky + commitlint.
+Si `PLAYBOOK_SOURCE=local`, ver `playbook/backend-stack.md §Base` para el setup completo de Husky + commitlint.
+Si `PLAYBOOK_SOURCE=shared`, referenciar la sección equivalente en `PLAYBOOK_REFERENCE_LABEL`.
 
 ## Testing
 
-Ver `playbook/testing-strategy.md §13` para los targets de cobertura según el tier del proyecto.
-Ver `playbook/testing-strategy.md §14` para la configuración de Jest/Vitest.
+Si `PLAYBOOK_SOURCE=local`, ver `playbook/testing-strategy.md §13` para los targets de cobertura según el tier del proyecto y `playbook/testing-strategy.md §14` para la configuración de Jest/Vitest.
+Si `PLAYBOOK_SOURCE=shared`, referenciar esas secciones en `PLAYBOOK_REFERENCE_LABEL`.
 
 ## Excepciones al Playbook
 
@@ -158,13 +164,13 @@ Este proyecto sigue el playbook de ingeniería compartido:
 
 | Decisión | Documento |
 |----------|-----------|
-| Stack backend (NestJS, Prisma, etc.) | `playbook/backend-stack.md` |
-| Patrones de código | `playbook/backend-patterns.md` |
-| Contrato de API (envelope, errores) | `playbook/api-contract.md` |
-| Stack frontend (React, Zustand, etc.) | `playbook/frontend-stack.md` |
-| Patrones frontend | `playbook/frontend-patterns.md` |
-| Testing (frameworks, coverage targets) | `playbook/testing-strategy.md` |
-| CI/CD, Docker, K8s | `playbook/infra-stack.md` |
+| Stack backend (NestJS, Prisma, etc.) | `playbook/backend-stack.md` o `PLAYBOOK_REFERENCE_LABEL` |
+| Patrones de código | `playbook/backend-patterns.md` o `PLAYBOOK_REFERENCE_LABEL` |
+| Contrato de API (envelope, errores) | `playbook/api-contract.md` o `PLAYBOOK_REFERENCE_LABEL` |
+| Stack frontend (React, Zustand, etc.) | `playbook/frontend-stack.md` o `PLAYBOOK_REFERENCE_LABEL` |
+| Patrones frontend | `playbook/frontend-patterns.md` o `PLAYBOOK_REFERENCE_LABEL` |
+| Testing (frameworks, coverage targets) | `playbook/testing-strategy.md` o `PLAYBOOK_REFERENCE_LABEL` |
+| CI/CD, Docker, K8s | `playbook/infra-stack.md` o `PLAYBOOK_REFERENCE_LABEL` |
 
 ## 🎯 Quick Reference
 
@@ -242,16 +248,20 @@ Tool-specific configs:
 ✅ [List generated configs]
 
 Estándares cubiertos por el playbook (sin duplicar):
-📖 Stack tecnológico  → playbook/backend-stack.md
-📖 Patrones de código → playbook/backend-patterns.md
-📖 Contrato de API    → playbook/api-contract.md
-📖 Testing strategy   → playbook/testing-strategy.md
-📖 CI/CD e Infra      → playbook/infra-stack.md
+📖 Stack tecnológico  → playbook local o shared resuelto
+📖 Patrones de código → playbook local o shared resuelto
+📖 Contrato de API    → playbook local o shared resuelto
+📖 Testing strategy   → playbook local o shared resuelto
+📖 CI/CD e Infra      → playbook local o shared resuelto
 ```
 
 **Paso final — inicializar el seguimiento del playbook:**
 
 ```
+Si `.flow-skills/playbook-status.md` ya existe porque fue inicializado automáticamente al elegir Playbook sin playbook local, no volver a pedir init ni repetirlo.
+
+Solo si el status file todavía no existe:
+
 🔄 Inicializando seguimiento de adopción del playbook...
 
 /flow-playbook-sync --init

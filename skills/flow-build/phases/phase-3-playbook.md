@@ -7,6 +7,9 @@
 > **Stack asumido por defecto según PROJECT_TYPE:**
 > - `backend` / `fullstack` → NestJS 11 + Fastify + Prisma + PostgreSQL + TypeScript strict (ver `backend-stack.md`)
 > - `frontend` → React 19 + Vite + TypeScript strict + Zustand + TanStack Query (ver `frontend-stack.md`)
+>
+> **Referencia de playbook resuelta:** usar `PLAYBOOK_REFERENCE_LABEL` en todos los documentos generados.
+> Si `PLAYBOOK_SOURCE=shared`, no asumir `playbook/` local ni escribir paths absolutos del sistema.
 
 > ⚠️ **Proyectos mobile**: El playbook no tiene un `mobile-stack.md` todavía. Si el proyecto es mobile, usá **Modo Standalone** para que puedas definir el stack completo (React Native, Flutter, etc.) sin restricciones.
 
@@ -113,7 +116,9 @@ Excepciones documentadas: [lista o "ninguna"]
 
 2. `ai-instructions.md`
    - Stack técnico del proyecto
-   - Referencia al playbook: `Ver playbook/ para estándares de código, API, testing y CI/CD`
+   - Referencia al playbook según el origen resuelto:
+     - Si `PLAYBOOK_SOURCE=local` → `Ver playbook/ para estándares de código, API, testing y CI/CD`
+     - Si `PLAYBOOK_SOURCE=shared` → `Ver ${PLAYBOOK_REFERENCE_LABEL} para estándares de código, API, testing y CI/CD`
    - Excepciones documentadas
    - Integraciones externas con sus casos de uso
 
