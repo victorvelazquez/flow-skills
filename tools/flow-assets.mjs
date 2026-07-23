@@ -2,11 +2,11 @@
 
 import crypto from "node:crypto";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const MANIFEST_PATH = path.join(REPO_ROOT, "flow-assets.json");
 const LOCK_PATH = path.join(REPO_ROOT, "flow-assets.lock.json");
 const REQUIRED_PATTERNS = [
   "agents/flow-*.md",
@@ -171,16 +171,19 @@ export function collectManagedFiles(root, manifest) {
 
 function fileRecord(root, relative) {
   const bytes = fs.readFileSync(safeAbsolute(root, relative));
+  const executable = Boolean(fs.statSync(safeAbsolute(root, relative)).mode & 0o111);
   return {
     path: relative,
     sha256: sha256(bytes),
     bytes: bytes.length,
-    mode: "100644",
-    executable: false,
+    mode: executable ? "100755" : "100644",
+    executable,
   };
 }
 
 export function buildPlan(sourceRoot, repoRoot = REPO_ROOT, manifest = readManifest(repoRoot)) {
+  assertDirectory(sourceRoot, "OpenCode source directory");
+  assertDirectory(repoRoot, "Flow skills repository");
   const sourceFiles = collectManagedFiles(sourceRoot, manifest);
   const repoFiles = collectManagedFiles(repoRoot, manifest);
   const sourceSet = new Set(sourceFiles);
@@ -193,11 +196,54 @@ export function buildPlan(sourceRoot, repoRoot = REPO_ROOT, manifest = readManif
     if (!repoSet.has(relative)) add.push(relative);
     else if (!fs.readFileSync(safeAbsolute(sourceRoot, relative)).equals(fs.readFileSync(safeAbsolute(repoRoot, relative)))) change.push(relative);
   }
-  return { add, change, delete: remove, files: sourceFiles };
+  const operations = [
+    ...add.map((relative) => ({ action: "add", path: relative })),
+    ...change.map((relative) => ({ action: "change", path: relative })),
+    ...remove.map((relative) => ({ action: "delete", path: relative })),
+  ];
+  const sourceState = sourceFiles.map((relative) => fileRecord(sourceRoot, relative));
+  const destinationState = repoFiles.map((relative) => fileRecord(repoRoot, relative));
+  const manifestBytes = fs.readFileSync(path.join(repoRoot, "flow-assets.json"));
+  const lockPath = path.join(repoRoot, "flow-assets.lock.json");
+  const identity = {
+    schema: "flow-assets-plan/v1",
+    manifestSha256: sha256(manifestBytes),
+    source: sourceState,
+    destination: destinationState,
+    destinationLock: fs.existsSync(lockPath) ? sha256(fs.readFileSync(lockPath)) : null,
+    operations,
+  };
+  return {
+    status: operations.length === 0 ? "synchronized" : "changed",
+    planId: sha256(JSON.stringify(identity)),
+    counts: { add: add.length, change: change.length, delete: remove.length },
+    add,
+    change,
+    delete: remove,
+    operations,
+    files: sourceFiles,
+    sourceState,
+    destinationState,
+  };
+}
+
+function assertDirectory(root, label) {
+  if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
+    throw new Error(`${label} not found: ${root}`);
+  }
+}
+
+export function statusSnapshot(sourceRoot, repoRoot = REPO_ROOT, manifest = readManifest(repoRoot)) {
+  const plan = buildPlan(sourceRoot, repoRoot, manifest);
+  return {
+    status: plan.status,
+    synchronized: plan.operations.length === 0,
+    counts: plan.counts,
+  };
 }
 
 export function buildLock(sourceRoot, manifestBytes, plan, metadata) {
-  const files = plan.files.map((relative) => fileRecord(sourceRoot, relative));
+  const files = plan.sourceState || plan.files.map((relative) => fileRecord(sourceRoot, relative));
   return {
     $schema: "flow-assets-lock/v1",
     capturedAt: metadata.capturedAt,
@@ -219,39 +265,130 @@ function atomicWrite(target, bytes) {
   fs.mkdirSync(path.dirname(target), { recursive: true });
   const temporary = `${target}.${process.pid}.tmp`;
   fs.writeFileSync(temporary, bytes);
-  if (fs.existsSync(target)) fs.unlinkSync(target);
   fs.renameSync(temporary, target);
 }
 
-export function applyPlan(sourceRoot, repoRoot, plan, lock) {
-  const transaction = path.join(repoRoot, `.flow-assets-txn-${process.pid}`);
-  fs.mkdirSync(transaction);
-  const touched = [...plan.change, ...plan.delete, ...(fs.existsSync(path.join(repoRoot, "flow-assets.lock.json")) ? ["flow-assets.lock.json"] : [])];
-  try {
-    for (const relative of touched) {
-      const source = safeAbsolute(repoRoot, relative);
-      if (!fs.existsSync(source)) continue;
-      const backup = safeAbsolute(transaction, relative);
-      fs.mkdirSync(path.dirname(backup), { recursive: true });
-      fs.copyFileSync(source, backup);
-    }
-    for (const relative of [...plan.add, ...plan.change]) {
-      atomicWrite(safeAbsolute(repoRoot, relative), fs.readFileSync(safeAbsolute(sourceRoot, relative)));
-      fs.chmodSync(safeAbsolute(repoRoot, relative), 0o644);
-    }
-    for (const relative of plan.delete) fs.unlinkSync(safeAbsolute(repoRoot, relative));
-    atomicWrite(path.join(repoRoot, "flow-assets.lock.json"), `${JSON.stringify(lock, null, 2)}\n`);
-  } catch (error) {
-    for (const relative of [...plan.add, ...plan.change, ...plan.delete, "flow-assets.lock.json"]) {
-      const target = safeAbsolute(repoRoot, relative);
-      const backup = safeAbsolute(transaction, relative);
-      if (fs.existsSync(backup)) atomicWrite(target, fs.readFileSync(backup));
-      else if (fs.existsSync(target)) fs.unlinkSync(target);
-    }
-    throw error;
-  } finally {
-    fs.rmSync(transaction, { recursive: true, force: true });
+const TRANSACTION_BASE = path.join(os.tmpdir(), "flow-assets-transactions");
+
+export function transactionRoot(repoRoot) { return path.join(TRANSACTION_BASE, sha256(fs.realpathSync(repoRoot))); }
+
+function checkedDirectory(directory) {
+  if (!fs.existsSync(directory)) fs.mkdirSync(directory, { recursive: true }); const stat = fs.lstatSync(directory);
+  if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Unsafe transaction path: ${directory}`);
+}
+
+function checkedPath(root, relative) {
+  const target = safeAbsolute(root, relative); let current = root;
+  for (const segment of relative.split("/")) {
+    current = path.join(current, segment); if (fs.existsSync(current) && fs.lstatSync(current).isSymbolicLink()) throw new Error(`Unsafe transaction target: ${relative}`);
   }
+  return target;
+}
+
+function acquireTransaction(repoRoot) {
+  checkedDirectory(TRANSACTION_BASE); const root = transactionRoot(repoRoot); checkedDirectory(root);
+  const lock = path.join(root, "apply.lock");
+  try {
+    fs.mkdirSync(lock);
+  } catch (error) {
+    if (error.code !== "EEXIST") throw error;
+    checkedDirectory(lock);
+    let owner; try { owner = JSON.parse(fs.readFileSync(checkedPath(lock, "owner.json"), "utf8")); } catch { throw new Error("Snapshot apply already in progress; lock owner is unreadable."); }
+    if (!Number.isInteger(owner.pid)) throw new Error("Snapshot apply already in progress; lock owner is invalid.");
+    let stale = false;
+    try { process.kill(owner.pid, 0); } catch (signalError) { if (signalError.code === "ESRCH") stale = true; else throw new Error("Snapshot apply already in progress; lock owner cannot be checked."); }
+    if (!stale) throw new Error("Snapshot apply already in progress.");
+    fs.rmSync(lock, { recursive: true });
+    try { fs.mkdirSync(lock); } catch { throw new Error("Snapshot apply already in progress."); }
+  }
+  atomicWrite(path.join(lock, "owner.json"), JSON.stringify({ pid: process.pid }));
+  return { root, lock };
+}
+
+function recoverTransaction(repoRoot, root) {
+  const transaction = path.join(root, "transaction"); if (!fs.existsSync(transaction)) return;
+  checkedDirectory(transaction);
+  const journalPath = checkedPath(transaction, "journal.json");
+  const journal = JSON.parse(fs.readFileSync(journalPath, "utf8"));
+  if (journal.schema !== "flow-assets-transaction/v1" || !Array.isArray(journal.entries)) throw new Error("Invalid snapshot transaction journal; backups preserved.");
+  for (const entry of journal.entries) {
+    if (entry.path !== "flow-assets.lock.json") validateRelativePath(entry.path);
+    const target = checkedPath(repoRoot, entry.path);
+    const backup = checkedPath(transaction, `backups/${entry.path}`);
+    const discard = checkedPath(transaction, `discard/${entry.path}`);
+    if (fs.existsSync(backup)) {
+      if (fs.existsSync(target)) { fs.mkdirSync(path.dirname(discard), { recursive: true }); fs.renameSync(target, discard); }
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.renameSync(backup, target);
+    } else if (entry.hadOriginal && !fs.existsSync(target)) throw new Error(`Incomplete recovery backup; transaction preserved: ${entry.path}`);
+    else if (!entry.hadOriginal && fs.existsSync(target)) { fs.mkdirSync(path.dirname(discard), { recursive: true }); fs.renameSync(target, discard); }
+  }
+  fs.rmSync(transaction, { recursive: true });
+}
+
+function releaseTransaction({ root, lock }) { fs.rmSync(lock, { recursive: true, force: true }); if (fs.existsSync(root) && fs.readdirSync(root).length === 0) fs.rmdirSync(root); }
+
+export function applyPlan(sourceRoot, repoRoot, plan, lock, options = {}) {
+  const transaction = path.join(options.transactionRoot, "transaction");
+  const entries = [...plan.operations.map(({ path: assetPath }) => ({ path: assetPath, hadOriginal: fs.existsSync(safeAbsolute(repoRoot, assetPath)) })),
+    { path: "flow-assets.lock.json", hadOriginal: fs.existsSync(path.join(repoRoot, "flow-assets.lock.json")) }];
+  fs.mkdirSync(transaction);
+  atomicWrite(path.join(transaction, "journal.json"), JSON.stringify({ schema: "flow-assets-transaction/v1", entries }));
+  try {
+    for (const entry of entries) {
+      const target = checkedPath(repoRoot, entry.path);
+      if (!entry.hadOriginal) continue;
+      const backup = safeAbsolute(transaction, `backups/${entry.path}`);
+      fs.mkdirSync(path.dirname(backup), { recursive: true });
+      fs.renameSync(target, backup);
+    }
+    options.afterBackup?.();
+    for (const relative of [...plan.add, ...plan.change]) {
+      const target = checkedPath(repoRoot, relative);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, options.frozen.get(relative));
+      fs.chmodSync(target, 0o644);
+      if (options.injectFailureAfterWrites === 1) throw new Error("Injected snapshot failure.");
+    }
+    fs.writeFileSync(path.join(repoRoot, "flow-assets.lock.json"), `${JSON.stringify(lock, null, 2)}\n`);
+    return (options.verify || verifyLock)(repoRoot);
+  } catch (error) {
+    recoverTransaction(repoRoot, options.transactionRoot);
+    throw error;
+  }
+}
+
+export function applySnapshot({
+  sourceRoot,
+  repoRoot = REPO_ROOT,
+  expectedPlanId,
+  metadata,
+  verify,
+  injectFailureAfterWrites,
+  ...hooks
+}) {
+  if (!expectedPlanId) throw new Error("Snapshot apply requires an expected plan ID.");
+  const transaction = acquireTransaction(repoRoot);
+  try {
+    recoverTransaction(repoRoot, transaction.root);
+    hooks.afterRecovery?.(); hooks.afterLock?.();
+    const manifestBytes = fs.readFileSync(path.join(repoRoot, "flow-assets.json"));
+    const manifest = validateManifest(JSON.parse(manifestBytes));
+    let plan = buildPlan(sourceRoot, repoRoot, manifest);
+    if (plan.planId !== expectedPlanId) throw new Error(`Stale plan ID: expected ${expectedPlanId}, current ${plan.planId}.`);
+    hooks.afterPlan?.();
+    plan = buildPlan(sourceRoot, repoRoot, manifest);
+    if (plan.planId !== expectedPlanId) throw new Error("Source or destination drifted after plan acceptance.");
+    const frozen = new Map(plan.files.map((relative) => [relative, fs.readFileSync(safeAbsolute(sourceRoot, relative))]));
+    if (plan.sourceState.some((entry) => sha256(frozen.get(entry.path)) !== entry.sha256)) throw new Error("Source drifted while freezing the plan.");
+    if (buildPlan(sourceRoot, repoRoot, manifest).planId !== expectedPlanId) throw new Error("Source or destination drifted while freezing the plan.");
+    const lock = buildLock(sourceRoot, manifestBytes, plan, metadata || {});
+    if (!lock.capturedAt || !lock.source.opencodeVersion || !lock.source.gentleAiVersion) throw new Error("Apply requires --captured-at, --opencode-version, and --gentle-ai-version.");
+    const verifiedLock = applyPlan(sourceRoot, repoRoot, plan, lock, { verify, injectFailureAfterWrites, afterBackup: hooks.afterBackup, frozen, transactionRoot: transaction.root });
+    fs.rmSync(path.join(transaction.root, "transaction"), { recursive: true });
+    return { ok: true, verified: true, planId: plan.planId, plan, totals: verifiedLock.totals,
+      lockSha256: sha256(fs.readFileSync(path.join(repoRoot, "flow-assets.lock.json"))) };
+  } finally { releaseTransaction(transaction); }
 }
 
 export function verifyLock(repoRoot = REPO_ROOT) {
@@ -277,31 +414,55 @@ function option(args, name) {
   return index === -1 ? undefined : args[index + 1];
 }
 
+function validateOptions(args, flags, values) {
+  const seen = new Set();
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index];
+    if (seen.has(argument)) throw new Error(`Duplicate argument: ${argument}`);
+    seen.add(argument);
+    if (flags.has(argument)) continue;
+    if (!values.has(argument)) throw new Error(`Unsupported argument: ${argument}`);
+    if (index + 1 >= args.length || args[index + 1].startsWith("--")) throw new Error(`Missing value for ${argument}.`);
+    index += 1;
+  }
+}
+
 const invoked = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (invoked) {
   const args = process.argv.slice(2);
   if (args.includes("--verify")) {
+    if (args.length !== 1) throw new Error("--verify does not accept other arguments.");
     const lock = verifyLock();
     console.log(JSON.stringify({ ok: true, totals: lock.totals, lockSha256: sha256(fs.readFileSync(LOCK_PATH)) }, null, 2));
   } else {
     const source = option(args, "--source");
-    if (!source) throw new Error("Usage: node tools/flow-assets.mjs --source <opencode-dir> [--apply ...] or --verify");
+    if (!source) throw new Error("Usage: node tools/flow-assets.mjs --status --source <dir> | --snapshot --source <dir> --dry-run | --snapshot --source <dir> --apply --expected-plan-id <id> ...metadata | --verify");
     const sourceRoot = path.resolve(source);
-    const manifestBytes = fs.readFileSync(MANIFEST_PATH);
-    const manifest = validateManifest(JSON.parse(manifestBytes));
-    const plan = buildPlan(sourceRoot, REPO_ROOT, manifest);
-    if (!args.includes("--apply")) console.log(JSON.stringify(plan, null, 2));
-    else {
-      const lock = buildLock(sourceRoot, manifestBytes, plan, {
-        capturedAt: option(args, "--captured-at"),
-        opencodeVersion: option(args, "--opencode-version"),
-        gentleAiVersion: option(args, "--gentle-ai-version"),
+    if (args.includes("--status")) {
+      validateOptions(args, new Set(["--status"]), new Set(["--source"]));
+      console.log(JSON.stringify(statusSnapshot(sourceRoot), null, 2));
+    } else if (args.includes("--snapshot") && args.includes("--dry-run")) {
+      if (args.includes("--apply")) throw new Error("Snapshot preview cannot also apply.");
+      validateOptions(args, new Set(["--snapshot", "--dry-run"]), new Set(["--source"]));
+      console.log(JSON.stringify(buildPlan(sourceRoot), null, 2));
+    } else if (args.includes("--snapshot") && args.includes("--apply")) {
+      validateOptions(args, new Set(["--snapshot", "--apply"]), new Set([
+        "--source",
+        "--expected-plan-id",
+        "--captured-at",
+        "--opencode-version",
+        "--gentle-ai-version",
+      ]));
+      const result = applySnapshot({
+        sourceRoot,
+        expectedPlanId: option(args, "--expected-plan-id"),
+        metadata: {
+          capturedAt: option(args, "--captured-at"),
+          opencodeVersion: option(args, "--opencode-version"),
+          gentleAiVersion: option(args, "--gentle-ai-version"),
+        },
       });
-      if (!lock.capturedAt || !lock.source.opencodeVersion || !lock.source.gentleAiVersion) {
-        throw new Error("Apply requires --captured-at, --opencode-version, and --gentle-ai-version.");
-      }
-      applyPlan(sourceRoot, REPO_ROOT, plan, lock);
-      console.log(JSON.stringify({ plan, totals: lock.totals }, null, 2));
-    }
+      console.log(JSON.stringify(result, null, 2));
+    } else throw new Error("Snapshot requires exactly one of --dry-run or --apply.");
   }
 }

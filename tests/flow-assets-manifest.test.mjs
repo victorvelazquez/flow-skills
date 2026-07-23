@@ -2,12 +2,17 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
+  applySnapshot,
+  buildPlan,
   collectManagedFiles,
   sha256,
+  statusSnapshot,
+  transactionRoot,
   validateFileKind,
   validateManifest,
   validateRelativePath,
@@ -15,6 +20,58 @@ import {
 } from "../tools/flow-assets.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+const manifestFixture = {
+  $schema: "flow-assets/v1",
+  excluded: [],
+  liveMirrored: {
+    libraries: [],
+    patterns: [
+      { path: "agents/flow-*.md" },
+      { path: "commands/flow-*.md" },
+      { path: "scripts/flow-*.mjs" },
+      { path: "skills/flow-*/**" },
+      { path: "skills/ui-design-system/**", reason: "fixture" },
+    ],
+  },
+  repoOwned: [],
+};
+
+function write(rootPath, relative, contents) {
+  const target = path.join(rootPath, ...relative.split("/"));
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, contents);
+}
+
+function fixture() {
+  const parent = fs.mkdtempSync(path.join(os.tmpdir(), "flow-assets-plan-"));
+  const source = path.join(parent, "live");
+  const repo = path.join(parent, "repo");
+  fs.mkdirSync(source);
+  fs.mkdirSync(repo);
+  write(repo, "flow-assets.json", `${JSON.stringify(manifestFixture, null, 2)}\n`);
+  return { source, repo, manifest: validateManifest(manifestFixture) };
+}
+
+function state(rootPath) {
+  const output = {};
+  const visit = (directory) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const absolute = path.join(directory, entry.name);
+      const relative = path.relative(rootPath, absolute).split(path.sep).join("/");
+      if (entry.isDirectory()) visit(absolute);
+      else output[relative] = sha256(fs.readFileSync(absolute));
+    }
+  };
+  visit(rootPath);
+  return output;
+}
+
+const metadata = {
+  capturedAt: "2026-07-23T12:00:00.000Z",
+  opencodeVersion: "test-opencode",
+  gentleAiVersion: "test-gentle-ai",
+};
 
 test("manifest and lock define a deterministic, complete, safe mirror", () => {
   const manifestBytes = fs.readFileSync(path.join(root, "flow-assets.json"));
@@ -68,4 +125,172 @@ test("validation rejects traversal, secret-like paths, and symbolic links", () =
   const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "flow-assets-safe-"));
   fs.writeFileSync(path.join(fixtureRoot, "safe.txt"), "safe\n");
   assert.equal(fs.readFileSync(path.join(fixtureRoot, validateRelativePath("safe.txt")), "utf8"), "safe\n");
+});
+
+test("status reports identical mirrors with zero counts", () => {
+  const { source, repo, manifest } = fixture();
+  write(source, "scripts/flow-z.mjs", "same\n");
+  write(repo, "scripts/flow-z.mjs", "same\n");
+
+  assert.deepEqual(statusSnapshot(source, repo, manifest), {
+    status: "synchronized",
+    synchronized: true,
+    counts: { add: 0, change: 0, delete: 0 },
+  });
+});
+
+test("snapshot preview is sorted, stable, and read-only", () => {
+  const { source, repo, manifest } = fixture();
+  write(source, "scripts/flow-z.mjs", "add z\n");
+  write(source, "scripts/flow-a.mjs", "add a\n");
+  write(source, "commands/flow-z.md", "new z\n");
+  write(source, "commands/flow-a.md", "new a\n");
+  write(repo, "commands/flow-z.md", "old z\n");
+  write(repo, "commands/flow-a.md", "old a\n");
+  write(repo, "agents/flow-z.md", "delete z\n");
+  write(repo, "agents/flow-a.md", "delete a\n");
+  const sourceBefore = state(source);
+  const repoBefore = state(repo);
+
+  const first = buildPlan(source, repo, manifest);
+  const second = buildPlan(source, repo, manifest);
+
+  assert.deepEqual(first.add, ["scripts/flow-a.mjs", "scripts/flow-z.mjs"]);
+  assert.deepEqual(first.change, ["commands/flow-a.md", "commands/flow-z.md"]);
+  assert.deepEqual(first.delete, ["agents/flow-a.md", "agents/flow-z.md"]);
+  assert.deepEqual(first.operations, [
+    { action: "add", path: "scripts/flow-a.mjs" },
+    { action: "add", path: "scripts/flow-z.mjs" },
+    { action: "change", path: "commands/flow-a.md" },
+    { action: "change", path: "commands/flow-z.md" },
+    { action: "delete", path: "agents/flow-a.md" },
+    { action: "delete", path: "agents/flow-z.md" },
+  ]);
+  assert.equal(first.planId, second.planId);
+  assert.match(first.planId, /^[a-f0-9]{64}$/);
+  assert.deepEqual(state(source), sourceBefore);
+  assert.deepEqual(state(repo), repoBefore);
+});
+
+test("snapshot apply rejects missing and stale plan IDs with zero writes", () => {
+  const sourceDrift = fixture();
+  write(sourceDrift.source, "scripts/flow-a.mjs", "first\n");
+  const sourcePlan = buildPlan(sourceDrift.source, sourceDrift.repo, sourceDrift.manifest);
+  const sourceRepoBefore = state(sourceDrift.repo);
+  assert.throws(() => applySnapshot({
+    sourceRoot: sourceDrift.source,
+    repoRoot: sourceDrift.repo,
+    metadata,
+  }), /expected plan ID/i);
+  assert.deepEqual(state(sourceDrift.repo), sourceRepoBefore);
+  write(sourceDrift.source, "scripts/flow-a.mjs", "drifted\n");
+  assert.throws(() => applySnapshot({
+    sourceRoot: sourceDrift.source,
+    repoRoot: sourceDrift.repo,
+    expectedPlanId: sourcePlan.planId,
+    metadata,
+  }), /stale plan ID/i);
+  assert.deepEqual(state(sourceDrift.repo), sourceRepoBefore);
+
+  const destinationDrift = fixture();
+  write(destinationDrift.source, "scripts/flow-a.mjs", "live\n");
+  write(destinationDrift.repo, "scripts/flow-a.mjs", "repo\n");
+  const destinationPlan = buildPlan(destinationDrift.source, destinationDrift.repo, destinationDrift.manifest);
+  write(destinationDrift.repo, "scripts/flow-a.mjs", "destination drift\n");
+  const driftedRepoBefore = state(destinationDrift.repo);
+  assert.throws(() => applySnapshot({
+    sourceRoot: destinationDrift.source,
+    repoRoot: destinationDrift.repo,
+    expectedPlanId: destinationPlan.planId,
+    metadata,
+  }), /stale plan ID/i);
+  assert.deepEqual(state(destinationDrift.repo), driftedRepoBefore);
+});
+
+test("exact plan ID applies, updates the lock, and verifies before success", () => {
+  const { source, repo, manifest } = fixture();
+  write(source, "scripts/flow-a.mjs", "live\n");
+  const plan = buildPlan(source, repo, manifest);
+  let verified = 0;
+
+  const result = applySnapshot({
+    sourceRoot: source,
+    repoRoot: repo,
+    expectedPlanId: plan.planId,
+    metadata,
+    verify: (repoRoot) => {
+      verified += 1;
+      return verifyLock(repoRoot);
+    },
+  });
+
+  assert.equal(verified, 1);
+  assert.equal(result.planId, plan.planId);
+  assert.equal(result.verified, true);
+  assert.equal(fs.readFileSync(path.join(repo, "scripts", "flow-a.mjs"), "utf8"), "live\n");
+  assert.equal(verifyLock(repo).totals.count, 1);
+});
+
+test("injected apply failure rolls files and lock back", () => {
+  const { source, repo, manifest } = fixture();
+  write(source, "scripts/flow-a.mjs", "old a\n");
+  write(source, "scripts/flow-b.mjs", "old b\n");
+  const initial = buildPlan(source, repo, manifest);
+  applySnapshot({ sourceRoot: source, repoRoot: repo, expectedPlanId: initial.planId, metadata });
+  write(source, "scripts/flow-a.mjs", "new a\n");
+  write(source, "scripts/flow-b.mjs", "new b\n");
+  const plan = buildPlan(source, repo, manifest);
+  const before = state(repo);
+
+  assert.throws(() => applySnapshot({
+    sourceRoot: source,
+    repoRoot: repo,
+    expectedPlanId: plan.planId,
+    metadata,
+    injectFailureAfterWrites: 1,
+  }), /Injected snapshot failure/);
+  assert.deepEqual(state(repo), before);
+  verifyLock(repo);
+});
+
+test("engine CLI rejects unsupported snapshot arguments", () => {
+  const result = spawnSync(process.execPath, [
+    path.join(root, "tools", "flow-assets.mjs"),
+    "--snapshot",
+    "--source",
+    root,
+    "--dry-run",
+    "--unknown",
+  ], { encoding: "utf8" });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Unsupported argument: --unknown/);
+});
+
+test("apply lock and spanning revalidation reject concurrent and drifted writes", () => {
+  const locked = fixture(); write(locked.source, "scripts/flow-a.mjs", "live\n");
+  const lockedPlan = buildPlan(locked.source, locked.repo, locked.manifest); const lockedBefore = state(locked.repo);
+  applySnapshot({ sourceRoot: locked.source, repoRoot: locked.repo, expectedPlanId: lockedPlan.planId, metadata, afterLock: () => {
+    assert.throws(() => applySnapshot({ sourceRoot: locked.source, repoRoot: locked.repo, expectedPlanId: lockedPlan.planId, metadata }), /already in progress/); assert.deepEqual(state(locked.repo), lockedBefore); } });
+  for (const drift of ["source", "destination"]) {
+    const item = fixture(); write(item.source, "scripts/flow-a.mjs", "live\n");
+    if (drift === "destination") write(item.repo, "scripts/flow-a.mjs", "old\n");
+    const plan = buildPlan(item.source, item.repo, item.manifest); const before = state(item.repo);
+    assert.throws(() => applySnapshot({ sourceRoot: item.source, repoRoot: item.repo, expectedPlanId: plan.planId, metadata, afterPlan: () =>
+      write(drift === "source" ? item.source : item.repo, "scripts/flow-a.mjs", "drift\n") }), /drifted/);
+    if (drift === "source") assert.deepEqual(state(item.repo), before); else assert.equal(fs.readFileSync(path.join(item.repo, "scripts", "flow-a.mjs"), "utf8"), "drift\n");
+    assert.equal(fs.existsSync(transactionRoot(item.repo)), false);
+  }
+});
+
+test("next apply recovers a process interruption after backup and leaves no residue", () => {
+  const item = fixture(); write(item.source, "scripts/flow-a.mjs", "old\n"); let plan = buildPlan(item.source, item.repo, item.manifest);
+  applySnapshot({ sourceRoot: item.source, repoRoot: item.repo, expectedPlanId: plan.planId, metadata });
+  write(item.source, "scripts/flow-a.mjs", "new\n"); plan = buildPlan(item.source, item.repo, item.manifest);
+  const runner = path.join(path.dirname(item.repo), "interrupt.mjs"); fs.writeFileSync(runner, `import { applySnapshot } from ${JSON.stringify(pathToFileURL(path.join(root, "tools", "flow-assets.mjs")).href)};\napplySnapshot({sourceRoot:${JSON.stringify(item.source)},repoRoot:${JSON.stringify(item.repo)},expectedPlanId:${JSON.stringify(plan.planId)},metadata:${JSON.stringify(metadata)},afterBackup:()=>process.exit(86)});\n`);
+  assert.equal(spawnSync(process.execPath, [runner]).status, 86);
+  let recovered = false; const result = applySnapshot({ sourceRoot: item.source, repoRoot: item.repo, expectedPlanId: plan.planId, metadata, afterRecovery: () =>
+    { recovered = fs.readFileSync(path.join(item.repo, "scripts", "flow-a.mjs"), "utf8") === "old\n"; } });
+  assert.equal(recovered && result.verified, true);
+  assert.equal(fs.existsSync(transactionRoot(item.repo)), false);
 });

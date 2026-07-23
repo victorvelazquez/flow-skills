@@ -1,11 +1,16 @@
 ---
-description: Sync flow-skills — publish local changes, update from repo, or install on a new machine
+description: Preview or apply a live OpenCode Flow snapshot to the local flow-skills mirror
 ---
 
-Read the skill file at ~/.config/opencode/skills/flow-skills-sync/SKILL.md FIRST, then follow its workflow exactly.
+Read `~/.config/opencode/skills/flow-skills-sync/SKILL.md` first and follow its workflow exactly.
 
-CONTEXT:
+Forward the user's arguments unchanged to the live wrapper:
 
-- Working directory: !`echo -n "$(pwd)"`
-- Current project: !`echo -n "$(basename $(pwd))"`
-- OS: !`node -e "process.stdout.write(process.platform)"`
+```bash
+node ~/.config/opencode/scripts/flow-skills.mjs $ARGUMENTS
+```
+
+Context:
+
+- Working directory: !`node -e "process.stdout.write(process.cwd())"`
+- Arguments: `$ARGUMENTS`

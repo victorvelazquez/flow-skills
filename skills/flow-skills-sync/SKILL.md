@@ -1,79 +1,55 @@
 ---
 name: flow-skills-sync
-description: Skill manager for the flow-skills repository — uses the runtime script as the source of truth for local sync/update/install context, export, prune, and dry-run planning. Trigger: /flow-skills-sync command.
+description: "Preview and explicitly apply live OpenCode Flow snapshots to the local flow-skills mirror. Trigger: /flow-skills-sync."
 trigger: /flow-skills-sync command
 ---
 
 # flow-skills-sync
 
-Trigger: user runs `/flow-skills-sync`
+## Activation Contract
+
+Use this skill when the user runs `/flow-skills-sync` or asks to inspect or snapshot live OpenCode Flow assets into the local repository mirror.
 
 ## Script Path
 
 ```bash
-node -e "const os=require('os'),path=require('path');console.log(path.join(os.homedir(),'.config','opencode','scripts','flow-skills.mjs'))"
+node ~/.config/opencode/scripts/flow-skills.mjs
 ```
 
-Store as `$SCRIPT`.
+## Workflow
 
-## Default Behavior
-
-The script is the source of truth. Prefer the runtime flow over manual orchestration.
-
-- Happy path: `--auto`
-- Safe preview: `--auto --dry-run`
-- Ask the user only if the script returns a blocker
-
-## Primary Commands
-
-### Automatic execution
+1. Run read-only status when the user asks only for synchronization state:
 
 ```bash
-node "$SCRIPT" --auto
+node ~/.config/opencode/scripts/flow-skills.mjs --status
 ```
 
-### Safe preview
+2. Before every snapshot apply, run the read-only preview and present its counts, sorted operations, and `planId`:
 
 ```bash
-node "$SCRIPT" --auto --dry-run
+node ~/.config/opencode/scripts/flow-skills.mjs --snapshot --dry-run
 ```
 
-## What the script handles
+3. Stop and request explicit user authorization for that exact preview. Do not infer authorization from an earlier request or from a previous preview.
 
-- context detection (`publish`, `update`, `install`, `synced`)
-- local sync context gathering
-- export detection and export execution
-- prune of deleted skills/scripts/commands during export
-- update flow (`git pull` + `node install.mjs`)
-- dry-run planning without side effects
-
-## What the agent still does
-
-- present the detected mode clearly
-- if mode is `publish`, explain that local sync is done and the correct next step is `/flow-commit` followed by `/flow-pr` inside `Tools/flow-skills`
-- if mode is `install`, explain the manual install path
-- do not use this skill itself for commit/push/PR
-
-## Response Rules
-
-- If `mode` is `synced`, report there is nothing to do
-- If dry-run was used, present it as a preview only
-- If `mode` is `publish` and export succeeded, stop there and tell the user to continue with `/flow-commit` and `/flow-pr` if they want to publish remotely
-- If the script fails, present the blocker/error and ask what action to take
-
-## Fallback / Debug Commands
-
-Use these only for debugging or recovery:
+4. Only after authorization, use the exact `planId` returned by that preview and provide all required metadata:
 
 ```bash
-node "$SCRIPT" --context
-node "$SCRIPT" --run-export
-node "$SCRIPT" --update
+node ~/.config/opencode/scripts/flow-skills.mjs --snapshot --apply --expected-plan-id <planId> --captured-at <iso-timestamp> --opencode-version <version> --gentle-ai-version <version>
 ```
 
-## Restrictions
+5. Report the engine result. If the plan ID is stale, preview again and request new authorization.
 
-- NEVER manually recreate mode detection when `--auto` can do it
-- NEVER run export twice in the same publish flow unless the user explicitly asks
-- NEVER commit, push, or open a PR from this skill
-- NEVER pretend install/update/export ran when the script was executed with `--dry-run`
+## Hard Rules
+
+- Live OpenCode is the source; the flow-skills repository is the mirror.
+- Preview is always the first snapshot step and is read-only.
+- Apply only after explicit user authorization for the exact preview `planId`.
+- Never use Git to publish, commit, push, pull, or fetch.
+- Never run installation or mutate OpenCode configuration.
+- Never infer modes or parse prose; trust the engine's structured result.
+- Stop on missing paths, missing metadata, verification failure, or stale plan identity.
+
+## Output Contract
+
+Return the status or plan counts, sorted operations, `planId`, authorization state, and final verification result when an apply was authorized.
