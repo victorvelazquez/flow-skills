@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import crypto from "node:crypto";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -194,7 +195,7 @@ export function buildPlan(sourceRoot, repoRoot = REPO_ROOT, manifest = readManif
 
   for (const relative of sourceFiles) {
     if (!repoSet.has(relative)) add.push(relative);
-    else if (!fs.readFileSync(safeAbsolute(sourceRoot, relative)).equals(fs.readFileSync(safeAbsolute(repoRoot, relative)))) change.push(relative);
+    else if (JSON.stringify(fileRecord(sourceRoot, relative)) !== JSON.stringify(fileRecord(repoRoot, relative))) change.push(relative);
   }
   const operations = [
     ...add.map((relative) => ({ action: "add", path: relative })),
@@ -259,6 +260,167 @@ export function buildLock(sourceRoot, manifestBytes, plan, metadata) {
     },
     files,
   };
+}
+
+const RESTORE_PLAN_SCHEMA = "flow-assets-restore-plan/v1";
+const RESTORE_BACKUP_SCHEMA = "flow-assets-restore-backup/v1";
+
+function gitObject(repoRoot, args, options = {}) {
+  try {
+    return execFileSync("git", args, { cwd: repoRoot, encoding: options.encoding, maxBuffer: 32 * 1024 * 1024,
+      stdio: ["ignore", "pipe", "pipe"] });
+  } catch (error) {
+    throw new Error(`${options.label || "Git object read failed"}: ${String(error.stderr || error.message).trim()}`);
+  }
+}
+
+function parseTree(bytes) {
+  const entries = new Map();
+  const raw = bytes.subarray(0, bytes.length - (bytes.at(-1) === 0 ? 1 : 0));
+  const body = raw.toString("utf8");
+  if (!Buffer.from(body).equals(raw)) throw new Error("Historical tree contains a non-UTF-8 path.");
+  for (const token of body.split("\0")) {
+    if (!token) continue;
+    const tab = token.indexOf("\t");
+    const match = token.slice(0, tab).match(/^([0-7]{6}) (blob|tree|commit) ([0-9a-f]{40,64})$/);
+    const relative = token.slice(tab + 1);
+    if (tab < 0 || !match || !relative || entries.has(relative)) throw new Error("Historical tree contains a malformed or duplicate entry.");
+    entries.set(relative, { path: relative, mode: match[1], type: match[2], oid: match[3] });
+  }
+  return entries;
+}
+
+function historicalBlob(repoRoot, entry, label) {
+  if (!entry) throw new Error(`Historical ${label} is missing; legacy generations cannot be restored.`);
+  if (entry.type !== "blob" || !["100644", "100755"].includes(entry.mode)) throw new Error(`Historical ${label} has unsupported type or mode.`);
+  return gitObject(repoRoot, ["cat-file", "blob", entry.oid], { label: `Cannot read historical ${label}` });
+}
+
+function isManagedPath(relative, manifest) {
+  return manifest.liveMirrored.libraries.includes(relative)
+    || /^agents\/flow-.*\.md$/.test(relative)
+    || /^commands\/flow-.*\.md$/.test(relative)
+    || /^scripts\/flow-.*\.mjs$/.test(relative)
+    || /^skills\/(?:flow-[^/]+|ui-design-system)\/.+/.test(relative);
+}
+
+function collectRestoreManagedFiles(root, manifest) {
+  const output = [];
+  const accepted = (relative) => { try { validateRelativePath(relative); return true; } catch { return false; } };
+  const collectNamed = (directory, matcher) => {
+    const absolute = path.join(root, directory);
+    if (!validateManagedDirectory(root, directory)) return;
+    for (const entry of fs.readdirSync(absolute, { withFileTypes: true })) {
+      const relative = `${directory}/${entry.name}`;
+      if (!matcher(entry.name)) continue;
+      validateFileKind(relative, entry);
+      if (!entry.isFile()) throw new Error(`Managed restore asset is not a file: ${relative}`);
+      output.push(relative);
+    }
+  };
+  collectNamed("agents", (name) => /^flow-.*\.md$/.test(name));
+  collectNamed("commands", (name) => /^flow-.*\.md$/.test(name));
+  collectNamed("scripts", (name) => /^flow-.*\.mjs$/.test(name));
+  const walkOwned = (directory) => { for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    const absolute = path.join(directory, entry.name), relative = path.relative(root, absolute).split(path.sep).join("/");
+    if (!accepted(relative)) continue;
+    validateFileKind(relative, entry);
+    if (entry.isDirectory()) walkOwned(absolute); else output.push(relative);
+  } };
+  const skills = path.join(root, "skills");
+  if (validateManagedDirectory(root, "skills")) for (const entry of fs.readdirSync(skills, { withFileTypes: true })) {
+    if (!entry.isDirectory() || (!entry.name.startsWith("flow-") && entry.name !== "ui-design-system")) continue;
+    validateFileKind(`skills/${entry.name}`, entry); walkOwned(path.join(skills, entry.name));
+  }
+  for (const library of manifest.liveMirrored.libraries) {
+    const absolute = safeAbsolute(root, library);
+    if (!fs.existsSync(absolute)) continue;
+    const stat = fs.lstatSync(absolute);
+    validateFileKind(library, { isSymbolicLink: () => stat.isSymbolicLink(), isFile: () => stat.isFile(), isDirectory: () => stat.isDirectory() });
+    if (!stat.isFile()) throw new Error(`Explicit restore library is not a file: ${library}`);
+    output.push(library);
+  }
+  return [...new Set(output)].sort();
+}
+
+function parseHistoricalJson(bytes, label) {
+  try { return JSON.parse(bytes.toString("utf8")); }
+  catch { throw new Error(`Historical ${label} is malformed JSON.`); }
+}
+
+function validateHistoricalLock(lock, manifestBytes, manifest, tree, repoRoot) {
+  if (lock?.$schema !== "flow-assets-lock/v1" || !Array.isArray(lock.files) || !lock.manifest || !lock.totals) {
+    throw new Error("Historical lock is malformed or has an invalid schema.");
+  }
+  if (lock.manifest.sha256 !== sha256(manifestBytes)) throw new Error("Historical manifest digest does not match lock.");
+  const paths = lock.files.map((entry) => entry?.path);
+  if (!isSortedUnique(paths)) throw new Error("Historical lock paths must be sorted and unique.");
+  const owned = [...tree.values()].filter((entry) => isManagedPath(entry.path, manifest)).map((entry) => entry.path).sort();
+  if (JSON.stringify(paths) !== JSON.stringify(owned)) throw new Error("Historical managed ownership does not exactly match lock paths.");
+  for (const expected of lock.files) {
+    validateRelativePath(expected.path);
+    if (JSON.stringify(Object.keys(expected).sort()) !== JSON.stringify(["bytes", "executable", "mode", "path", "sha256"])) {
+      throw new Error(`Historical lock blob record is malformed: ${expected.path}`);
+    }
+    if (!/^[0-9a-f]{64}$/.test(expected.sha256) || !Number.isSafeInteger(expected.bytes) || expected.bytes < 0
+      || !["100644", "100755"].includes(expected.mode) || expected.executable !== (expected.mode === "100755")) {
+      throw new Error(`Historical lock blob record is malformed: ${expected.path}`);
+    }
+    const treeEntry = tree.get(expected.path);
+    if (treeEntry?.type !== "blob" || treeEntry.mode !== expected.mode) throw new Error(`Historical blob record type or mode mismatch: ${expected.path}`);
+    const bytes = historicalBlob(repoRoot, treeEntry, `asset ${expected.path}`);
+    if (bytes.length !== expected.bytes || sha256(bytes) !== expected.sha256) throw new Error(`Historical blob record mismatch: ${expected.path}`);
+  }
+  const totalBytes = lock.files.reduce((sum, entry) => sum + entry.bytes, 0);
+  if (lock.totals.count !== lock.files.length || lock.totals.bytes !== totalBytes) throw new Error("Historical lock totals are invalid.");
+  return lock;
+}
+
+export function readHistoricalGeneration(requestedRef, repoRoot = REPO_ROOT) {
+  if (typeof requestedRef !== "string" || !requestedRef) throw new Error("Restore requires a non-empty ref.");
+  const targetCommit = gitObject(repoRoot, ["rev-parse", "--verify", "--end-of-options", `${requestedRef}^{commit}`],
+    { encoding: "utf8", label: `Cannot resolve restore ref '${requestedRef}'` }).trim();
+  const targetTree = gitObject(repoRoot, ["rev-parse", "--verify", "--end-of-options", `${targetCommit}^{tree}`],
+    { encoding: "utf8", label: "Cannot freeze restore target tree" }).trim();
+  const tree = parseTree(gitObject(repoRoot, ["ls-tree", "-r", "-z", "--full-tree", targetTree], { label: "Cannot read historical tree" }));
+  const manifestBytes = historicalBlob(repoRoot, tree.get("flow-assets.json"), "manifest");
+  const lockBytes = historicalBlob(repoRoot, tree.get("flow-assets.lock.json"), "lock");
+  let manifest;
+  try { manifest = validateManifest(parseHistoricalJson(manifestBytes, "manifest")); }
+  catch (error) { if (/JSON/.test(error.message)) throw error; throw new Error(`Historical manifest is invalid: ${error.message}`); }
+  const lock = validateHistoricalLock(parseHistoricalJson(lockBytes, "lock"), manifestBytes, manifest, tree, repoRoot);
+  return { requestedRef, targetCommit, targetTree, manifest, lock, manifestSha256: sha256(manifestBytes), lockSha256: sha256(lockBytes) };
+}
+
+export function buildRestorePlan({ requestedRef, destinationRoot, repoRoot = REPO_ROOT }) {
+  assertDirectory(destinationRoot, "OpenCode destination directory");
+  assertDirectory(repoRoot, "Flow skills repository");
+  const target = readHistoricalGeneration(requestedRef, repoRoot);
+  const currentManifestBytes = fs.readFileSync(path.join(repoRoot, "flow-assets.json"));
+  const currentManifest = validateManifest(JSON.parse(currentManifestBytes));
+  const ownership = { ...currentManifest, liveMirrored: { ...currentManifest.liveMirrored,
+    libraries: [...new Set([...currentManifest.liveMirrored.libraries, ...target.manifest.liveMirrored.libraries])].sort() } };
+  const currentFiles = collectRestoreManagedFiles(destinationRoot, ownership);
+  const currentState = currentFiles.map((relative) => fileRecord(destinationRoot, relative));
+  const currentByPath = new Map(currentState.map((entry) => [entry.path, entry]));
+  const targetByPath = new Map(target.lock.files.map((entry) => [entry.path, entry]));
+  const add = target.lock.files.filter((entry) => !currentByPath.has(entry.path)).map((entry) => entry.path);
+  const change = target.lock.files.filter((entry) => currentByPath.has(entry.path)
+    && JSON.stringify(currentByPath.get(entry.path)) !== JSON.stringify(entry)).map((entry) => entry.path);
+  const remove = currentFiles.filter((relative) => !targetByPath.has(relative));
+  const operations = [...add.map((relative) => ({ action: "add", path: relative })),
+    ...change.map((relative) => ({ action: "change", path: relative })),
+    ...remove.map((relative) => ({ action: "delete", path: relative }))];
+  const identity = { schema: RESTORE_PLAN_SCHEMA, requestedRef, targetCommit: target.targetCommit, targetTree: target.targetTree,
+    targetManifestSha256: target.manifestSha256, targetLockSha256: target.lockSha256, targetFiles: target.lock.files,
+    currentManifestSha256: sha256(currentManifestBytes), currentLiveState: currentState, operations, backupSchema: RESTORE_BACKUP_SCHEMA };
+  const planId = sha256(JSON.stringify(identity));
+  return { schema: RESTORE_PLAN_SCHEMA, planId, requestedRef, applySupported: false, backupSchema: RESTORE_BACKUP_SCHEMA,
+    requiredApplyIds: { restorePlanId: planId, targetCommit: target.targetCommit, targetTree: target.targetTree },
+    target: { commit: target.targetCommit, tree: target.targetTree, manifestSha256: target.manifestSha256,
+      lockSha256: target.lockSha256, totals: target.lock.totals, files: target.lock.files },
+    current: { manifestSha256: sha256(currentManifestBytes), files: currentState }, counts: { add: add.length, change: change.length, delete: remove.length },
+    add, change, delete: remove, operations };
 }
 
 function atomicWrite(target, bytes) {
@@ -347,7 +509,7 @@ export function applyPlan(sourceRoot, repoRoot, plan, lock, options = {}) {
       const target = checkedPath(repoRoot, relative);
       fs.mkdirSync(path.dirname(target), { recursive: true });
       fs.writeFileSync(target, options.frozen.get(relative));
-      fs.chmodSync(target, 0o644);
+      fs.chmodSync(target, plan.sourceState.find((entry) => entry.path === relative).executable ? 0o755 : 0o644);
       if (options.injectFailureAfterWrites === 1) throw new Error("Injected snapshot failure.");
     }
     fs.writeFileSync(path.join(repoRoot, "flow-assets.lock.json"), `${JSON.stringify(lock, null, 2)}\n`);
@@ -430,13 +592,22 @@ function validateOptions(args, flags, values) {
 const invoked = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (invoked) {
   const args = process.argv.slice(2);
-  if (args.includes("--verify")) {
+  if (args.includes("--restore")) {
+    if (args.includes("--apply")) throw new Error("Restore apply is unsupported in this work unit.");
+    validateOptions(args, new Set(["--restore", "--dry-run"]), new Set(["--ref", "--destination"]));
+    const requestedRef = option(args, "--ref");
+    const destination = option(args, "--destination");
+    if (!args.includes("--dry-run") || !requestedRef || !destination) {
+      throw new Error("Usage: node tools/flow-assets.mjs --restore --ref <commit-or-tag> --destination <opencode-dir> --dry-run");
+    }
+    console.log(JSON.stringify(buildRestorePlan({ requestedRef, destinationRoot: path.resolve(destination) }), null, 2));
+  } else if (args.includes("--verify")) {
     if (args.length !== 1) throw new Error("--verify does not accept other arguments.");
     const lock = verifyLock();
     console.log(JSON.stringify({ ok: true, totals: lock.totals, lockSha256: sha256(fs.readFileSync(LOCK_PATH)) }, null, 2));
   } else {
     const source = option(args, "--source");
-    if (!source) throw new Error("Usage: node tools/flow-assets.mjs --status --source <dir> | --snapshot --source <dir> --dry-run | --snapshot --source <dir> --apply --expected-plan-id <id> ...metadata | --verify");
+    if (!source) throw new Error("Usage: node tools/flow-assets.mjs --status --source <dir> | --snapshot --source <dir> --dry-run | --snapshot --source <dir> --apply --expected-plan-id <id> ...metadata | --restore --ref <ref> --destination <dir> --dry-run | --verify");
     const sourceRoot = path.resolve(source);
     if (args.includes("--status")) {
       validateOptions(args, new Set(["--status"]), new Set(["--source"]));

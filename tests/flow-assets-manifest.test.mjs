@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -93,12 +95,25 @@ test("manifest and lock define a deterministic, complete, safe mirror", () => {
   assert.ok(manifest.liveMirrored.patterns.find((entry) => entry.path === "skills/ui-design-system/**")?.reason);
   assert.ok(manifest.excluded.includes("opencode.json"));
   assert.ok(manifest.excluded.includes("scripts/tests/**"));
+  assert.ok(manifest.repoOwned.includes(".gitattributes"));
+  assert.ok(!lock.files.some((entry) => entry.path === ".gitattributes"));
+
+  const attributeLines = fs.readFileSync(path.join(root, ".gitattributes"), "utf8").split(/\r?\n/).filter(Boolean);
+  const expectedAttributes = [...manifest.liveMirrored.patterns.map((entry) => entry.path), ...manifest.liveMirrored.libraries]
+    .map((entry) => `${entry} -text`).sort();
+  assert.deepEqual([...attributeLines].sort(), expectedAttributes);
 
   for (const entry of lock.files) {
     assert.equal(entry.mode, "100644");
     assert.equal(entry.executable, false);
     assert.ok(!entry.path.startsWith("tests/"));
     assert.ok(!["install.mjs", "README.md", "CHANGELOG.md", "package.json", ".gitignore"].includes(entry.path));
+    assert.match(execFileSync("git", ["check-attr", "text", "--", entry.path], { cwd: root, encoding: "utf8" }).trim(), /: text: unset$/);
+    const bytes = fs.readFileSync(path.join(root, ...entry.path.split("/")));
+    const expectedOid = crypto.createHash("sha1").update(`blob ${bytes.length}\0`).update(bytes).digest("hex");
+    assert.equal(execFileSync("git", ["hash-object", `--path=${entry.path}`, "--", entry.path], { cwd: root, encoding: "utf8" }).trim(), expectedOid);
+    assert.equal(sha256(bytes), entry.sha256);
+    assert.equal(bytes.length, entry.bytes);
   }
 });
 
@@ -170,6 +185,18 @@ test("snapshot preview is sorted, stable, and read-only", () => {
   assert.match(first.planId, /^[a-f0-9]{64}$/);
   assert.deepEqual(state(source), sourceBefore);
   assert.deepEqual(state(repo), repoBefore);
+});
+
+test("snapshot detects and preserves executable mode changes", { skip: process.platform === "win32" && "Windows does not expose Unix executable bits on temp files." }, () => {
+  const { source, repo, manifest } = fixture();
+  write(source, "scripts/flow-mode.mjs", "same\n");
+  write(repo, "scripts/flow-mode.mjs", "same\n");
+  fs.chmodSync(path.join(source, "scripts", "flow-mode.mjs"), 0o755);
+  const plan = buildPlan(source, repo, manifest);
+  assert.deepEqual(plan.change, ["scripts/flow-mode.mjs"]);
+  applySnapshot({ sourceRoot: source, repoRoot: repo, expectedPlanId: plan.planId, metadata });
+  assert.equal(Boolean(fs.statSync(path.join(repo, "scripts", "flow-mode.mjs")).mode & 0o111), true);
+  assert.equal(verifyLock(repo).files[0].mode, "100755");
 });
 
 test("snapshot apply rejects missing and stale plan IDs with zero writes", () => {
