@@ -111,13 +111,13 @@ function collectFiles(dir) {
 }
 
 /**
- * Collect flow-* skill dirs from a base skills directory.
+ * Collect Flow skill dirs and their shared UI contract.
  */
 function collectFlowSkillDirs(skillsBase) {
   if (!fs.existsSync(skillsBase)) return [];
   return fs
     .readdirSync(skillsBase, { withFileTypes: true })
-    .filter((e) => e.isDirectory() && e.name.startsWith("flow-"))
+    .filter((e) => e.isDirectory() && (e.name.startsWith("flow-") || e.name === "ui-design-system"))
     .map((e) => e.name);
 }
 

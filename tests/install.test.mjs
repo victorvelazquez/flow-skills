@@ -80,6 +80,10 @@ test("installer copies every runtime asset and agent byte-for-byte but excludes 
   assert.equal(fs.existsSync(path.join(target, "agents", "flow-pr-agent.md")), true);
   assert.equal(fs.existsSync(path.join(target, "scripts", "lib", "flow-audit-cache.mjs")), true);
   assert.equal(fs.existsSync(path.join(target, "scripts", "lib", "dotnet-format.mjs")), true);
+  assert.deepEqual(
+    fs.readFileSync(path.join(target, "skills", "ui-design-system", "SKILL.md")),
+    fs.readFileSync(path.join(root, "skills", "ui-design-system", "SKILL.md")),
+  );
 });
 
 test("installer dry-run reports Flow-owned stale tests without deleting any test assets", () => {

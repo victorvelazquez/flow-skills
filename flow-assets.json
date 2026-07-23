@@ -1,0 +1,76 @@
+{
+  "$schema": "flow-assets/v1",
+  "excluded": [
+    "**/*.log",
+    "**/*.tmp",
+    "**/.env*",
+    "**/auth.*",
+    "**/auth/**",
+    "**/cache/**",
+    "**/credentials.*",
+    "**/credentials/**",
+    "**/node_modules/**",
+    "**/provider.*",
+    "**/provider/**",
+    "**/receipts/**",
+    "**/review-state/**",
+    "**/sessions/**",
+    ".atl/**",
+    ".codegraph/**",
+    "opencode.json",
+    "scripts/tests/**"
+  ],
+  "liveMirrored": {
+    "libraries": [
+      "scripts/lib/detect-tooling.mjs",
+      "scripts/lib/dotnet-format.mjs",
+      "scripts/lib/flow-audit-cache.mjs",
+      "scripts/lib/flow-audit-output.mjs",
+      "scripts/lib/flow-branch-policy.mjs",
+      "scripts/lib/flow-chain-plan.mjs",
+      "scripts/lib/flow-check-evidence.mjs",
+      "scripts/lib/flow-delivery-config.mjs",
+      "scripts/lib/flow-pr-body.mjs",
+      "scripts/lib/flow-pr-labels.mjs",
+      "scripts/lib/flow-pr-prs.mjs",
+      "scripts/lib/flow-work-units.mjs",
+      "scripts/lib/helpers.mjs",
+      "scripts/lib/process-control.mjs",
+      "scripts/lib/promotion-review-coordinator.mjs",
+      "scripts/lib/review-causal-admission.mjs",
+      "scripts/lib/review-delivery-policy.mjs",
+      "scripts/lib/scope.mjs"
+    ],
+    "patterns": [
+      {
+        "path": "agents/flow-*.md"
+      },
+      {
+        "path": "commands/flow-*.md"
+      },
+      {
+        "path": "scripts/flow-*.mjs"
+      },
+      {
+        "path": "skills/flow-*/**"
+      },
+      {
+        "path": "skills/ui-design-system/**",
+        "reason": "Shared UI contract required by the Flow UI and refactor bundles."
+      }
+    ]
+  },
+  "repoOwned": [
+    ".gitignore",
+    "CHANGELOG.md",
+    "README.md",
+    "docs/**",
+    "flow-assets.json",
+    "flow-assets.lock.json",
+    "install.mjs",
+    "package.json",
+    "playbook/**",
+    "tests/**",
+    "tools/**"
+  ]
+}
