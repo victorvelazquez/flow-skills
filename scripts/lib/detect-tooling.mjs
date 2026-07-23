@@ -27,6 +27,61 @@ function _readJsonFile(cwd, file) {
   }
 }
 
+function _quotePath(file) {
+  return `"${String(file).replace(/"/g, '\\"')}"`;
+}
+
+function _isSafeShellPath(file) {
+  return !/[\r\n`$"';&|<>()[\]{}!*?\\]/.test(String(file));
+}
+
+function _listFilesRecursive(cwd, predicate, max = 2000) {
+  const results = [];
+  const skip = new Set([".git", "node_modules", "dist", "build", "coverage", ".next", ".nuxt", "bin", "obj", "target", "vendor"]);
+  function walk(dir) {
+    if (results.length >= max) return;
+    let entries = [];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries) {
+      if (results.length >= max) return;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (!skip.has(entry.name)) walk(full);
+      } else if (entry.isFile() && predicate(full, entry.name)) {
+        results.push(full);
+      }
+    }
+  }
+  walk(cwd);
+  return results;
+}
+
+function _detectDotnet(cwd) {
+  let solution = null;
+  try {
+    solution = fs.readdirSync(cwd).filter((name) => name.endsWith(".sln"))
+      .filter(_isSafeShellPath).sort((a, b) => a.localeCompare(b))[0];
+  } catch { solution = null; }
+  const projectFiles = _listFilesRecursive(cwd, (full, name) =>
+    name.endsWith(".csproj") && _isSafeShellPath(path.relative(cwd, full).replace(/\\/g, "/")));
+  const targetPath = solution ? path.join(cwd, solution) : projectFiles[0] || null;
+  if (!targetPath) return { hasProject: false, target: null, hasSolution: false, hasTests: false };
+  const hasTests = projectFiles.some((file) => {
+    const normalized = file.replace(/\\/g, "/").toLowerCase();
+    if (normalized.includes("/test/") || normalized.includes("/tests/") || /tests?\.csproj$/.test(normalized)) return true;
+    try {
+      const xml = fs.readFileSync(file, "utf8").toLowerCase();
+      return xml.includes("microsoft.net.test.sdk") || xml.includes("xunit") || xml.includes("nunit") || xml.includes("mstest");
+    } catch { return false; }
+  });
+  return {
+    hasProject: true,
+    hasSolution: Boolean(solution),
+    hasTests,
+    target: _quotePath(path.relative(cwd, targetPath).replace(/\\/g, "/")),
+  };
+}
+
 function _runSafe(cmd) {
   try {
     return {
@@ -67,6 +122,7 @@ export function detectTooling(cwd) {
     ...(pkg && pkg.dependencies),
     ...(pkg && pkg.devDependencies),
   };
+  const dotnet = _detectDotnet(cwd);
 
   // ── Test runner ────────────────────────────────────────────────────────────
   let testRunner = null;
@@ -99,6 +155,8 @@ export function detectTooling(cwd) {
     testRunner = "pytest";
   } else if (ex("Gemfile") || ex(".rspec")) {
     testRunner = "rspec";
+  } else if (dotnet.hasProject && dotnet.hasTests) {
+    testRunner = "dotnet-test";
   } else if (scripts["test"]) {
     testRunner = "npm-test";
   }
@@ -181,6 +239,8 @@ export function detectTooling(cwd) {
     formatter = "gofmt";
   } else if (scripts["format:check"] || scripts["check:format"]) {
     formatter = "npm-format";
+  } else if (dotnet.hasProject) {
+    formatter = "dotnet-format";
   }
 
   // ── Coverage ───────────────────────────────────────────────────────────────
@@ -217,6 +277,8 @@ export function detectTooling(cwd) {
     security = "govulncheck";
   } else if (ex("Gemfile")) {
     security = "bundler-audit";
+  } else if (dotnet.hasProject) {
+    security = "dotnet-vulnerable";
   } else if (scripts["audit"] || scripts["security"]) {
     security = "npm-audit";
   }
@@ -276,7 +338,7 @@ export function detectTooling(cwd) {
       } catch {
         framework = "ruby";
       }
-    }
+    } else if (dotnet.hasProject) framework = "dotnet";
   }
 
   return {
@@ -287,5 +349,6 @@ export function detectTooling(cwd) {
     coverage,
     security,
     framework,
+    dotnet,
   };
 }

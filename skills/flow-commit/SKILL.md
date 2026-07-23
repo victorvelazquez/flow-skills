@@ -1,101 +1,51 @@
 ---
 name: flow-commit
-description: Universal git commit workflow — uses the runtime script as the source of truth for automatic commits, protected-branch handling, and dry-run previews. Trigger: /flow-commit command.
-trigger: /flow-commit command
+description: "Trigger: /flow-commit. Plan and create isolated Conventional Commit groups while honoring reviewed-delivery authority."
+license: Apache-2.0
+metadata:
+  author: gentleman-programming
+  version: "4.0"
 ---
 
 # flow-commit
 
-## Execution Flow
+## Activation Contract
 
-The script is the source of truth. Always run `--auto --dry-run` first, then execute with overrides.
+Load for `/flow-commit` or a request to commit current local changes through Flow.
 
-1. Run `--auto --dry-run` — get the plan
-2. Read `plannedCommitGroups[].files` and compare against `git status --short`
-3. If user mentioned specific files, verify they appear in the plan — if missing, ask before proceeding
-4. Apply LLM-chosen branch name and messages, then run `--auto` with overrides
-5. If there is a mismatch between the plan and the working tree, STOP and clarify
+## Hard Rules
 
-## Naming
+- Treat `scripts/flow-commit.mjs` as the execution source of truth.
+- Run `--auto --dry-run` before `--auto`; pass the exact returned `planId` as `--expected-plan-id`.
+- Never push. This skill alone owns ordinary branch creation, staging, and commits.
+- Never rewrite existing commits with squash, reset, rebase, or amend to satisfy reviewed topology.
+- Keep work units as reporting metadata. When `deliveryPolicy.topology` is `single`, the one physical `reviewed-delivery` group is authoritative.
+- Stop on authority, plan, candidate-tree, path, partial-staging, or index-isolation drift.
 
-Use the LLM to determine the final branch name and commit messages from the dry-run plan:
+## Decision Gates
 
-- One short branch name with a conventional prefix: `feat/`, `fix/`, `refactor/`, `chore/`, `docs/`, `test/`
-- One commit message per planned group — concise, why-oriented, conventional format
-- Do NOT invent scope or intent not supported by the script-reported files
-- Treat the LLM-chosen values as final — never narrate or compare them to script defaults
+| State | Action |
+| --- | --- |
+| Clean tree | Return noop; create no branch or commit |
+| Protected branch with changes | Use one semantic task branch |
+| `single` reviewed delivery | Commit all and only reviewed paths once |
+| Grouped/no authority | Preserve planned work-unit groups |
+| Required lifecycle unavailable or denied | Stop with zero commits |
 
-Good vs bad messages:
+## Execution Steps
 
-- ✅ `fix(auth): tighten refresh token validation`
-- ❌ `fix(auth): fix auth issues`
-- ✅ `refactor(storage): simplify S3 upload coordination`
-- ❌ `refactor(storage): refactor storage module`
+1. Run `node ~/.config/opencode/scripts/flow-commit.mjs --auto --dry-run`. When native review discovery is ambiguous, rerun planning with the explicitly chosen `--lineage <id>`; never infer or auto-select one.
+2. Compare `plannedCommitGroups[].files` with `git status --short`; retain `planId`.
+3. Choose one branch name and messages supported by the plan. Use `reviewed-delivery` as the override key for a single physical group.
+4. Run `--auto --expected-plan-id <planId>` with unchanged scope, selected overrides, and the same explicit `--lineage <id>` used for planning.
+5. Report commits, work units, skipped groups, leftovers, and the next `/flow-pr` action.
 
-Pass final values to the script via:
+## Output Contract
 
-- `--branch-name "type/slug"`
-- `--message-overrides '{"group:key":"type(scope): message"}'`
+Return the branch decision, immutable plan ID, delivery policy/source, each physical commit and files, preserved work-unit metadata, skipped groups, leftovers, and next action.
 
-Message override keys come from `plannedCommitGroups[].key` in the script JSON.
+## References
 
-## Signals
-
-- `skippedCommitGroups` — groups skipped because no effective staged changes remained; usually safe and expected
-- `leftovers.known` non-empty — files from the original scope were not committed; needs attention
-- `leftovers.artifacts` non-empty — new files appeared outside the original scope; warn, do not assume they belong in this session
-- `leftovers.known = []` and `leftovers.artifacts = []` — flow finished cleanly
-
-## Commands
-
-### Normal flow
-
-```bash
-# Step 1 — preview
-node "$(node -e "process.stdout.write(require('os').homedir())")/.config/opencode/scripts/flow-commit.mjs" --auto --dry-run
-
-# Step 2 — execute with LLM overrides
-node "$(node -e "process.stdout.write(require('os').homedir())")/.config/opencode/scripts/flow-commit.mjs" --auto --branch-name "fix/auth-refresh-token" --message-overrides '{"source:auth":"fix(auth): tighten refresh token validation"}'
-```
-
-### Fallback / debug
-
-```bash
-node "$(node -e "process.stdout.write(require('os').homedir())")/.config/opencode/scripts/flow-commit.mjs" --analyze
-node "$(node -e "process.stdout.write(require('os').homedir())")/.config/opencode/scripts/flow-commit.mjs" --summary --count 5
-node "$(node -e "process.stdout.write(require('os').homedir())")/.config/opencode/scripts/flow-commit.mjs" --create-branch --name "feat/example"
-node "$(node -e "process.stdout.write(require('os').homedir())")/.config/opencode/scripts/flow-commit.mjs" --commit --files "f1,f2" --message "feat(scope): add example"
-```
-
-## Response Rules
-
-### Happy path (script succeeds, no leftovers)
-
-Present exactly this format — nothing more, nothing less:
-
-```
-Todo limpio. Resumen:
-- ✅ Branch creado: <branch> (desde <base-branch>, que es rama protegida)
-- ✅ Commit: <message>
-- ✅ <N> archivo(s): <file(s)>
-- ✅ Working tree limpio: sin leftovers
-
-Ejecutá /flow-pr para pushear y crear el PR.
-```
-
-- Omit the "rama protegida" note if the base branch is not protected
-- List each file on a separate `✅` line if there are multiple files in a single commit
-- If there are multiple commits, add one `✅ Commit:` line per commit followed by its files
-
-### Other cases
-
-- If dry-run was used, label the result clearly as a preview with no side effects
-- If the script fails, present the error and ask what action to take
-- If skipped commit groups are reported, explain they were skipped intentionally and safely
-- If leftovers remain, list them explicitly and ask whether they should be included
-- If any user-mentioned or `git status` file is absent from the plan, do not present the run as complete without clarifying the mismatch
-
-## Restrictions
-
-- NEVER push from this skill
-- NEVER ask for confirmation on the happy path just because the script succeeded
+- `../../scripts/flow-commit.mjs` - runtime implementation.
+- `../../scripts/lib/review-delivery-policy.mjs` - versioned lifecycle compatibility adapter.
+- `references/review-delivery.md` - configuration, lineage selection, precedence, and failure semantics.

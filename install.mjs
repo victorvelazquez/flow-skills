@@ -19,19 +19,28 @@ import { execSync } from "child_process";
 // ─── Paths ────────────────────────────────────────────────────────────────────
 
 const REPO_DIR = path.dirname(fileURLToPath(import.meta.url));
-const OPENCODE_DIR = path.join(os.homedir(), ".config", "opencode");
+const OPENCODE_DIR = process.env.FLOW_SKILLS_OPENCODE_DIR || path.join(os.homedir(), ".config", "opencode");
 
 const REPO = {
   skills: path.join(REPO_DIR, "skills"),
   commands: path.join(REPO_DIR, "commands"),
+  agents: path.join(REPO_DIR, "agents"),
   scripts: path.join(REPO_DIR, "scripts"),
 };
 
 const OPENCODE = {
   skills: path.join(OPENCODE_DIR, "skills"),
   commands: path.join(OPENCODE_DIR, "commands"),
+  agents: path.join(OPENCODE_DIR, "agents"),
   scripts: path.join(OPENCODE_DIR, "scripts"),
 };
+const OPENCODE_CONFIG = path.join(OPENCODE_DIR, "opencode.json");
+const OPENCODE_CONFIG_BACKUP = `${OPENCODE_CONFIG}.flow-skills.bak`;
+const STALE_FLOW_SCRIPT_TESTS = [
+  "flow-pr.test.mjs",
+  path.join("lib", "flow-chain-plan.test.mjs"),
+];
+let installCopyCount = 0;
 
 // ─── Colors ───────────────────────────────────────────────────────────────────
 
@@ -60,6 +69,12 @@ function ensureDir(dir) {
 }
 
 function copyFile(src, dest, dryRun = false) {
+  if (!dryRun) {
+    installCopyCount++;
+    if (installCopyCount === Number(process.env.FLOW_SKILLS_TEST_FAIL_COPY_AT || 0)) {
+      throw new Error(`Injected asset copy failure at copy ${installCopyCount}.`);
+    }
+  }
   ensureDir(path.dirname(dest));
   if (!dryRun) fs.copyFileSync(src, dest);
 }
@@ -106,6 +121,32 @@ function collectFlowSkillDirs(skillsBase) {
     .map((e) => e.name);
 }
 
+function prepareOpenCodeConfig() {
+  if (!fs.existsSync(OPENCODE_CONFIG)) {
+    throw new Error("Supported Flow installation requires a valid opencode.json configuration.");
+  }
+  let config;
+  const original = fs.readFileSync(OPENCODE_CONFIG, "utf8");
+  try { config = JSON.parse(original); }
+  catch { throw new Error("opencode.json is not valid JSON; refusing to modify an unsupported config shape."); }
+  const tasks = config?.agent?.["gentle-orchestrator"]?.permission?.task;
+  if (!tasks || Array.isArray(tasks) || typeof tasks !== "object" || tasks["*"] !== "deny"
+    || (tasks["flow-pr-agent"] != null && tasks["flow-pr-agent"] !== "allow")) {
+    throw new Error("gentle-orchestrator.permission.task is unsupported; expected an object with '*' denied.");
+  }
+  if (tasks["flow-pr-agent"] === "allow") return { changed: false };
+  tasks["flow-pr-agent"] = "allow";
+  return { changed: true, original, updated: `${JSON.stringify(config, null, 2)}\n` };
+}
+
+function installOpenCodeConfig(plan, dryRun) {
+  if (!plan.changed || dryRun) return;
+  fs.copyFileSync(OPENCODE_CONFIG, OPENCODE_CONFIG_BACKUP);
+  const temporary = `${OPENCODE_CONFIG}.${process.pid}.tmp`;
+  fs.writeFileSync(temporary, plan.updated, "utf8");
+  fs.renameSync(temporary, OPENCODE_CONFIG);
+}
+
 // ─── Banner ───────────────────────────────────────────────────────────────────
 
 function banner(mode) {
@@ -128,6 +169,12 @@ function install(dryRun = false) {
     process.exit(1);
   }
 
+  let configPlan;
+  try { configPlan = prepareOpenCodeConfig(); }
+  catch (error) {
+    fail(error.message);
+    process.exit(1);
+  }
   let totalFiles = 0;
 
   // ── Skills ──────────────────────────────────────────────────────────────────
@@ -173,6 +220,28 @@ function install(dryRun = false) {
       totalFiles++;
     }
   }
+
+  // ── Agents ───────────────────────────────────────────────────────────────────
+  head("Agents");
+  if (fs.existsSync(REPO.agents)) {
+    const agentFiles = fs.readdirSync(REPO.agents)
+      .filter((file) => file.startsWith("flow-") && file.endsWith(".md"));
+    for (const agentFile of agentFiles) {
+      copyFile(path.join(REPO.agents, agentFile), path.join(OPENCODE.agents, agentFile), dryRun);
+      ok(agentFile);
+      totalFiles++;
+    }
+  }
+  // Tests are source-only. Remove only test assets shipped by older Flow installations.
+  for (const relative of STALE_FLOW_SCRIPT_TESTS) {
+    if (removeFile(path.join(OPENCODE.scripts, relative), dryRun)) {
+      ok(`${relative} — ${dryRun ? "would remove" : "removed"} stale Flow test`);
+    }
+  }
+
+  // Apply permission activation only after every throwable asset operation succeeds.
+  installOpenCodeConfig(configPlan, dryRun);
+  if (configPlan.changed) ok(`opencode.json — ${dryRun ? "would allow" : "allowed"} flow-pr-agent for gentle-orchestrator`);
 
   // ── Summary ──────────────────────────────────────────────────────────────────
   console.log("");
@@ -308,6 +377,26 @@ function exportToRepo(dryRun = false) {
     }
   }
 
+  // ── Agents ───────────────────────────────────────────────────────────────────
+  head("Agents");
+  if (fs.existsSync(OPENCODE.agents)) {
+    const trackedAgents = fs.existsSync(REPO.agents)
+      ? new Set(fs.readdirSync(REPO.agents).filter((file) => file.startsWith("flow-") && file.endsWith(".md")))
+      : new Set();
+    for (const agentFile of trackedAgents) {
+      const src = path.join(OPENCODE.agents, agentFile);
+      const dest = path.join(REPO.agents, agentFile);
+      if (!fs.existsSync(src)) continue;
+      const isDiff = !fs.existsSync(dest) || fs.readFileSync(src).toString() !== fs.readFileSync(dest).toString();
+      if (isDiff) {
+        copyFile(src, dest, dryRun);
+        ok(`${agentFile} — ${dryRun ? "would update" : "updated"}`);
+        changedFiles++;
+      } else info(`${agentFile} — no changes`);
+      totalFiles++;
+    }
+  }
+
   // ── Summary ──────────────────────────────────────────────────────────────────
   console.log("");
   if (dryRun) {
@@ -401,6 +490,20 @@ function uninstall(dryRun = false) {
       }
     }
     if (scriptFiles.length === 0) info("No scripts found");
+  }
+
+  // ── Agents ───────────────────────────────────────────────────────────────────
+  head("Agents");
+  if (fs.existsSync(OPENCODE.agents)) {
+    const agentFiles = fs.readdirSync(OPENCODE.agents)
+      .filter((file) => file.startsWith("flow-") && file.endsWith(".md"));
+    for (const agentFile of agentFiles) {
+      if (removeFile(path.join(OPENCODE.agents, agentFile), dryRun)) {
+        ok(`${agentFile} — ${dryRun ? "would remove" : "removed"}`);
+        removed++;
+      }
+    }
+    if (agentFiles.length === 0) info("No flow-* agents found");
   }
 
   // ── Summary ──────────────────────────────────────────────────────────────────

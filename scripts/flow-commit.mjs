@@ -7,6 +7,7 @@
  *   --auto                                           Run the full automatic happy-path flow
  *     optional: --branch-name "type/slug"
  *     optional: --message-overrides '{"source:auth":"fix(auth): tighten token validation"}'
+ *     optional: --lineage <id>                         Select one native review lineage
  *   --analyze                                        Detect changes → output JSON
  *   --analyze --known-files "f1,f2"                  Same but filter to known files only (safe re-scan)
  *   --commit --files "f1,f2" --message "msg"         Stage + commit files
@@ -14,13 +15,27 @@
  *   --create-branch --name "type/slug"               Create and checkout new branch (auto-retry suffixes)
  */
 
-import { run, runSafe, parseArgs, PROTECTED_BRANCHES } from "./lib/helpers.mjs";
+import { run, runSafe, runFileSafe, parseArgs, PROTECTED_BRANCHES } from "./lib/helpers.mjs";
+import {
+  deliveryPlanId,
+  normalizeRequestedLineage,
+  resolveCommitDeliveryPolicy,
+  validateRealStagedDelivery,
+} from "./lib/review-delivery-policy.mjs";
+import { groupWorkUnits } from "./lib/flow-work-units.mjs";
 import process from "process";
 import path from "path";
 import fs from "fs";
+import os from "os";
+import { fileURLToPath } from "url";
 
 const DEFAULT_MAX_AUTO_ROUNDS = 3;
 const DEFAULT_BRANCH_ATTEMPTS = 5;
+let reviewDeliveryRunner = runFileSafe;
+
+export function configureCommitTestDependencies({ runner = runFileSafe } = {}) {
+  reviewDeliveryRunner = runner;
+}
 const BRANCH_PREFIX_ALIASES = new Map([
   ["feature", "feat"],
   ["feat", "feat"],
@@ -182,6 +197,8 @@ function classifyType(filePath) {
   if (
     (ext === ".md" || ext === ".rst" || ext === ".txt") &&
     (normalized.split("/").filter(Boolean).length === 1 ||
+      normalized.startsWith("docs/") ||
+      normalized.startsWith("doc/") ||
       normalized.includes("/docs/") ||
       normalized.includes("/doc/"))
   ) {
@@ -295,8 +312,37 @@ function normalizeFilePath(filePath) {
   return filePath.replace(/\\/g, "/").trim();
 }
 
+function normalizeLiteralFilePath(filePath) {
+  return filePath;
+}
+
+export function parseNullDelimitedPaths(output) {
+  return output.split("\0").filter((file) => file.length > 0);
+}
+
+export function parsePorcelainStatus(output) {
+  const fields = output.split("\0");
+  const records = [];
+
+  for (let index = 0; index < fields.length; index++) {
+    const field = fields[index];
+    if (!field || field.length < 3 || field[2] !== " ") continue;
+    const X = field[0];
+    const Y = field[1];
+    const hasOriginalPath = X === "R" || X === "C" || Y === "R" || Y === "C";
+    records.push({
+      X,
+      Y,
+      path: field.slice(3),
+      originalPath: hasOriginalPath ? fields[++index] ?? "" : null,
+    });
+  }
+
+  return records;
+}
+
 function enrichFile(filePath, status) {
-  const normalized = normalizeFilePath(filePath);
+  const normalized = normalizeLiteralFilePath(filePath);
   return {
     path: normalized,
     feature: classifyFeature(normalized),
@@ -331,7 +377,7 @@ function dedupeFiles(files) {
   const byPath = new Map();
 
   for (const file of files) {
-    const normalized = normalizeFilePath(file.path);
+    const normalized = normalizeLiteralFilePath(file.path);
     const existing = byPath.get(normalized);
     const statuses = file.statuses ? [...file.statuses] : [file.status];
 
@@ -428,21 +474,11 @@ function getAnalysisData(flags = {}) {
 // ─── git status parser (shared) ───────────────────────────────────────────────
 
 function parseGitStatus(knownFiles = null) {
-  const statusOutput = run("git status --porcelain --untracked-files=all");
-  const lines = statusOutput
-    ? statusOutput.split("\n").filter((line) => {
-        if (!line || line.length < 4) return false;
-        const trimmed = line.trim();
-        if (
-          trimmed === "nul" ||
-          trimmed === "?? nul" ||
-          trimmed.endsWith(" nul")
-        ) {
-          return false;
-        }
-        return /^.{2} .+$/.test(line);
-      })
-    : [];
+  const statusResult = runFileSafe("git", [
+    "status", "--porcelain=v1", "-z", "--untracked-files=all",
+  ]);
+  if (!statusResult.ok) throw new Error(`Could not inspect Git status: ${statusResult.output}`);
+  const records = parsePorcelainStatus(statusResult.stdout);
 
   const staged = [];
   const unstaged = [];
@@ -450,17 +486,8 @@ function parseGitStatus(knownFiles = null) {
   const deleted = [];
   const skipped = [];
 
-  for (const line of lines) {
-    const X = line[0];
-    const Y = line[1];
-
-    let filePath = line.slice(3).trim();
-    if (filePath.includes(" -> ")) {
-      filePath = filePath.split(" -> ")[1].trim();
-    }
-
-    filePath = normalizeFilePath(filePath);
-    if (!filePath || filePath === "nul" || filePath === "/dev/null") continue;
+  for (const { X, Y, path: filePath } of records) {
+    if (!filePath) continue;
 
     if (knownFiles !== null && !knownFiles.has(filePath)) {
       skipped.push(filePath);
@@ -756,25 +783,16 @@ function buildDescription(type, scope, files) {
 
 function buildCommitGroups(files, options = {}) {
   const messageOverrides = options.messageOverrides || new Map();
-  const grouped = new Map();
-
-  for (const file of dedupeFiles(files)) {
-    const scope =
-      file.type === "config" ? "config" : sanitizeScope(file.feature);
-    const bucket = file.type === "source" ? "source" : file.type;
-    const key = `${bucket}:${scope}`;
-
-    if (!grouped.has(key)) {
-      grouped.set(key, []);
-    }
-
-    grouped.get(key).push(file);
+  const workUnits = groupWorkUnits(dedupeFiles(files));
+  if (workUnits.ambiguities.length > 0) {
+    const details = workUnits.ambiguities
+      .map((item) => `${item.file} -> ${item.candidateGroups.join(" | ")}`)
+      .join("; ");
+    throw new Error(`Automatic work-unit grouping is ambiguous: ${details}. Use explicit staging or reorganize the change; Flow will not guess.`);
   }
-
-  const typeOrder = { config: 0, source: 1, test: 2, doc: 3 };
-
-  return [...grouped.entries()]
-    .sort(([leftKey], [rightKey]) => {
+  const typeOrder = { config: 0, behavior: 1, test: 2, doc: 3 };
+  return workUnits.groups
+    .sort(({ key: leftKey }, { key: rightKey }) => {
       const [leftType, leftScope] = leftKey.split(":");
       const [rightType, rightScope] = rightKey.split(":");
       const leftWeight = typeOrder[leftType] ?? 99;
@@ -782,7 +800,7 @@ function buildCommitGroups(files, options = {}) {
       if (leftWeight !== rightWeight) return leftWeight - rightWeight;
       return leftScope.localeCompare(rightScope);
     })
-    .map(([key, groupFiles]) => {
+    .map(({ key, files: groupFiles }) => {
       const [bucket] = key.split(":");
       const scope = getGroupScope(groupFiles);
       const type =
@@ -809,6 +827,26 @@ function buildCommitGroups(files, options = {}) {
         message,
       };
     });
+}
+
+export function buildPhysicalCommitGroups(files, policy, options = {}) {
+  const workUnits = buildCommitGroups(files, options);
+  if (policy.topology !== "single") return { workUnits, groups: workUnits };
+  const messageOverrides = options.messageOverrides || new Map();
+  const primary = workUnits.find((group) => ["feat", "fix", "refactor"].includes(group.type)) || workUnits[0];
+  const defaultMessage = primary?.defaultMessage || "chore(root): deliver reviewed changes";
+  return {
+    workUnits,
+    groups: [{
+      key: "reviewed-delivery",
+      type: primary?.type || "chore",
+      scope: primary?.scope || "root",
+      files: dedupeFiles(files),
+      defaultMessage,
+      message: sanitizeCommitMessage(messageOverrides.get("reviewed-delivery"), defaultMessage),
+      workUnitKeys: workUnits.map((group) => group.key),
+    }],
+  };
 }
 
 function inferBranchPrefix(files) {
@@ -853,33 +891,127 @@ function buildBranchName(files) {
   return `${inferBranchPrefix(files)}/${inferBranchSlug(files)}`;
 }
 
-function quoteFilePath(file) {
-  return `"${file.replace(/"/g, '\\"')}"`;
-}
-
 function escapeCommitMessage(message) {
   return message.replace(/"/g, '\\"');
 }
 
 function getStagedFilesForPaths(fileList) {
   const uniqueFiles = [
-    ...new Set(fileList.map((file) => normalizeFilePath(file)).filter(Boolean)),
+    ...new Set(fileList.map((file) => normalizeLiteralFilePath(file)).filter(Boolean)),
   ];
 
   if (uniqueFiles.length === 0) return [];
 
-  const quotedFiles = uniqueFiles.map((file) => quoteFilePath(file)).join(" ");
-  const stagedResult = runSafe(
-    `git diff --cached --name-only -- ${quotedFiles}`,
-  );
+  const stagedResult = runFileSafe("git", [
+    "diff", "--cached", "--name-only", "-z", "--", ...uniqueFiles,
+  ]);
   if (!stagedResult.ok) {
     throw new Error(`git diff --cached failed: ${stagedResult.output}`);
   }
 
-  return stagedResult.output
-    .split("\n")
-    .map((file) => normalizeFilePath(file))
-    .filter(Boolean);
+  return stagedResult.stdout
+    ? parseNullDelimitedPaths(stagedResult.stdout)
+    : [];
+}
+
+function getAllStagedFiles() {
+  const result = runFileSafe("git", ["diff", "--cached", "--name-only", "-z", "HEAD", "--"]);
+  if (!result.ok) throw new Error(`Could not inspect staged paths: ${result.output}`);
+  return parseNullDelimitedPaths(result.stdout).sort();
+}
+
+function captureIndexSnapshot() {
+  const indexResult = runFileSafe("git", ["rev-parse", "--path-format=absolute", "--git-path", "index"]);
+  if (!indexResult.ok) throw new Error(`Could not resolve Git index: ${indexResult.output}`);
+  const indexPath = indexResult.stdout;
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "flow-git-index-"));
+  const backupPath = path.join(tempDir, "index");
+  const existed = fs.existsSync(indexPath);
+  if (existed) fs.copyFileSync(indexPath, backupPath);
+  return { indexPath, backupPath, tempDir, existed };
+}
+
+function restoreIndexSnapshot(snapshot) {
+  if (snapshot.existed) fs.copyFileSync(snapshot.backupPath, snapshot.indexPath);
+  else fs.rmSync(snapshot.indexPath, { force: true });
+}
+
+function withIndexRollback(action) {
+  const snapshot = captureIndexSnapshot();
+  try {
+    return action();
+  } catch (error) {
+    try {
+      restoreIndexSnapshot(snapshot);
+    } catch (restoreError) {
+      throw new Error(`${error.message} Index rollback failed: ${restoreError.message}`);
+    }
+    throw error;
+  } finally {
+    fs.rmSync(snapshot.tempDir, { recursive: true, force: true });
+  }
+}
+
+function assertSingleDeliveryScope(analysis, targetPaths) {
+  const staged = new Set(analysis.changes.staged.map((file) => file.path));
+  const unstaged = new Set(analysis.changes.unstaged.map((file) => file.path));
+  const partial = [...staged].filter((file) => unstaged.has(file));
+  if (partial.length > 0) {
+    throw new Error(`Single reviewed delivery cannot proceed with partially staged paths: ${partial.join(", ")}`);
+  }
+  const expected = [...new Set(targetPaths)].sort();
+  const existing = getAllStagedFiles();
+  const extra = existing.filter((file) => !expected.includes(file));
+  if (extra.length > 0) {
+    throw new Error(`Staged paths outside the reviewed target: ${extra.join(", ")}`);
+  }
+}
+
+function stageExactPaths(fileList) {
+  const expected = [...new Set(fileList.map(normalizeLiteralFilePath).filter(Boolean))].sort();
+  const result = runFileSafe("git", ["add", "--all", "--", ...expected]);
+  if (!result.ok) throw new Error(`git add failed: ${result.output}`);
+  const actual = getAllStagedFiles();
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    throw new Error(`Staged snapshot does not exactly match the reviewed target (expected: ${expected.join(", ")}; actual: ${actual.join(", ")}).`);
+  }
+  return result.output;
+}
+
+function executeReviewedDelivery(group, policy) {
+  const files = group.files.map((file) => file.path);
+  const baseResult = runFileSafe("git", ["rev-parse", "HEAD^{commit}"]);
+  if (!baseResult.ok) throw new Error(`Could not resolve delivery base: ${baseResult.output}`);
+  const baseCommit = baseResult.stdout;
+  return withIndexRollback(() => {
+    const addOutput = stageExactPaths(files);
+    validateRealStagedDelivery(policy, { runner: reviewDeliveryRunner });
+    const stagedTree = run("git write-tree");
+    if (stagedTree !== policy.authority.candidateTree) {
+      throw new Error("Staged reviewed-delivery tree differs from the frozen authority.");
+    }
+    const commitResult = runFileSafe("git", ["commit", "-m", group.message]);
+    if (!commitResult.ok) throw new Error(`git commit failed: ${commitResult.output}`);
+    const createdResult = runFileSafe("git", ["rev-parse", "HEAD^{commit}"]);
+    if (!createdResult.ok) throw new Error(`Could not resolve reviewed commit: ${createdResult.output}`);
+    const createdCommit = createdResult.stdout;
+    try {
+      const treeResult = runFileSafe("git", ["rev-parse", "HEAD^{tree}"]);
+      const countResult = runFileSafe("git", ["rev-list", "--count", `${baseCommit}..HEAD`]);
+      if (!treeResult.ok || !countResult.ok) throw new Error(`Could not verify reviewed delivery: ${treeResult.output || countResult.output}`);
+      const commitCount = Number.parseInt(countResult.stdout, 10);
+      if (treeResult.stdout !== policy.authority.candidateTree || commitCount !== 1) {
+        throw new Error("Reviewed delivery verification failed: expected one commit with the frozen candidate tree.");
+      }
+    } catch (error) {
+      const rollback = runFileSafe("git", ["update-ref", "HEAD", baseCommit, createdCommit]);
+      if (!rollback.ok) {
+        throw new Error(`${error.message} HEAD rollback failed closed: ${rollback.output}`);
+      }
+      throw error;
+    }
+    return { addOutput, commitOutput: commitResult.output, stagedFiles: files, skipped: false };
+  });
 }
 
 // ─── Core actions ──────────────────────────────────────────────────────────────
@@ -890,44 +1022,46 @@ function analyze(flags = {}) {
 
 function executeCommit(fileList, message) {
   const uniqueFiles = [
-    ...new Set(fileList.map((file) => normalizeFilePath(file)).filter(Boolean)),
+    ...new Set(fileList.map((file) => normalizeLiteralFilePath(file)).filter(Boolean)),
   ];
 
   if (uniqueFiles.length === 0) {
     throw new Error("--files is empty");
   }
 
-  const quotedFiles = uniqueFiles.map((file) => quoteFilePath(file)).join(" ");
-  const addResult = runSafe(`git add ${quotedFiles}`);
-  if (!addResult.ok) {
-    throw new Error(`git add failed: ${addResult.output}`);
-  }
+  return withIndexRollback(() => {
+    const alreadyStaged = getAllStagedFiles();
+    const outsideGroup = alreadyStaged.filter((file) => !uniqueFiles.includes(file));
+    if (outsideGroup.length > 0) {
+      throw new Error(`Git index already contains staged paths outside this group: ${outsideGroup.join(", ")}`);
+    }
+    const filesToAdd = uniqueFiles.filter((file) => !alreadyStaged.includes(file));
+    const addResult = filesToAdd.length > 0
+      ? runFileSafe("git", ["add", "--all", "--", ...filesToAdd])
+      : { ok: true, output: "" };
+    if (!addResult.ok) throw new Error(`git add failed: ${addResult.output}`);
 
-  const stagedFiles = getStagedFilesForPaths(uniqueFiles);
-  if (stagedFiles.length === 0) {
+    const stagedFiles = getStagedFilesForPaths(uniqueFiles);
+    if (stagedFiles.length === 0) {
+      return {
+        addOutput: addResult.output,
+        commitOutput: "",
+        stagedFiles,
+        skipped: true,
+        reason: "No effective staged changes remained for this group after git add.",
+      };
+    }
+
+    const commitResult = runFileSafe("git", ["commit", "-m", message]);
+    if (!commitResult.ok) throw new Error(`git commit failed: ${commitResult.output}`);
+
     return {
       addOutput: addResult.output,
-      commitOutput: "",
+      commitOutput: commitResult.output,
       stagedFiles,
-      skipped: true,
-      reason:
-        "No effective staged changes remained for this group after git add.",
+      skipped: false,
     };
-  }
-
-  const commitResult = runSafe(
-    `git commit -m "${escapeCommitMessage(message)}"`,
-  );
-  if (!commitResult.ok) {
-    throw new Error(`git commit failed: ${commitResult.output}`);
-  }
-
-  return {
-    addOutput: addResult.output,
-    commitOutput: commitResult.output,
-    stagedFiles,
-    skipped: false,
-  };
+  });
 }
 
 function commit(flags) {
@@ -1079,7 +1213,7 @@ function createBranch(flags) {
   }
 }
 
-function autoCommitWorkflow(flags) {
+export function autoCommitWorkflow(flags) {
   const maxRounds = parsePositiveInt(
     flags["max-rounds"],
     DEFAULT_MAX_AUTO_ROUNDS,
@@ -1089,6 +1223,7 @@ function autoCommitWorkflow(flags) {
     DEFAULT_BRANCH_ATTEMPTS,
   );
   const dryRun = hasTruthyFlag(flags["dry-run"]);
+  const requestedLineage = normalizeRequestedLineage(flags["lineage"]);
   const branchNameOverride = flags["branch-name"];
   const messageOverrides = parseMessageOverridesArg(flags["message-overrides"]);
   const log = (message) => process.stderr.write(message);
@@ -1116,6 +1251,22 @@ function autoCommitWorkflow(flags) {
       ) + "\n",
     );
     return;
+  }
+
+  const deliveryPolicy = resolveCommitDeliveryPolicy({
+    targetPaths: inScopeFiles,
+    lineage: requestedLineage,
+    runner: reviewDeliveryRunner,
+  });
+  if (deliveryPolicy.topology === "single") assertSingleDeliveryScope(analysis, inScopeFiles);
+  const initialPlanning = buildPhysicalCommitGroups(collectAllFiles(analysis.changes), deliveryPolicy, { messageOverrides });
+  const planId = deliveryPlanId(deliveryPolicy, {
+    targetPaths: [...inScopeFiles].sort(),
+    physicalGroups: initialPlanning.groups.map((group) => ({ key: group.key, files: group.files.map((file) => file.path).sort() })),
+    requestedLineage: requestedLineage || null,
+  });
+  if (!dryRun && flags["expected-plan-id"] !== planId) {
+    throw new Error("Commit plan identity is missing or drifted; rerun --auto --dry-run and pass its planId with --expected-plan-id.");
   }
 
   let plannedBranch = null;
@@ -1178,7 +1329,8 @@ function autoCommitWorkflow(flags) {
       break;
     }
 
-    const groups = buildCommitGroups(roundFiles, { messageOverrides });
+    const planning = buildPhysicalCommitGroups(roundFiles, deliveryPolicy, { messageOverrides });
+    const groups = planning.groups;
     if (groups.length === 0) {
       throw new Error(
         "Automatic commit flow could not determine commit groups.",
@@ -1205,10 +1357,9 @@ function autoCommitWorkflow(flags) {
         continue;
       }
 
-      const result = executeCommit(
-        group.files.map((file) => file.path),
-        group.message,
-      );
+      const result = deliveryPolicy.topology === "single"
+        ? executeReviewedDelivery(group, deliveryPolicy)
+        : executeCommit(group.files.map((file) => file.path), group.message);
 
       if (result.addOutput) log(result.addOutput + "\n");
       if (result.skipped) {
@@ -1225,6 +1376,7 @@ function autoCommitWorkflow(flags) {
       }
       if (result.commitOutput) log(result.commitOutput + "\n");
       commitCount += 1;
+      if (deliveryPolicy.topology === "single") break;
     }
 
     if (dryRun) {
@@ -1237,6 +1389,15 @@ function autoCommitWorkflow(flags) {
         plannedBranch,
         commitCount: 0,
         knownFiles: [...originalKnownFiles],
+        planId,
+        deliveryPolicy,
+        workUnits: initialPlanning.workUnits.map((group) => ({
+          key: group.key,
+          type: group.type,
+          scope: group.scope,
+          files: group.files.map((file) => file.path),
+          defaultMessage: group.defaultMessage,
+        })),
         plannedCommitGroups,
         skippedCommitGroups: [],
         leftovers: { known: [...originalKnownFiles], artifacts: [] },
@@ -1265,6 +1426,15 @@ function autoCommitWorkflow(flags) {
             currentBranch: getAnalysisData().branch.current,
             protectedBranchDetected: analysis.branch.isProtected,
             plannedBranch,
+            planId,
+            deliveryPolicy,
+            workUnits: initialPlanning.workUnits.map((group) => ({
+              key: group.key,
+              type: group.type,
+              scope: group.scope,
+              files: group.files.map((file) => file.path),
+              defaultMessage: group.defaultMessage,
+            })),
             commitCount,
             plannedCommitGroups,
             skippedCommitGroups,
@@ -1306,8 +1476,8 @@ function autoCommitWorkflow(flags) {
 
 // ─── Entry point ──────────────────────────────────────────────────────────────
 
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))) {
 const flags = parseArgs();
-
 try {
   if (flags["auto"]) {
     autoCommitWorkflow(flags);
@@ -1322,7 +1492,7 @@ try {
   } else {
     process.stderr.write(
       "Usage:\n" +
-        '  node flow-commit.mjs --auto [--dry-run] [--branch-name "type/slug"] [--message-overrides "{...}"] [--max-rounds 3] [--branch-attempts 5]\n' +
+        '  node flow-commit.mjs --auto [--dry-run] [--expected-plan-id <id>] [--lineage <id>] [--branch-name "type/slug"] [--message-overrides "{...}"] [--max-rounds 3] [--branch-attempts 5]\n' +
         "  node flow-commit.mjs --analyze\n" +
         '  node flow-commit.mjs --analyze --known-files "f1,f2"\n' +
         '  node flow-commit.mjs --commit --files "f1.ts,f2.tsx" --message "feat(scope): desc"\n' +
@@ -1334,4 +1504,5 @@ try {
 } catch (error) {
   process.stderr.write(`${error.message}\n`);
   process.exit(1);
+}
 }
