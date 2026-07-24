@@ -432,6 +432,11 @@ export function restoreTransactionRoot(destinationRoot) {
   return path.join(path.resolve(destinationRoot), ".flow-skills", "transactions");
 }
 
+export function inspectRestoreTransaction(destinationRoot) {
+  const root = restoreTransactionRoot(destinationRoot);
+  return { incomplete: fs.existsSync(path.join(root, "transaction")) || fs.existsSync(path.join(root, "apply.lock")) };
+}
+
 function assertNoSymlinkPath(absolute, label) {
   const resolved = path.resolve(absolute), root = path.parse(resolved).root; let current = root;
   for (const segment of path.relative(root, resolved).split(path.sep).filter(Boolean)) {
@@ -575,7 +580,10 @@ function verifyRestoreTarget(destinationRoot, ownership, target) {
 export function applyRestore(input, extraHooks = {}) {
   const options = { repoRoot: REPO_ROOT, ...input, ...extraHooks };
   if (!options.expectedTargetCommit || !options.expectedPlanId) throw new Error("Restore apply requires --expected-target-commit and an expected plan ID.");
-  let plan = assertRestoreExpected(options), transaction = acquireRestoreTransaction(options.destinationRoot), backup, recovered = false;
+  let plan = assertRestoreExpected(options);
+  options.validateReady?.();
+  const transaction = acquireRestoreTransaction(options.destinationRoot);
+  let backup, recovered = false;
   try {
     recovered = recoverRestoreTransaction(options.destinationRoot, transaction.root); options.afterRecovery?.();
     plan = assertRestoreExpected(options); options.afterLock?.(); plan = assertRestoreExpected(options);
@@ -584,6 +592,7 @@ export function applyRestore(input, extraHooks = {}) {
     const frozen = freezeRestoreTarget(generation, options.repoRoot); plan = assertRestoreExpected(options);
     const currentManifest = validateManifest(JSON.parse(fs.readFileSync(path.join(options.repoRoot, "flow-assets.json"))));
     const ownership = unionManifest(currentManifest, generation.manifest);
+    plan = assertRestoreExpected(options); options.validateReady?.(); plan = assertRestoreExpected(options);
     const backupRoot = options.backupRoot ? path.resolve(options.backupRoot) : path.join(path.resolve(options.destinationRoot), ".flow-skills", "backups");
     backup = createRestoreBackup(options.destinationRoot, backupRoot, [currentManifest, generation.manifest], plan); options.afterBackup?.();
     plan = assertRestoreExpected(options);
