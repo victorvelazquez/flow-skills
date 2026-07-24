@@ -420,7 +420,7 @@ export function buildRestorePlan({ requestedRef, destinationRoot, repoRoot = REP
     targetManifestSha256: target.manifestSha256, targetLockSha256: target.lockSha256, targetFiles: target.lock.files,
     currentManifestSha256: sha256(currentManifestBytes), currentLiveState: currentState, operations, backupSchema: RESTORE_BACKUP_SCHEMA };
   const planId = sha256(JSON.stringify(identity));
-  return { schema: RESTORE_PLAN_SCHEMA, planId, requestedRef, applySupported: false, backupSchema: RESTORE_BACKUP_SCHEMA,
+  return { schema: RESTORE_PLAN_SCHEMA, planId, requestedRef, applySupported: true, backupSchema: RESTORE_BACKUP_SCHEMA,
     requiredApplyIds: { restorePlanId: planId, targetCommit: target.targetCommit, targetTree: target.targetTree },
     target: { commit: target.targetCommit, tree: target.targetTree, manifestSha256: target.manifestSha256,
       lockSha256: target.lockSha256, totals: target.lock.totals, files: target.lock.files },

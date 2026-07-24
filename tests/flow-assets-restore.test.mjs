@@ -84,7 +84,7 @@ test("full SHA, branch, and lightweight and annotated tags freeze the same gener
     { action: "add", path: "skills/flow-x/SKILL.md" },
   ]);
   assert.equal(plans[0].target.files[1].mode, "100755");
-  assert.equal(plans[0].applySupported, false);
+  assert.equal(plans[0].applySupported, true);
   assert.equal(plans[0].requiredApplyIds.restorePlanId, plans[0].planId);
   assert.equal(plans[0].target.files.some((entry) => entry.path === "skills/flow-x/SKILL.md"), true);
 });
