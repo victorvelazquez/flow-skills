@@ -20,18 +20,36 @@ function fail(message) {
   process.exit(1);
 }
 
-if (args.length === 0 || !["--status", "--snapshot"].includes(args[0])) {
-  fail("Usage: flow-skills.mjs --status | --snapshot --dry-run | --snapshot --apply --expected-plan-id <id> ...metadata");
+const restore = args[0] === "restore";
+if (!restore && (args.length === 0 || !["--status", "--snapshot"].includes(args[0]))) {
+  fail("Usage: flow-skills.mjs --status | --snapshot ... | restore <ref> [--apply --expected-target-commit <sha> --expected-plan-id <id>]");
 }
 
-for (let index = 0; index < args.length; index += 1) {
-  const argument = args[index];
-  if (flagOptions.has(argument)) continue;
-  if (!valueOptions.has(argument)) fail(`Unsupported argument: ${argument}`);
-  if (index + 1 >= args.length || args[index + 1].startsWith("--")) {
-    fail(`Missing value for ${argument}.`);
+if (restore) {
+  if (!args[1] || args[1].startsWith("--")) fail("Restore requires a ref.");
+  const restoreArgs = args.slice(2);
+  const restoreValues = new Set(["--expected-target-commit", "--expected-plan-id"]);
+  const seen = new Set();
+  for (let index = 0; index < restoreArgs.length; index += 1) {
+    const argument = restoreArgs[index];
+    if (seen.has(argument)) fail(`Duplicate restore argument: ${argument}`);
+    seen.add(argument);
+    if (argument === "--apply") continue;
+    if (!restoreValues.has(argument)) fail(`Unsupported restore argument: ${argument}`);
+    if (!restoreArgs[index + 1] || restoreArgs[index + 1].startsWith("--")) fail(`Missing value for ${argument}.`);
+    index += 1;
   }
-  index += 1;
+  const applying = seen.has("--apply");
+  if (!applying && restoreArgs.length > 0) fail("Restore preview does not accept apply authority IDs.");
+  if (applying && [...restoreValues].some((name) => !seen.has(name))) fail("Restore apply requires expected target commit and plan ID.");
+} else {
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index];
+    if (flagOptions.has(argument)) continue;
+    if (!valueOptions.has(argument)) fail(`Unsupported argument: ${argument}`);
+    if (index + 1 >= args.length || args[index + 1].startsWith("--")) fail(`Missing value for ${argument}.`);
+    index += 1;
+  }
 }
 
 const repoRoot = path.resolve(
@@ -49,7 +67,9 @@ if (!fs.existsSync(sourceRoot) || !fs.statSync(sourceRoot).isDirectory()) {
   fail(`OpenCode source directory not found: ${sourceRoot}`);
 }
 
-const forwarded = [args[0], "--source", sourceRoot, ...args.slice(1)];
+const forwarded = restore
+  ? ["--restore", "--ref", args[1], "--destination", sourceRoot, ...(args.includes("--apply") ? args.slice(2) : ["--dry-run"])]
+  : [args[0], "--source", sourceRoot, ...args.slice(1)];
 const result = spawnSync(process.execPath, [engine, ...forwarded], {
   cwd: repoRoot,
   encoding: "utf8",

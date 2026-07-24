@@ -1,5 +1,5 @@
 ---
-description: Preview or apply a live OpenCode Flow snapshot to the local flow-skills mirror
+description: Preview or apply Flow snapshots and confirmation-bound historical restores
 ---
 
 Read `~/.config/opencode/skills/flow-skills-sync/SKILL.md` first and follow its workflow exactly.

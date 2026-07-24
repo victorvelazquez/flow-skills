@@ -1,6 +1,6 @@
 {
   "$schema": "flow-assets-lock/v1",
-  "capturedAt": "2026-07-23T16:30:58.788Z",
+  "capturedAt": "2026-07-24T01:36:11.551Z",
   "source": {
     "kind": "opencode-user-config",
     "opencodeVersion": "1.18.4",
@@ -10,7 +10,7 @@
     "sha256": "e1fd1c66db6af835a7f0a4d8ef08a2e63e8d191682e86fef88424cc11a16c597"
   },
   "totals": {
-    "bytes": 825469,
+    "bytes": 826978,
     "count": 78
   },
   "files": [
@@ -121,8 +121,8 @@
     },
     {
       "path": "commands/flow-skills-sync.md",
-      "sha256": "d916e942e7c730588a77d999f6c3e21d4ab7da6858a74f4955b2353f436caaac",
-      "bytes": 439,
+      "sha256": "729756646732cf68772576d718b197ef1391a37b33c279daec15177c7b662a54",
+      "bytes": 435,
       "mode": "100644",
       "executable": false
     },
@@ -191,8 +191,8 @@
     },
     {
       "path": "scripts/flow-skills.mjs",
-      "sha256": "87508203857d06ae89516f7ab307216bfaf0d4a6584e6d41f10111900ea2c9d8",
-      "bytes": 2092,
+      "sha256": "058541b210156e707429cff5bf4acccf2827ae60904545f1e84668a404b74ded",
+      "bytes": 3314,
       "mode": "100644",
       "executable": false
     },
@@ -541,8 +541,8 @@
     },
     {
       "path": "skills/flow-skills-sync/SKILL.md",
-      "sha256": "5489364bdf524e3bc96d89760335b10825da8b2cabe23017f13550deaadd1db6",
-      "bytes": 2061,
+      "sha256": "50d1d2c776c2f389dc9008abe9ec10f95358626ef51282788cf49cba180a44d7",
+      "bytes": 2352,
       "mode": "100644",
       "executable": false
     },

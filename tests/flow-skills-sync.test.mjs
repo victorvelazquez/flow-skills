@@ -21,9 +21,10 @@ function harness() {
   fs.writeFileSync(path.join(repo, "tools", "flow-assets.mjs"), [
     'import fs from "node:fs";',
     'fs.writeFileSync(process.env.FLOW_CAPTURE, JSON.stringify(process.argv.slice(2)));',
+    'if (process.env.FLOW_ENGINE_ERROR) { process.stderr.write(process.env.FLOW_ENGINE_ERROR); process.exit(3); }',
     'process.stdout.write(JSON.stringify({ ok: true, args: process.argv.slice(2) }) + "\\n");',
   ].join("\n"));
-  return { repo, live, unrelated, capture };
+  return { parent, repo, live, unrelated, capture };
 }
 
 function run(args, fixture, overrides = {}) {
@@ -99,15 +100,60 @@ test("wrapper rejects unsupported and mutation-prone legacy arguments", () => {
   assert.doesNotMatch(source, /git\s+(?:fetch|pull|commit|push)|install\.mjs|run-export/i);
 });
 
-test("sync skill requires preview authorization and exact plan ID without restore or Git publication", () => {
+test("restore preview forwards literal refs without mutation or shell evaluation", () => {
+  for (const ref of ["feature/history", "v1.2.3", "a".repeat(40), "HEAD;touch should-not-exist"]) {
+    const fixture = harness();
+    const liveBefore = fs.readdirSync(fixture.live);
+    const result = run(["restore", ref], fixture);
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(JSON.parse(fs.readFileSync(fixture.capture, "utf8")), [
+      "--restore", "--ref", ref, "--destination", fixture.live, "--dry-run",
+    ]);
+    assert.deepEqual(fs.readdirSync(fixture.live), liveBefore);
+    assert.equal(fs.existsSync(path.join(fixture.parent, "should-not-exist")), false);
+  }
+});
+
+test("restore apply forwards exact authority IDs and surfaces engine blockers", () => {
+  const fixture = harness();
+  const args = ["restore", "release ref", "--apply", "--expected-target-commit", "commit value", "--expected-plan-id", "plan value"];
+  const result = run(args, fixture);
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(fs.readFileSync(fixture.capture, "utf8")), [
+    "--restore", "--ref", "release ref", "--destination", fixture.live, "--apply",
+    "--expected-target-commit", "commit value", "--expected-plan-id", "plan value",
+  ]);
+  const stale = run(args, fixture, { FLOW_ENGINE_ERROR: "Stale restore plan ID" });
+  assert.equal(stale.status, 3); assert.match(stale.stderr, /Stale restore plan ID/);
+});
+
+test("restore rejects missing refs, incomplete authority, preview IDs, and unsupported flags", () => {
+  const fixture = harness();
+  for (const args of [
+    ["restore"], ["restore", "HEAD", "--apply"],
+    ["restore", "HEAD", "--apply", "--expected-target-commit", "commit"],
+    ["restore", "HEAD", "--expected-plan-id", "plan"], ["restore", "HEAD", "--dry-run"],
+    ["restore", "HEAD", "--backup-root", "elsewhere"],
+  ]) {
+    const result = run(args, fixture); assert.notEqual(result.status, 0, args.join(" "));
+    assert.match(result.stderr, /restore|Unsupported|Usage/i);
+  }
+});
+
+test("sync skill preserves snapshot and adds confirmation-bound restore without Git publication", () => {
   const skill = fs.readFileSync(path.join(root, "skills", "flow-skills-sync", "SKILL.md"), "utf8");
   const command = fs.readFileSync(path.join(root, "commands", "flow-skills-sync.md"), "utf8");
 
   assert.match(skill, /--snapshot --dry-run/);
-  assert.match(skill, /explicit user authorization/i);
+  assert.match(skill, /explicit (?:user )?(?:authorization|confirmation)/i);
   assert.match(skill, /--expected-plan-id[= ]+<?planId>?/i);
   assert.match(skill, /exact.*planId/i);
-  assert.doesNotMatch(skill, /\brestore(?:d|s|ing)?\b/i);
+  assert.match(skill, /restore <ref>/);
+  assert.match(skill, /initial.*preview|first.*preview/i);
+  assert.match(skill, /explicit confirmation/i);
+  assert.match(skill, /target.*commit.*planId|planId.*target.*commit/is);
+  assert.match(skill, /stale.*preview/i);
+  assert.match(skill, /backup.*restart/i);
   assert.doesNotMatch(skill, /git\s+(?:commit|push)|\/flow-(?:commit|pr)/i);
   assert.match(command, /\$ARGUMENTS/);
   assert.match(command, /Working directory:/);
