@@ -65,10 +65,15 @@ function inspectConfig(destinationRoot) {
   let config;
   if (!fs.existsSync(configPath)) blockers.push("opencode.json is missing.");
   else {
-    try { config = JSON.parse(fs.readFileSync(configPath, "utf8")); }
+    try {
+      config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+      if (config === null || Array.isArray(config) || typeof config !== "object") {
+        blockers.push("opencode.json must contain a JSON object.");
+      }
+    }
     catch { blockers.push("opencode.json is malformed JSON."); }
   }
-  if (config) {
+  if (config !== null && !Array.isArray(config) && typeof config === "object") {
     const orchestrator = config?.agent?.["gentle-orchestrator"];
     const tasks = orchestrator?.permission?.task;
     if (orchestrator?.tools?.task !== true) blockers.push("gentle-orchestrator.tools.task must be true.");

@@ -157,6 +157,11 @@ test("configuration blockers are minimal, secret-free, and fail apply before mut
   const cases = [
     ["missing", null, /missing/i],
     ["malformed", "{bad", /malformed/i],
+    ["null", "null", /must contain a JSON object/i],
+    ["false", "false", /must contain a JSON object/i],
+    ["zero", "0", /must contain a JSON object/i],
+    ["string", JSON.stringify("not an object"), /must contain a JSON object/i],
+    ["array", "[]", /must contain a JSON object/i],
     ["task tool disabled", JSON.stringify({ agent: { "gentle-orchestrator": { tools: { task: false }, permission: { task: { "*": "deny", "flow-pr-agent": "allow" } } } } }), /tools\.task/i],
     ["unsafe task default", JSON.stringify({ agent: { "gentle-orchestrator": { tools: { task: true }, permission: { task: { "*": "allow", "flow-pr-agent": "allow" } } } } }), /must be 'deny'/i],
     ["missing executor", JSON.stringify({ agent: { "gentle-orchestrator": { tools: { task: true }, permission: { task: { "*": "deny" } } } } }), /flow-pr-agent/i],
