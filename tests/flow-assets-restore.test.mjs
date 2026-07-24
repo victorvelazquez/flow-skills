@@ -4,9 +4,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { buildRestorePlan, sha256 } from "../tools/flow-assets.mjs";
+import { applyRestore, buildRestorePlan, restoreTransactionRoot, sha256, transactionRoot } from "../tools/flow-assets.mjs";
 
 const workspace = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const engine = path.join(workspace, "tools", "flow-assets.mjs");
@@ -146,10 +146,107 @@ test("plan ID changes with a moving ref, live state, or current manifest", () =>
   assert.equal(new Set([first.planId, liveDrift.planId, manifestDrift.planId, moved.planId]).size, 4);
 });
 
-test("restore CLI rejects apply as unsupported in this work unit", () => {
+function applyFixture() {
+  const item = fixture();
+  const commit = commitGeneration(item.repo, {
+    "agents/flow-add.md": file("add\n"), "commands/flow-change.md": file("new\n"),
+    "scripts/flow-mode.mjs": file("same\n", "100755"),
+  });
+  write(item.live, "commands/flow-change.md", "old\n"); write(item.live, "scripts/flow-mode.mjs", "same\n");
+  write(item.live, "skills/flow-old/SKILL.md", "delete\n"); write(item.live, "opencode.json", "config\n");
+  write(item.live, "skills/flow-old/cache/state.json", "cache\n"); write(item.live, "tests/unrelated.mjs", "test\n");
+  const plan = buildRestorePlan({ requestedRef: "HEAD", destinationRoot: item.live, repoRoot: item.repo });
+  return { ...item, commit, plan, backupRoot: path.join(item.parent, "backups") };
+}
+
+const apply = (item, options = {}) => applyRestore({ requestedRef: "HEAD", destinationRoot: item.live, repoRoot: item.repo,
+  expectedTargetCommit: item.commit, expectedPlanId: item.plan.planId, backupRoot: item.backupRoot, ...options });
+
+test("restore apply rejects stale authority before backup or live writes", () => {
+  for (const kind of ["missing", "commit", "plan", "live", "manifest"]) {
+    const item = applyFixture(), before = snapshot(item.live);
+    const options = kind === "missing" ? { expectedPlanId: undefined } : kind === "commit" ? { expectedTargetCommit: "0".repeat(40) }
+      : kind === "plan" ? { expectedPlanId: "0".repeat(64) } : {};
+    if (kind === "live") write(item.live, "commands/flow-change.md", "drift\n");
+    if (kind === "manifest") write(item.repo, "flow-assets.json", `${JSON.stringify(manifest(["scripts/lib/drift.mjs"]), null, 2)}\n`);
+    assert.throws(() => apply(item, options), /requires|target commit|plan ID|stale/i, kind);
+    if (!new Set(["live", "manifest"]).has(kind)) assert.deepEqual(snapshot(item.live), before);
+    assert.equal(fs.existsSync(item.backupRoot), false);
+  }
+  const moved = applyFixture(), before = snapshot(moved.live);
+  commitGeneration(moved.repo, { "agents/flow-add.md": file("moved\n"), "commands/flow-change.md": file("new\n"), "scripts/flow-mode.mjs": file("same\n", "100755") });
+  assert.throws(() => apply(moved), /target commit|stale/i); assert.deepEqual(snapshot(moved.live), before);
+  assert.equal(fs.existsSync(moved.backupRoot), false);
+});
+
+test("restore apply retains a complete private backup and installs the exact target", () => {
+  const item = applyFixture(), repoStatus = git(item.repo, ["status", "--porcelain=v1"]), before = snapshot(item.live);
+  const indexPath = git(item.repo, ["rev-parse", "--path-format=absolute", "--git-path", "index"]), indexBefore = sha256(fs.readFileSync(indexPath));
+  const result = apply(item), backup = JSON.parse(fs.readFileSync(path.join(result.backupPath, "backup.json"), "utf8"));
+  assert.deepEqual(result.counts, { add: 1, change: 2, delete: 1 }); assert.equal(result.verified, true);
+  assert.equal(backup.$schema, "flow-assets-backup/v1"); assert.deepEqual(backup.scopePaths, item.plan.current.files.map((entry) => entry.path));
+  assert.equal(backup.planId, item.plan.planId); assert.equal(backup.targetCommit, item.commit);
+  assert.equal(fs.readFileSync(path.join(result.backupPath, "files", "commands", "flow-change.md"), "utf8"), "old\n");
+  assert.equal(fs.readFileSync(path.join(item.live, "commands", "flow-change.md"), "utf8"), "new\n");
+  assert.equal(fs.existsSync(path.join(item.live, "skills", "flow-old", "SKILL.md")), false);
+  assert.equal(fs.readFileSync(path.join(item.live, "opencode.json"), "utf8"), "config\n");
+  assert.equal(fs.readFileSync(path.join(item.live, "skills", "flow-old", "cache", "state.json"), "utf8"), "cache\n");
+  assert.doesNotMatch(JSON.stringify(backup), /opencode\.json|cache\/state|tests\/unrelated|[A-Za-z]:\\/);
+  assert.equal(git(item.repo, ["status", "--porcelain=v1"]), repoStatus); assert.equal(sha256(fs.readFileSync(indexPath)), indexBefore); assert.notDeepEqual(snapshot(item.live), before);
+  assert.equal(fs.existsSync(restoreTransactionRoot(item.live)), false);
+});
+
+test("restore failures roll live state back exactly and retain verified backup", () => {
+  for (const phase of ["afterBackup", "afterStaging", "afterOriginals", "afterWrites", "afterDeletes", "verifyFinal"]) {
+    const item = applyFixture(), before = snapshot(item.live), options = phase === "verifyFinal"
+      ? { verifyFinal: () => { throw new Error(`injected ${phase}`); } }
+      : { [phase]: () => { throw new Error(`injected ${phase}`); } };
+    assert.throws(() => apply(item, options), new RegExp(phase)); assert.deepEqual(snapshot(item.live), before, phase);
+    assert.equal(fs.readdirSync(item.backupRoot).filter((entry) => entry.startsWith("restore-")).length, 1, phase);
+    assert.equal(fs.existsSync(restoreTransactionRoot(item.live)), false, phase);
+  }
+});
+
+test("interrupted restore phases recover pre-state on the next preview", () => {
+  for (const phase of ["prepared", "staged", "mutating", "originals-moved", "targets-installed", "verifying", "committed"]) {
+    const item = applyFixture(), before = snapshot(item.live), runner = path.join(item.parent, `interrupt-${phase}.mjs`);
+    fs.writeFileSync(runner, `import {applyRestore} from ${JSON.stringify(pathToFileURL(engine).href)};applyRestore(${JSON.stringify({ requestedRef: "HEAD", destinationRoot: item.live, repoRoot: item.repo, expectedTargetCommit: item.commit, expectedPlanId: item.plan.planId, backupRoot: item.backupRoot })},{onPhase:p=>{if(p===${JSON.stringify(phase)})process.exit(86)}});`);
+    assert.equal(spawnSync(process.execPath, [runner]).status, 86, phase);
+    const recovered = buildRestorePlan({ requestedRef: "HEAD", destinationRoot: item.live, repoRoot: item.repo });
+    if (phase === "committed") assert.deepEqual(recovered.counts, { add: 0, change: process.platform === "win32" ? 1 : 0, delete: 0 });
+    else { assert.equal(recovered.planId, item.plan.planId, phase); assert.deepEqual(snapshot(item.live), before, phase); }
+    assert.equal(fs.existsSync(restoreTransactionRoot(item.live)), false, phase);
+  }
+});
+
+test("restore locks, roots, and post-lock target drift fail safely", () => {
+  const isolated = applyFixture(); assert.notEqual(transactionRoot(isolated.live), restoreTransactionRoot(isolated.live));
+  const defaulted = applyFixture(), defaultResult = apply(defaulted, { backupRoot: undefined });
+  assert.equal(path.dirname(defaultResult.backupPath), path.join(defaulted.live, ".flow-skills", "backups"));
+  const managed = applyFixture(); managed.backupRoot = path.join(managed.live, "skills", "flow-backup");
+  assert.throws(() => apply(managed), /managed path/i); assert.deepEqual(snapshot(managed.live)["commands/flow-change.md"].sha256, sha256("old\n"));
+  const linked = applyFixture(), outside = path.join(linked.parent, "outside"); fs.mkdirSync(outside);
+  try { fs.symlinkSync(outside, linked.backupRoot, "junction"); assert.throws(() => apply(linked), /symlink|reparse/i); } catch (error) { if (error.code !== "EPERM") throw error; }
+  const locked = applyFixture(); let blocked = false;
+  const result = apply(locked, { afterLock: () => { assert.throws(() => apply(locked), /already in progress/i); blocked = true; } });
+  assert.equal(blocked && result.verified, true);
+  const moved = applyFixture(), before = snapshot(moved.live);
+  assert.throws(() => apply(moved, { afterLock: () => commitGeneration(moved.repo, { "agents/flow-add.md": file("moved\n"), "commands/flow-change.md": file("new\n"), "scripts/flow-mode.mjs": file("same\n", "100755") }) }), /target commit|stale/i);
+  assert.deepEqual(snapshot(moved.live), before); assert.equal(fs.existsSync(moved.backupRoot), false);
+});
+
+test("restore CLI rejects apply without immutable IDs", () => {
   const live = fs.mkdtempSync(path.join(os.tmpdir(), "flow-assets-restore-cli-"));
   const result = spawnSync(process.execPath, [engine, "--restore", "--ref", "HEAD", "--destination", live, "--apply"], { encoding: "utf8" });
-  assert.notEqual(result.status, 0); assert.match(result.stderr, /restore apply is unsupported/i);
+  assert.notEqual(result.status, 0); assert.match(result.stderr, /expected-target-commit|expected plan ID|requires/i);
+});
+
+test("restore CLI applies an authorized plan in an isolated repository", () => {
+  const item = applyFixture(), tool = path.join(item.repo, "tools", "flow-assets.mjs"); fs.mkdirSync(path.dirname(tool)); fs.copyFileSync(engine, tool);
+  const result = spawnSync(process.execPath, [tool, "--restore", "--ref", "HEAD", "--destination", item.live, "--apply",
+    "--expected-target-commit", item.commit, "--expected-plan-id", item.plan.planId, "--backup-root", item.backupRoot], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr); const output = JSON.parse(result.stdout);
+  assert.equal(output.verified, true); assert.equal(output.planId, item.plan.planId); assert.ok(fs.existsSync(output.backupPath));
 });
 
 function snapshot(root) {

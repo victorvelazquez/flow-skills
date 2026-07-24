@@ -389,17 +389,22 @@ export function readHistoricalGeneration(requestedRef, repoRoot = REPO_ROOT) {
   try { manifest = validateManifest(parseHistoricalJson(manifestBytes, "manifest")); }
   catch (error) { if (/JSON/.test(error.message)) throw error; throw new Error(`Historical manifest is invalid: ${error.message}`); }
   const lock = validateHistoricalLock(parseHistoricalJson(lockBytes, "lock"), manifestBytes, manifest, tree, repoRoot);
-  return { requestedRef, targetCommit, targetTree, manifest, lock, manifestSha256: sha256(manifestBytes), lockSha256: sha256(lockBytes) };
+  return { requestedRef, targetCommit, targetTree, manifest, lock, tree, manifestSha256: sha256(manifestBytes), lockSha256: sha256(lockBytes) };
 }
 
-export function buildRestorePlan({ requestedRef, destinationRoot, repoRoot = REPO_ROOT }) {
+function unionManifest(current, target) {
+  return { ...current, liveMirrored: { ...current.liveMirrored,
+    libraries: [...new Set([...current.liveMirrored.libraries, ...target.liveMirrored.libraries])].sort() } };
+}
+
+export function buildRestorePlan({ requestedRef, destinationRoot, repoRoot = REPO_ROOT, recover = true }) {
   assertDirectory(destinationRoot, "OpenCode destination directory");
   assertDirectory(repoRoot, "Flow skills repository");
+  if (recover) recoverRestoreDestination(destinationRoot);
   const target = readHistoricalGeneration(requestedRef, repoRoot);
   const currentManifestBytes = fs.readFileSync(path.join(repoRoot, "flow-assets.json"));
   const currentManifest = validateManifest(JSON.parse(currentManifestBytes));
-  const ownership = { ...currentManifest, liveMirrored: { ...currentManifest.liveMirrored,
-    libraries: [...new Set([...currentManifest.liveMirrored.libraries, ...target.manifest.liveMirrored.libraries])].sort() } };
+  const ownership = unionManifest(currentManifest, target.manifest);
   const currentFiles = collectRestoreManagedFiles(destinationRoot, ownership);
   const currentState = currentFiles.map((relative) => fileRecord(destinationRoot, relative));
   const currentByPath = new Map(currentState.map((entry) => [entry.path, entry]));
@@ -421,6 +426,200 @@ export function buildRestorePlan({ requestedRef, destinationRoot, repoRoot = REP
       lockSha256: target.lockSha256, totals: target.lock.totals, files: target.lock.files },
     current: { manifestSha256: sha256(currentManifestBytes), files: currentState }, counts: { add: add.length, change: change.length, delete: remove.length },
     add, change, delete: remove, operations };
+}
+
+export function restoreTransactionRoot(destinationRoot) {
+  return path.join(path.resolve(destinationRoot), ".flow-skills", "transactions");
+}
+
+function assertNoSymlinkPath(absolute, label) {
+  const resolved = path.resolve(absolute), root = path.parse(resolved).root; let current = root;
+  for (const segment of path.relative(root, resolved).split(path.sep).filter(Boolean)) {
+    current = path.join(current, segment);
+    if (fs.existsSync(current) && fs.lstatSync(current).isSymbolicLink()) throw new Error(`${label} contains a symlink or reparse point: ${current}`);
+  }
+}
+
+function controlRoot(destinationRoot, requested, manifests, label) {
+  const root = path.resolve(requested); assertNoSymlinkPath(root, label);
+  const relative = path.relative(path.resolve(destinationRoot), root).split(path.sep).join("/");
+  if (relative && relative !== ".." && !relative.startsWith("../")
+    && manifests.some((manifest) => isManagedPath(relative, manifest) || isManagedPath(`${relative}/probe`, manifest))) {
+    throw new Error(`${label} cannot be inside a manifest-managed path.`);
+  }
+  fs.mkdirSync(root, { recursive: true }); checkedDirectory(root); return root;
+}
+
+function acquireRestoreTransaction(destinationRoot) {
+  const root = controlRoot(destinationRoot, restoreTransactionRoot(destinationRoot), [], "Restore transaction root"), lock = path.join(root, "apply.lock");
+  try { fs.mkdirSync(lock); }
+  catch (error) {
+    if (error.code !== "EEXIST") throw error; checkedDirectory(lock);
+    let owner; try { owner = JSON.parse(fs.readFileSync(path.join(lock, "owner.json"), "utf8")); } catch { throw new Error("Restore apply already in progress; lock owner is unreadable."); }
+    if (!Number.isInteger(owner.pid)) throw new Error("Restore apply already in progress; lock owner is invalid.");
+    try { process.kill(owner.pid, 0); throw new Error("Restore apply already in progress."); }
+    catch (signalError) { if (signalError.code !== "ESRCH") throw signalError; }
+    fs.rmSync(lock, { recursive: true }); fs.mkdirSync(lock);
+  }
+  atomicWrite(path.join(lock, "owner.json"), JSON.stringify({ pid: process.pid, operation: "restore" })); return { root, lock };
+}
+
+function releaseRestoreTransaction(transaction) {
+  fs.rmSync(transaction.lock, { recursive: true, force: true });
+  if (fs.existsSync(transaction.root) && fs.readdirSync(transaction.root).length === 0) fs.rmdirSync(transaction.root);
+  const parent = path.dirname(transaction.root); if (fs.existsSync(parent) && fs.readdirSync(parent).length === 0) fs.rmdirSync(parent);
+}
+
+function recordMatches(actual, expected) {
+  return actual.path === expected.path && actual.sha256 === expected.sha256 && actual.bytes === expected.bytes
+    && (process.platform === "win32" || (actual.mode === expected.mode && actual.executable === expected.executable));
+}
+
+function verifyRecordedState(root, scopePaths, records) {
+  const expected = new Map(records.map((entry) => [entry.path, entry]));
+  for (const relative of scopePaths) {
+    const absolute = safeAbsolute(root, relative);
+    if (!expected.has(relative)) { if (fs.existsSync(absolute)) throw new Error(`Unexpected managed restore asset: ${relative}`); continue; }
+    if (!fs.existsSync(absolute) || !recordMatches(fileRecord(root, relative), expected.get(relative))) throw new Error(`Restore state mismatch: ${relative}`);
+  }
+}
+
+function missingRestoreParents(root, paths) {
+  const missing = new Set();
+  for (const relative of paths) for (let current = path.dirname(safeAbsolute(root, relative)); current !== root && current.startsWith(`${root}${path.sep}`); current = path.dirname(current)) {
+    if (fs.existsSync(current)) break; missing.add(path.relative(root, current).split(path.sep).join("/"));
+  }
+  return [...missing].sort((a, b) => b.split("/").length - a.split("/").length);
+}
+
+function writeRestoreJournal(transaction, journal, phase, onPhase) {
+  journal.phase = phase; atomicWrite(path.join(transaction, "journal.json"), JSON.stringify(journal)); onPhase?.(phase);
+}
+
+function recoverRestoreTransaction(destinationRoot, root) {
+  const transaction = path.join(root, "transaction"); if (!fs.existsSync(transaction)) return false;
+  checkedDirectory(transaction); const journal = JSON.parse(fs.readFileSync(path.join(transaction, "journal.json"), "utf8"));
+  const phases = ["prepared", "staged", "mutating", "originals-moved", "targets-installed", "verifying", "committed"];
+  if (journal.schema !== "flow-assets-restore-transaction/v1" || journal.version !== 1 || journal.operation !== "restore" || !phases.includes(journal.phase) || !Array.isArray(journal.entries)
+    || !Array.isArray(journal.preState) || !Array.isArray(journal.targetState) || !Array.isArray(journal.scopePaths) || !Array.isArray(journal.createdParents)) {
+    throw new Error("Invalid restore transaction journal; evidence preserved.");
+  }
+  if (journal.phase === "committed") verifyRecordedState(destinationRoot, journal.scopePaths, journal.targetState);
+  else if (["mutating", "originals-moved", "targets-installed", "verifying"].includes(journal.phase)) {
+    const pre = new Map(journal.preState.map((entry) => [entry.path, entry]));
+    for (const entry of [...journal.entries].reverse()) {
+      const target = checkedPath(destinationRoot, entry.path), original = checkedPath(transaction, `originals/${entry.path}`);
+      if (entry.hadOriginal && fs.existsSync(original)) {
+        if (fs.existsSync(target)) { const discard = checkedPath(transaction, `discard/${entry.path}`); fs.mkdirSync(path.dirname(discard), { recursive: true }); fs.renameSync(target, discard); }
+        fs.mkdirSync(path.dirname(target), { recursive: true }); fs.renameSync(original, target);
+      } else if (entry.hadOriginal) {
+        if (!fs.existsSync(target) || !recordMatches(fileRecord(destinationRoot, entry.path), pre.get(entry.path))) throw new Error(`Incomplete restore recovery; evidence preserved: ${entry.path}`);
+      } else if (fs.existsSync(target)) fs.rmSync(target);
+    }
+    verifyRecordedState(destinationRoot, journal.scopePaths, journal.preState);
+  } else verifyRecordedState(destinationRoot, journal.scopePaths, journal.preState);
+  if (journal.phase !== "committed") for (const relative of journal.createdParents) {
+    const directory = safeAbsolute(destinationRoot, relative); if (fs.existsSync(directory) && fs.readdirSync(directory).length === 0) fs.rmdirSync(directory);
+  }
+  fs.rmSync(transaction, { recursive: true }); return true;
+}
+
+function recoverRestoreDestination(destinationRoot) {
+  const root = restoreTransactionRoot(destinationRoot);
+  if (!fs.existsSync(root) || (!fs.existsSync(path.join(root, "transaction")) && !fs.existsSync(path.join(root, "apply.lock")))) return false;
+  const lock = acquireRestoreTransaction(destinationRoot);
+  try { return recoverRestoreTransaction(destinationRoot, lock.root); } finally { releaseRestoreTransaction(lock); }
+}
+
+function createRestoreBackup(destinationRoot, backupRoot, manifests, plan) {
+  const root = controlRoot(destinationRoot, backupRoot, manifests, "Restore backup root");
+  const backupId = `restore-${new Date().toISOString().replace(/[:.]/g, "-")}-${plan.planId.slice(0, 12)}`;
+  const partial = path.join(root, `.${backupId}.partial-${process.pid}`), final = path.join(root, backupId); fs.mkdirSync(partial);
+  try {
+    for (const entry of plan.current.files) {
+      const target = checkedPath(partial, `files/${entry.path}`); fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.copyFileSync(safeAbsolute(destinationRoot, entry.path), target); fs.chmodSync(target, entry.executable ? 0o755 : 0o644);
+    }
+    const backup = { $schema: "flow-assets-backup/v1", backupId, planId: plan.planId, targetCommit: plan.target.commit,
+      currentManifestSha256: plan.current.manifestSha256, scopePaths: plan.current.files.map((entry) => entry.path), files: plan.current.files,
+      totals: { count: plan.current.files.length, bytes: plan.current.files.reduce((sum, entry) => sum + entry.bytes, 0) } };
+    atomicWrite(path.join(partial, "backup.json"), `${JSON.stringify(backup, null, 2)}\n`);
+    verifyRecordedState(path.join(partial, "files"), backup.scopePaths, backup.files);
+    fs.renameSync(partial, final); verifyRecordedState(path.join(final, "files"), backup.scopePaths, backup.files);
+    if (JSON.stringify(JSON.parse(fs.readFileSync(path.join(final, "backup.json")))) !== JSON.stringify(backup)) throw new Error("Published restore backup metadata failed verification.");
+    return { backupId, backupPath: final, backup };
+  } catch (error) { fs.rmSync(partial, { recursive: true, force: true }); throw error; }
+}
+
+function assertRestoreExpected(options) {
+  const plan = buildRestorePlan({ requestedRef: options.requestedRef, destinationRoot: options.destinationRoot, repoRoot: options.repoRoot, recover: false });
+  if (plan.target.commit !== options.expectedTargetCommit) throw new Error(`Restore target commit changed: expected ${options.expectedTargetCommit}, current ${plan.target.commit}.`);
+  if (plan.planId !== options.expectedPlanId) throw new Error(`Stale restore plan ID: expected ${options.expectedPlanId}, current ${plan.planId}.`);
+  return plan;
+}
+
+function freezeRestoreTarget(generation, repoRoot) {
+  return new Map(generation.lock.files.map((entry) => {
+    const bytes = historicalBlob(repoRoot, generation.tree.get(entry.path), `asset ${entry.path}`);
+    if (bytes.length !== entry.bytes || sha256(bytes) !== entry.sha256) throw new Error(`Historical blob drifted after lock: ${entry.path}`);
+    return [entry.path, bytes];
+  }));
+}
+
+function verifyRestoreTarget(destinationRoot, ownership, target) {
+  const paths = collectRestoreManagedFiles(destinationRoot, ownership), expected = target.lock.files.map((entry) => entry.path);
+  if (JSON.stringify(paths) !== JSON.stringify(expected)) throw new Error("Final restore ownership does not exactly match target lock.");
+  verifyRecordedState(destinationRoot, expected, target.lock.files); return target.lock;
+}
+
+export function applyRestore(input, extraHooks = {}) {
+  const options = { repoRoot: REPO_ROOT, ...input, ...extraHooks };
+  if (!options.expectedTargetCommit || !options.expectedPlanId) throw new Error("Restore apply requires --expected-target-commit and an expected plan ID.");
+  let plan = assertRestoreExpected(options), transaction = acquireRestoreTransaction(options.destinationRoot), backup, recovered = false;
+  try {
+    recovered = recoverRestoreTransaction(options.destinationRoot, transaction.root); options.afterRecovery?.();
+    plan = assertRestoreExpected(options); options.afterLock?.(); plan = assertRestoreExpected(options);
+    const generation = readHistoricalGeneration(options.requestedRef, options.repoRoot);
+    if (generation.targetCommit !== plan.target.commit || generation.targetTree !== plan.target.tree) throw new Error("Restore target changed after lock.");
+    const frozen = freezeRestoreTarget(generation, options.repoRoot); plan = assertRestoreExpected(options);
+    const currentManifest = validateManifest(JSON.parse(fs.readFileSync(path.join(options.repoRoot, "flow-assets.json"))));
+    const ownership = unionManifest(currentManifest, generation.manifest);
+    const backupRoot = options.backupRoot ? path.resolve(options.backupRoot) : path.join(path.resolve(options.destinationRoot), ".flow-skills", "backups");
+    backup = createRestoreBackup(options.destinationRoot, backupRoot, [currentManifest, generation.manifest], plan); options.afterBackup?.();
+    plan = assertRestoreExpected(options);
+    const directory = path.join(transaction.root, "transaction"), entries = plan.operations.map((entry) => ({ ...entry,
+      hadOriginal: fs.existsSync(safeAbsolute(options.destinationRoot, entry.path)) })); fs.mkdirSync(directory);
+    const journal = { schema: "flow-assets-restore-transaction/v1", version: 1, operation: "restore", planId: plan.planId,
+      targetCommit: plan.target.commit, targetTree: plan.target.tree, entries, preState: plan.current.files, targetState: generation.lock.files,
+      scopePaths: [...new Set([...plan.current.files.map((entry) => entry.path), ...generation.lock.files.map((entry) => entry.path)])].sort(),
+      createdParents: missingRestoreParents(path.resolve(options.destinationRoot), [...plan.add, ...plan.change]) };
+    writeRestoreJournal(directory, journal, "prepared", options.onPhase);
+    for (const relative of [...plan.add, ...plan.change]) {
+      const target = checkedPath(directory, `staged/${relative}`), expected = generation.lock.files.find((entry) => entry.path === relative);
+      fs.mkdirSync(path.dirname(target), { recursive: true }); fs.writeFileSync(target, frozen.get(relative)); fs.chmodSync(target, expected.executable ? 0o755 : 0o644);
+      if (!recordMatches({ ...fileRecord(directory, `staged/${relative}`), path: relative }, expected)) throw new Error(`Staged restore asset failed verification: ${relative}`);
+    }
+    writeRestoreJournal(directory, journal, "staged", options.onPhase); options.afterStaging?.(); plan = assertRestoreExpected(options);
+    writeRestoreJournal(directory, journal, "mutating", options.onPhase);
+    for (const entry of entries.filter((item) => item.hadOriginal)) {
+      const target = checkedPath(options.destinationRoot, entry.path), original = checkedPath(directory, `originals/${entry.path}`);
+      fs.mkdirSync(path.dirname(original), { recursive: true }); fs.renameSync(target, original);
+    }
+    writeRestoreJournal(directory, journal, "originals-moved", options.onPhase); options.afterOriginals?.();
+    for (const relative of [...plan.add, ...plan.change]) {
+      const target = checkedPath(options.destinationRoot, relative), staged = checkedPath(directory, `staged/${relative}`);
+      fs.mkdirSync(path.dirname(target), { recursive: true }); fs.renameSync(staged, target);
+    }
+    writeRestoreJournal(directory, journal, "targets-installed", options.onPhase); options.afterWrites?.(); options.afterDeletes?.();
+    writeRestoreJournal(directory, journal, "verifying", options.onPhase);
+    const verified = (options.verifyFinal || verifyRestoreTarget)(options.destinationRoot, ownership, generation);
+    writeRestoreJournal(directory, journal, "committed", options.onPhase); fs.rmSync(directory, { recursive: true });
+    return { ok: true, verified: true, recovered, backupId: backup.backupId, backupPath: backup.backupPath, planId: plan.planId,
+      targetCommit: plan.target.commit, targetTree: plan.target.tree, counts: plan.counts, totals: verified.totals };
+  } catch (error) {
+    try { recoverRestoreTransaction(options.destinationRoot, transaction.root); } catch (recoveryError) { throw new AggregateError([error, recoveryError], "Restore failed and recovery evidence was preserved."); }
+    throw error;
+  } finally { releaseRestoreTransaction(transaction); }
 }
 
 function atomicWrite(target, bytes) {
@@ -593,14 +792,17 @@ const invoked = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPa
 if (invoked) {
   const args = process.argv.slice(2);
   if (args.includes("--restore")) {
-    if (args.includes("--apply")) throw new Error("Restore apply is unsupported in this work unit.");
-    validateOptions(args, new Set(["--restore", "--dry-run"]), new Set(["--ref", "--destination"]));
+    validateOptions(args, new Set(["--restore", "--dry-run", "--apply"]), new Set([
+      "--ref", "--destination", "--expected-target-commit", "--expected-plan-id", "--backup-root",
+    ]));
     const requestedRef = option(args, "--ref");
     const destination = option(args, "--destination");
-    if (!args.includes("--dry-run") || !requestedRef || !destination) {
-      throw new Error("Usage: node tools/flow-assets.mjs --restore --ref <commit-or-tag> --destination <opencode-dir> --dry-run");
-    }
-    console.log(JSON.stringify(buildRestorePlan({ requestedRef, destinationRoot: path.resolve(destination) }), null, 2));
+    if (!requestedRef || !destination || (args.includes("--dry-run") === args.includes("--apply"))) throw new Error("Restore requires exactly one of --dry-run or --apply.");
+    const destinationRoot = path.resolve(destination);
+    const result = args.includes("--apply") ? applyRestore({ requestedRef, destinationRoot,
+      expectedTargetCommit: option(args, "--expected-target-commit"), expectedPlanId: option(args, "--expected-plan-id"),
+      backupRoot: option(args, "--backup-root") }) : buildRestorePlan({ requestedRef, destinationRoot });
+    console.log(JSON.stringify(result, null, 2));
   } else if (args.includes("--verify")) {
     if (args.length !== 1) throw new Error("--verify does not accept other arguments.");
     const lock = verifyLock();
@@ -611,6 +813,7 @@ if (invoked) {
     const sourceRoot = path.resolve(source);
     if (args.includes("--status")) {
       validateOptions(args, new Set(["--status"]), new Set(["--source"]));
+      recoverRestoreDestination(sourceRoot);
       console.log(JSON.stringify(statusSnapshot(sourceRoot), null, 2));
     } else if (args.includes("--snapshot") && args.includes("--dry-run")) {
       if (args.includes("--apply")) throw new Error("Snapshot preview cannot also apply.");
