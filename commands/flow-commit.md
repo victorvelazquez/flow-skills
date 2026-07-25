@@ -1,5 +1,7 @@
 ---
 description: Git workflow automation — branch protection, intelligent file grouping, Conventional Commits, atomic commits
+agent: flow-git-agent
+subtask: true
 ---
 
 Read the skill file at ~/.config/opencode/skills/flow-commit/SKILL.md FIRST, then follow its workflow exactly.

@@ -17,7 +17,7 @@ A versioned repository of `flow-*` AI skills for [OpenCode](https://opencode.ai)
 
 ## Install
 
-### First time on a new machine
+### Quick path
 
 ```bash
 git clone https://github.com/victorvelazquez/flow-skills.git ~/Developer/Tools/flow-skills
@@ -25,41 +25,32 @@ cd ~/Developer/Tools/flow-skills
 node install.mjs
 ```
 
-Restart OpenCode. All `/flow-*` commands are now available.
+The command is a read-only preview. Confirm that `configuration.ready` is `true`, then run the exact `applyCommand` printed by the preview. Restart OpenCode after apply.
+
+The bootstrap installs only the committed Flow generation at repository `HEAD`. It preserves `opencode.json` byte-for-byte and uses a verified backup plus transactional apply.
 
 ### Update after pulling
 
 ```bash
 cd ~/Developer/Tools/flow-skills
 git pull
-node install.mjs
+node install.mjs # preview the new HEAD, then run its exact applyCommand
 ```
 
 ### Or use the AI skill
 
-After installing, just type `/flow-skills-sync` in OpenCode — it will detect context and offer to publish, update, or install for you.
+After installing, use `/flow-skills-sync` for status, snapshots, and historical restores.
 
-## Publish local changes
-
-```bash
-node install.mjs --export   # copies opencode → repo, shows what changed
-git diff                     # review
-git add <files>              # stage what you want
-git commit -m "feat(...): ..."
-git push
-```
-
-Or use `/flow-skills-sync` in OpenCode for a guided conversational flow.
-
-## Other commands
+## Commands
 
 ```bash
-node install.mjs             # install repo → ~/.config/opencode/
-node install.mjs --export    # export ~/.config/opencode/ → repo
-node install.mjs --dry-run   # preview without changes
-node install.mjs --uninstall # remove all flow-* from opencode
-node install.mjs --help      # show usage
+node install.mjs             # preview HEAD without changes
+node install.mjs --dry-run   # compatibility alias for preview
+node install.mjs --destination <path>
+node install.mjs --help
 ```
+
+`--export`, `--update`, `--uninstall`, and historical `--ref` workflows are intentionally rejected. Use `/flow-skills-sync` for live-to-repository snapshots and historical restores.
 
 ## Requirements
 

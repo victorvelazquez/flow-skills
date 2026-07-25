@@ -23,10 +23,17 @@ import {
   readJsonFile,
 } from "./lib/helpers.mjs";
 import { detectTooling } from "./lib/detect-tooling.mjs";
+import { candidateChanged, getCandidateFingerprint, readPassCache, writePassCache } from "./lib/flow-audit-cache.mjs";
+import { compactAutomatedResults } from "./lib/flow-audit-output.mjs";
+import { terminateProcessTree } from "./lib/process-control.mjs";
+import { buildDotnetFormatExecution } from "./lib/dotnet-format.mjs";
 import process from "process";
 import path from "path";
 import fs from "fs";
 import os from "os";
+import { createHash } from "node:crypto";
+
+const CHECK_TIMEOUT_MS = 10 * 60 * 1000;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -138,7 +145,7 @@ function aggregateResults(results, startTime) {
  * This function is the single source of truth for command resolution.
  * detect() now calls this and emits the result to stdout.
  */
-function buildToolchain() {
+function buildToolchain(candidate = null) {
   const cwd = process.cwd();
   const pkg = readJsonFile("package.json");
   const scripts = (pkg && pkg.scripts) || {};
@@ -148,6 +155,7 @@ function buildToolchain() {
   };
 
   const tooling = detectTooling(cwd);
+  const dotnetTarget = tooling.dotnet?.target || null;
 
   const isMonorepoRoot =
     exists("pnpm-workspace.yaml") ||
@@ -215,6 +223,9 @@ function buildToolchain() {
         ? monoRun("test")
         : scripts["test"] || "npm test";
       break;
+    case "dotnet-test":
+      testCommand = dotnetTarget ? `dotnet test ${dotnetTarget}` : null;
+      break;
   }
 
   // Linter commands
@@ -259,7 +270,10 @@ function buildToolchain() {
   let typeChecker = null;
   let typeCommand = null;
 
-  if (isMonorepoRoot) {
+  if (dotnetTarget) {
+    typeChecker = "dotnet-build";
+    typeCommand = `dotnet build ${dotnetTarget}`;
+  } else if (isMonorepoRoot) {
     typeChecker = "tsc";
     typeCommand =
       scripts["typecheck"] || scripts["type-check"] || monoRun("typecheck");
@@ -289,6 +303,8 @@ function buildToolchain() {
 
   // Formatter commands
   let formatCommand = null;
+  let formatFile = null;
+  let formatArgs = null;
   switch (tooling.formatter) {
     case "prettier":
       formatCommand =
@@ -311,6 +327,16 @@ function buildToolchain() {
     case "npm-format":
       formatCommand = scripts["format:check"] || scripts["check:format"];
       break;
+    case "dotnet-format": {
+      const execution = buildDotnetFormatExecution(
+        dotnetTarget,
+        candidate?.publication ? candidate.publication.changedPaths : null,
+      );
+      formatFile = execution?.file || null;
+      formatArgs = execution?.args || null;
+      formatCommand = execution?.command || null;
+      break;
+    }
   }
 
   // Coverage commands
@@ -366,6 +392,11 @@ function buildToolchain() {
       case "bundler-audit":
         securityCommand = "bundle exec bundler-audit check";
         break;
+      case "dotnet-vulnerable":
+        securityCommand = dotnetTarget
+          ? `dotnet list ${dotnetTarget} package --vulnerable --include-transitive`
+          : null;
+        break;
       default:
         if (tooling.security === "npm-audit") {
           securityCommand = scripts["audit"] || scripts["security"];
@@ -384,7 +415,7 @@ function buildToolchain() {
       ? { name: typeChecker, command: typeCommand }
       : null,
     formatter: tooling.formatter
-      ? { name: tooling.formatter, command: formatCommand }
+      ? { name: tooling.formatter, command: formatCommand, file: formatFile, args: formatArgs }
       : null,
     coverage: tooling.coverage
       ? { name: tooling.coverage, command: coverageCommand }
@@ -394,6 +425,7 @@ function buildToolchain() {
       : null,
     packageManager: tooling.packageManager,
     framework: tooling.framework,
+    dotnet: tooling.dotnet || null,
     monorepo:
       exists("pnpm-workspace.yaml") ||
       exists("turbo.json") ||
@@ -648,6 +680,7 @@ function runTool(flags) {
 
   let command = null;
   let toolName = tool;
+  let execution = null;
 
   if (tool === "lint") {
     command = toolchain.linter?.command || null;
@@ -661,6 +694,9 @@ function runTool(flags) {
   } else if (tool === "format" || tool === "fmt") {
     command = toolchain.formatter?.command || null;
     toolName = toolchain.formatter?.name || "format";
+    execution = toolchain.formatter?.file
+      ? { file: toolchain.formatter.file, args: toolchain.formatter.args || [] }
+      : null;
   } else if (tool === "coverage" || tool === "cov") {
     command = toolchain.coverage?.command || null;
     toolName = toolchain.coverage?.name || "coverage";
@@ -695,7 +731,27 @@ function runTool(flags) {
   let status = "passed";
 
   try {
-    stdout = run(command);
+    if (execution) {
+      const result = spawnSync(execution.file, execution.args, {
+        cwd: process.cwd(),
+        encoding: "utf8",
+        shell: false,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      if (result.error) throw result.error;
+      stdout = String(result.stdout || "").trim();
+      stderr = String(result.stderr || "").trim();
+      exitCode = result.status ?? 1;
+      if (exitCode !== 0) {
+        const error = new Error(stderr || stdout || `${execution.file} exited ${exitCode}`);
+        error.status = exitCode;
+        error.stdout = stdout;
+        error.stderr = stderr;
+        throw error;
+      }
+    } else {
+      stdout = run(command);
+    }
   } catch (err) {
     // Use actual exit code from execSync error (err.status), fallback to 1
     exitCode = typeof err.status === "number" ? err.status : 1;
@@ -849,11 +905,11 @@ function report() {
  * Returns the aggregated report JSON including totalDuration, ranAt, and
  * keyLines per tool result.
  */
-async function executeRunAll(flags) {
+async function executeRunAll(flags, candidate = null) {
   const startTime = Date.now();
 
   // Build toolchain directly — no subprocess overhead
-  const toolchain = buildToolchain();
+  const toolchain = buildToolchain(candidate);
 
   // Build list of tools to run
   const tools = [
@@ -876,6 +932,8 @@ async function executeRunAll(flags) {
       key: "format",
       command: toolchain.formatter?.command || null,
       name: toolchain.formatter?.name || "format",
+      file: toolchain.formatter?.file || null,
+      args: toolchain.formatter?.args || [],
     },
     {
       key: "coverage",
@@ -908,14 +966,27 @@ async function executeRunAll(flags) {
 
       const start = Date.now();
       // Use shell: true for cross-platform command resolution (npx, etc.)
-      const child = spawn(toolDef.command, [], {
-        shell: true,
+      const child = spawn(toolDef.file || toolDef.command, toolDef.file ? toolDef.args : [], {
+        shell: !toolDef.file,
+        detached: process.platform !== "win32",
         cwd: process.cwd(),
         stdio: ["ignore", "pipe", "pipe"],
       });
 
       let stdout = "";
       let stderr = "";
+      let timedOut = false;
+      let settled = false;
+      const settle = (value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        resolve(value);
+      };
+      const timeout = setTimeout(() => {
+        timedOut = true;
+        void terminateProcessTree(child);
+      }, CHECK_TIMEOUT_MS);
       child.stdout.on("data", (d) => (stdout += d.toString()));
       child.stderr.on("data", (d) => (stderr += d.toString()));
 
@@ -923,7 +994,7 @@ async function executeRunAll(flags) {
         const isExecutionFailure =
           err.code === "ENOENT" || err.code === "EACCES";
         const errMsg = `Execution failed: ${err.message}`;
-        resolve({
+        settle({
           tool: toolDef.name,
           command: toolDef.command,
           exitCode: 1,
@@ -937,6 +1008,19 @@ async function executeRunAll(flags) {
 
       child.on("close", (code) => {
         const exitCode = code ?? 1;
+        if (timedOut) {
+          settle({
+            tool: toolDef.name,
+            command: toolDef.command,
+            exitCode: 1,
+            stdout,
+            stderr: [stderr, `Execution timed out after ${CHECK_TIMEOUT_MS / 1000} seconds.`].filter(Boolean).join("\n"),
+            keyLines: extractKeyLines([stdout, stderr].filter(Boolean).join("\n")),
+            duration: Date.now() - start,
+            status: "error",
+          });
+          return;
+        }
         const combinedOutput = [stdout.trim(), stderr.trim()]
           .filter(Boolean)
           .join("\n");
@@ -949,7 +1033,7 @@ async function executeRunAll(flags) {
             combinedOutput.toLowerCase().includes("no such file") ||
             combinedOutput.toLowerCase().includes("enoent"));
 
-        resolve({
+        settle({
           tool: toolDef.name,
           command: toolDef.command,
           exitCode,
@@ -970,8 +1054,12 @@ async function executeRunAll(flags) {
       });
     });
 
-  // Run all in parallel
-  const results = await Promise.all(tools.map(runToolAsync));
+  const results = [];
+  if (toolchain.dotnet?.hasProject) {
+    for (const tool of tools) results.push(await runToolAsync(tool));
+  } else {
+    results.push(...(await Promise.all(tools.map(runToolAsync))));
+  }
 
   // Aggregate using shared function
   const aggregated = aggregateResults(results, startTime);
@@ -1004,6 +1092,96 @@ async function auto(flags) {
   }
 
   process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+}
+
+function fingerprintChecksCandidate(baseRef, candidateRef) {
+  const provisional = getCandidateFingerprint(process.cwd(), { baseRef, candidateRef });
+  const toolchain = buildToolchain(provisional);
+  const checks = ["linter", "typeChecker", "testRunner", "formatter", "coverage", "security"]
+    .map((key) => {
+      const tool = toolchain[key];
+      return [key, tool ? {
+        name: tool.name || null,
+        command: tool.command || null,
+        file: tool.file || null,
+        args: tool.args || null,
+      } : null];
+    });
+  const toolConfigDigest = createHash("sha256")
+    .update(JSON.stringify(checks))
+    .digest("hex");
+  return getCandidateFingerprint(process.cwd(), { baseRef, candidateRef, toolConfigDigest });
+}
+
+async function checksOnly(flags) {
+  const baseRef = flags["base-ref"] !== true ? flags["base-ref"] : null;
+  const candidateRef = flags["candidate-ref"] !== true ? flags["candidate-ref"] : null;
+  let candidate;
+  try {
+    candidate = fingerprintChecksCandidate(baseRef, candidateRef);
+  } catch (err) {
+    process.stdout.write(JSON.stringify({
+      success: false,
+      mode: "checks-only",
+      error: `Could not fingerprint the review candidate: ${err.message}`,
+    }, null, 2) + "\n");
+    process.exitCode = 1;
+    return;
+  }
+
+  const usePassCache = !hasTruthyFlag(flags["no-pass-cache"]);
+  const cached = usePassCache ? readPassCache(candidate) : null;
+  if (cached) {
+    process.stdout.write(JSON.stringify({
+      success: true,
+      mode: "checks-only",
+      candidate,
+      evidence: { source: "local-cache", advisory: true, timestamp: cached.timestamp },
+      automated: {
+        overallStatus: "PASS",
+        summary: "local advisory evidence cache hit",
+        details: cached.checks.map((check) => ({
+          tool: check.tool,
+          command: check.command,
+          status: check.status,
+          exitCode: check.exitCode,
+          stdoutHash: check.stdoutHash,
+          stderrHash: check.stderrHash,
+          keyLines: [],
+        })),
+      },
+    }, null, 2) + "\n");
+    return;
+  }
+
+  const automated = await executeRunAll(flags, candidate);
+  let finalCandidate = null;
+  try {
+    finalCandidate = fingerprintChecksCandidate(baseRef, candidateRef);
+  } catch {
+    finalCandidate = null;
+  }
+  const changedDuringChecks = candidateChanged(candidate, finalCandidate);
+  const success = automated.overallStatus === "PASS" && !changedDuringChecks;
+  const writtenCache = success && usePassCache ? writePassCache(finalCandidate, automated) : null;
+  process.stdout.write(JSON.stringify({
+    success,
+    mode: "checks-only",
+    candidate: finalCandidate || candidate,
+    evidence: {
+      source: "fresh",
+      advisory: usePassCache,
+      authoritative: !usePassCache,
+      written: Boolean(writtenCache),
+    },
+    automated: compactAutomatedResults(automated),
+    ...(changedDuringChecks
+      ? { error: "Candidate changed while checks were running; rerun checks before native review." }
+      : automated.overallStatus === "SKIP"
+        ? { error: "No supported checks were configured; SKIP is not a PASS and cannot authorize native review." }
+        : {}),
+  }, null, 2) + "\n");
+  if (!success) process.exitCode = 1;
 }
 
 // ─── --fix ────────────────────────────────────────────────────────────────────
@@ -1125,7 +1303,9 @@ async function fix(flags) {
 
 const flags = parseArgs();
 
-if (flags["detect"]) {
+if (flags["checks-only"]) {
+  await checksOnly(flags);
+} else if (flags["detect"]) {
   detect();
 } else if (flags["auto"]) {
   await auto(flags);
@@ -1143,6 +1323,7 @@ if (flags["detect"]) {
   process.stderr.write(
     "Usage:\n" +
       "  node flow-audit.mjs --auto [--scope <path>] [--since <ref>] [--dry-run]\n" +
+      "  node flow-audit.mjs --checks-only [--base-ref <ref> --candidate-ref <ref>]\n" +
       "  node flow-audit.mjs --detect\n" +
       "  node flow-audit.mjs --scope [path] [--since <ref>]\n" +
       "  node flow-audit.mjs --run lint|typecheck|test|format|coverage|security\n" +

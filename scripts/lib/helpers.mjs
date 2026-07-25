@@ -4,7 +4,7 @@
  * Node.js ESM, zero external dependencies, cross-platform (Windows + Linux/macOS)
  */
 
-import { execSync } from "child_process";
+import { execSync, spawnSync } from "child_process";
 import process from "process";
 import path from "path";
 import fs from "fs";
@@ -27,7 +27,12 @@ export function run(cmd, opts = {}) {
     }).trimEnd();
   } catch (err) {
     const msg = (err.stderr || err.message || String(err)).trim();
-    throw new Error(msg);
+    const wrapped = new Error(msg);
+    wrapped.status = err.status;
+    wrapped.code = err.code;
+    wrapped.stdout = String(err.stdout || "").trimEnd();
+    wrapped.stderr = String(err.stderr || "").trimEnd();
+    throw wrapped;
   }
 }
 
@@ -64,6 +69,38 @@ export function runWithStdin(cmd, input) {
   } catch (err) {
     return { ok: false, output: (err.stderr || err.message || String(err)).trim() };
   }
+}
+
+/**
+ * Execute a program with an argv array and no shell interpolation.
+ * Use this whenever Git-controlled refs or paths are passed to a process.
+ */
+export function runFileSafe(command, args = [], opts = {}) {
+  const result = spawnSync(command, args.map(String), {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    stdio: [opts.input == null ? "ignore" : "pipe", "pipe", "pipe"],
+    input: opts.input,
+    env: opts.env || process.env,
+    maxBuffer: opts.maxBuffer || 4 * 1024 * 1024,
+    ...opts,
+    shell: false,
+  });
+  const stdout = String(result.stdout || "").trimEnd();
+  const stderr = String(result.stderr || "").trimEnd();
+  const output = [stdout, stderr].filter(Boolean).join("\n");
+  return {
+    ok: !result.error && result.status === 0,
+    status: result.status,
+    stdout,
+    stderr,
+    output: result.error ? [output, result.error.message].filter(Boolean).join("\n") : output,
+    error: result.error || null,
+  };
+}
+
+export function runFileWithStdin(command, args = [], input = "", opts = {}) {
+  return runFileSafe(command, args, { ...opts, input });
 }
 
 // ─── Argument parsing ─────────────────────────────────────────────────────────
@@ -201,6 +238,7 @@ export const PROTECTED_BRANCHES = [
   "master",
   "develop",
   "development",
+  "dev",
   "staging",
   "production",
 ];

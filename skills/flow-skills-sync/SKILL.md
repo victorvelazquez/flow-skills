@@ -1,79 +1,55 @@
 ---
 name: flow-skills-sync
-description: Skill manager for the flow-skills repository — uses the runtime script as the source of truth for local sync/update/install context, export, prune, and dry-run planning. Trigger: /flow-skills-sync command.
+description: "Trigger: /flow-skills-sync. Preview and apply snapshots or confirmation-bound historical restores."
 trigger: /flow-skills-sync command
+license: Apache-2.0
+metadata:
+  author: gentleman-programming
+  version: "1.1"
 ---
 
 # flow-skills-sync
 
-Trigger: user runs `/flow-skills-sync`
+## Activation Contract
 
-## Script Path
+Use for `/flow-skills-sync`, live-to-repository snapshots, synchronization status, or restoring a historical Flow generation.
 
-```bash
-node -e "const os=require('os'),path=require('path');console.log(path.join(os.homedir(),'.config','opencode','scripts','flow-skills.mjs'))"
-```
+## Hard Rules
 
-Store as `$SCRIPT`.
+- Live OpenCode is the snapshot source; `flow-skills` is the versioned mirror and restore authority.
+- Preview before every apply. Apply only after explicit confirmation bound to the preview's immutable target commit and exact `planId`.
+- Never checkout, reset, pull, install, publish with Git, or mutate OpenCode configuration.
+- Forward structured arguments; never parse prose or infer authority IDs.
+- On stale target/plan errors, discard confirmation and preview again.
 
-## Default Behavior
+## Decision Gates
 
-The script is the source of truth. Prefer the runtime flow over manual orchestration.
+| Request | Action |
+| --- | --- |
+| Status | Run `--status`; report `0/0/0` when synchronized. |
+| Snapshot | Preview with `--snapshot --dry-run`; require explicit authorization before its existing apply contract. |
+| `restore <ref>` | Initial call only previews; it NEVER implies apply. |
+| Confirmed restore | Apply the same ref with the preview's exact target commit and `planId`. |
 
-- Happy path: `--auto`
-- Safe preview: `--auto --dry-run`
-- Ask the user only if the script returns a blocker
+## Execution Steps
 
-## Primary Commands
-
-### Automatic execution
-
-```bash
-node "$SCRIPT" --auto
-```
-
-### Safe preview
+1. Run status or snapshot through `node ~/.config/opencode/scripts/flow-skills.mjs` using the existing arguments.
+2. For restore, run only:
 
 ```bash
-node "$SCRIPT" --auto --dry-run
+node ~/.config/opencode/scripts/flow-skills.mjs restore <ref>
 ```
 
-## What the script handles
-
-- context detection (`publish`, `update`, `install`, `synced`)
-- local sync context gathering
-- export detection and export execution
-- prune of deleted skills/scripts/commands during export
-- update flow (`git pull` + `node install.mjs`)
-- dry-run planning without side effects
-
-## What the agent still does
-
-- present the detected mode clearly
-- if mode is `publish`, explain that local sync is done and the correct next step is `/flow-commit` followed by `/flow-pr` inside `Tools/flow-skills`
-- if mode is `install`, explain the manual install path
-- do not use this skill itself for commit/push/PR
-
-## Response Rules
-
-- If `mode` is `synced`, report there is nothing to do
-- If dry-run was used, present it as a preview only
-- If `mode` is `publish` and export succeeded, stop there and tell the user to continue with `/flow-commit` and `/flow-pr` if they want to publish remotely
-- If the script fails, present the blocker/error and ask what action to take
-
-## Fallback / Debug Commands
-
-Use these only for debugging or recovery:
+3. Present the requested ref, immutable target commit/tree, counts, sorted operations, `planId`, persistent backup policy, and any legacy-ref blocker.
+4. Ask for explicit confirmation binding that target commit and `planId`.
+5. After confirmation, run the same ref and exact IDs:
 
 ```bash
-node "$SCRIPT" --context
-node "$SCRIPT" --run-export
-node "$SCRIPT" --update
+node ~/.config/opencode/scripts/flow-skills.mjs restore <ref> --apply --expected-target-commit <sha> --expected-plan-id <planId>
 ```
 
-## Restrictions
+6. If authority is stale, return to preview and request new confirmation. On success, report verification/recovery, persistent backup ID/path, and that an OpenCode restart is mandatory.
 
-- NEVER manually recreate mode detection when `--auto` can do it
-- NEVER run export twice in the same publish flow unless the user explicitly asks
-- NEVER commit, push, or open a PR from this skill
-- NEVER pretend install/update/export ran when the script was executed with `--dry-run`
+## Output Contract
+
+Return mode, ref, target commit/tree, counts/operations, `planId`, confirmation state, blockers, and apply backup/recovery/verification details when present.

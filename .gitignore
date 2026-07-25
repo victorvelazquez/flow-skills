@@ -11,3 +11,6 @@ nul
 
 # flow-build cache (generated at runtime — not for version control)
 .flow-skills/cache/
+
+# Local CodeGraph index
+.codegraph/
