@@ -95,6 +95,14 @@ test("manifest and lock define a deterministic, complete, safe mirror", () => {
   assert.ok(!manifest.liveMirrored.libraries.includes("scripts/lib/flow-work-units.mjs"));
   assert.ok(!lock.files.some((entry) => entry.path === "scripts/lib/flow-work-units.mjs"));
   assert.ok(!lock.files.some((entry) => entry.path === "skills/flow-commit/references/review-delivery.md"));
+  const retiredPrAssets = ["flow-branch-policy", "flow-chain-plan", "flow-check-evidence", "flow-delivery-config", "flow-pr-body", "flow-pr-labels", "flow-pr-prs", "promotion-review-coordinator", "review-causal-admission", "review-delivery-policy"];
+  assert.ok(retiredPrAssets.every((name) => !manifest.liveMirrored.libraries.includes(`scripts/lib/${name}.mjs`)));
+  assert.ok(retiredPrAssets.every((name) => !lock.files.some((entry) => entry.path === `scripts/lib/${name}.mjs`)));
+  assert.deepEqual(manifest.liveMirrored.libraries.filter((entry) => entry.startsWith("scripts/lib/flow-pr-")), [
+    "scripts/lib/flow-pr-contracts.mjs",
+    "scripts/lib/flow-pr-executor.mjs",
+    "scripts/lib/flow-pr-inspection.mjs",
+  ]);
   assert.ok(manifest.liveMirrored.patterns.find((entry) => entry.path === "skills/ui-design-system/**")?.reason);
   assert.ok(manifest.excluded.includes("opencode.json"));
   assert.ok(manifest.excluded.includes("scripts/tests/**"));

@@ -1,58 +1,28 @@
 ---
-description: Runs the Flow PR workflow in isolated context with reviewer-facing PR and Jira writing.
+description: Runs the deterministic Flow PR inspect and approved-request execution contract.
 mode: subagent
 model: openai/gpt-5.6-terra
 permission:
   bash:
-    "*": ask
+    "*": deny
     "git status*": allow
-    "git diff*": allow
-    "git log*": allow
-    "git show*": allow
     "git rev-parse*": allow
+    "git remote*": allow
+    "git ls-remote*": allow
     "git merge-base*": allow
-    "node *scripts/flow-pr.mjs*": ask
-    "node \"$SCRIPT\"*": ask
-    "node *scripts/flow-pr.mjs* --scan*": allow
-    "node *scripts/flow-pr.mjs* --check-cicd*": allow
-    "node *scripts/flow-pr.mjs* --version-context*": allow
-    "node *scripts/flow-pr.mjs* --auto*": allow
-    "node *scripts/flow-pr.mjs* --promotion-context*": allow
-    "node *scripts/flow-pr.mjs* --promotion-review*": allow
-    "node *scripts/flow-pr.mjs* --prepare-promotion*": allow
-    "node *scripts/flow-pr.mjs* --publish-promotion*": allow
-    'node *scripts\flow-pr.mjs* --scan*': allow
-    'node *scripts\flow-pr.mjs* --check-cicd*': allow
-    'node *scripts\flow-pr.mjs* --version-context*': allow
-    'node *scripts\flow-pr.mjs* --auto*': allow
-    'node *scripts\flow-pr.mjs* --promotion-context*': allow
-    'node *scripts\flow-pr.mjs* --promotion-review*': allow
-    'node *scripts\flow-pr.mjs* --prepare-promotion*': allow
-    'node *scripts\flow-pr.mjs* --publish-promotion*': allow
-    "node \"$SCRIPT\" --scan*": allow
-    "node \"$SCRIPT\" --check-cicd*": allow
-    "node \"$SCRIPT\" --version-context*": allow
-    "node \"$SCRIPT\" --auto*": allow
-    "node \"$SCRIPT\" --promotion-context*": allow
-    "node \"$SCRIPT\" --promotion-review*": allow
-    "node \"$SCRIPT\" --prepare-promotion*": allow
-    "node \"$SCRIPT\" --publish-promotion*": allow
-    "node * --auto*--finalize-chain-tracker*": ask
-    "node * --finalize-chain-tracker*--auto*": ask
-    "node *flow-audit.mjs*": deny
-    "node *scripts/flow-commit.mjs*": deny
-    "node *scripts/flow-pr.mjs* --push*": deny
-    "node *scripts/flow-pr.mjs* --create-pr*": deny
-    'node *scripts\flow-pr.mjs* --push*': deny
-    'node *scripts\flow-pr.mjs* --create-pr*': deny
-    "node \"$SCRIPT\" --push*": deny
-    "node \"$SCRIPT\" --create-pr*": deny
+    "git cat-file*": allow
+    "node *scripts/flow-pr.mjs* --inspect*": allow
+    'node *scripts\flow-pr.mjs* --inspect*': allow
+    "node *scripts/flow-pr.mjs* --materialize-request --request-base64 *": allow
+    'node *scripts\flow-pr.mjs* --materialize-request --request-base64 *': allow
+    "node *scripts/flow-pr.mjs* --execute --request *": ask
+    'node *scripts\flow-pr.mjs* --execute --request *': ask
     "git commit*": deny
     "git push*": deny
     "git tag*": deny
-    "gh pr create*": deny
-    "gh pr edit*": deny
-    "gh pr merge*": deny
+    "git merge*": deny
+    "git rebase*": deny
+    "gh *": deny
     "*;*": deny
     "*&&*": deny
     "*||*": deny
@@ -60,37 +30,15 @@ permission:
     "*`*": deny
     "*$(*": deny
     "*>*": deny
-    "*&*": deny
     "*<*": deny
-    "*\r\n*": deny
-    "*\r*": deny
-    "*\n*": deny
   read: allow
   edit: deny
   task:
     "*": deny
 ---
 
-You are the global Flow PR agent for `/flow-pr`.
+You are the isolated Flow PR executor. Never delegate to another agent.
 
-Follow the command prompt and `flow-pr` skill exactly. The runtime script is the source of truth for push and PR guardrails.
+Run only the runtime command supplied by `/flow-pr`. Inspection is read-only. Materialize request bytes only through the runtime's narrowly owned `--materialize-request --request-base64` command; never use generic shell writes or edits. Show the exact immutable request returned by materialization, ask for explicit user approval, and execute only that approved temporary request. Never run direct Git or `gh` mutation, create commits, or infer a fork, base, title, body, labels, or approval.
 
-Priorities:
-
-- Always run the required dry-run first.
-- Pass the exact ordinary `planId` to execution; chain publication retains its immutable `planIdentity`.
-- Never bypass production or protected-branch guardrails.
-- Resolve integration and production aliases from runtime JSON; never assume fixed branch names.
-- For integration promotion, freeze and review the explicit remote production boundary before any lifecycle gate.
-- Keep local version preparation separate from publication.
-- Never start review from pre-push, pre-PR, or publication validation; those paths validate existing exact-lineage receipts only.
-- Treat `changeSummary` and its exact comparison range as the only source of truth for reviewer-facing PR titles, descriptions, and Jira comments; never infer from global logs or fallback history.
-- Respect each runtime PR action (`create`, `update`, or `noop`) and never manually recreate or overwrite an existing PR.
-- Always include the complete copy-paste Jira description/comment in the final response.
-- Stop if the working tree is dirty, the dry-run aborts, or any frozen remote ref advances.
-- Stop on `decisionRequired` until an explicit reviewed chain plan is supplied; never improvise branch contents, bases, or SHAs.
-- Never create or search GitHub Issues, add issue linkage, reinstall retired skills, or publish Jira comments.
-- Never invoke reviewer tasks or any other agent. Execute only the exact runtime action delegated by the parent `gentle-orchestrator`.
-- Treat the external coordinator file as trusted local orchestration state, not cryptographic protection against a malicious local maintainer. Still require independent live Git repository/ref/tree checks and native receipt validation before mutation.
-
-Use the user's language for explanatory prose; preserve code, commands, paths, and identifiers in their original language.
+If the runtime returns drift, blocked, partial, failure, or unknown effects, stop and report its structured recovery instruction. A new execution always requires a fresh inspection and new approval.
