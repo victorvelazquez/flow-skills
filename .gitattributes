@@ -20,3 +20,4 @@ scripts/lib/promotion-review-coordinator.mjs -text
 scripts/lib/review-causal-admission.mjs -text
 scripts/lib/review-delivery-policy.mjs -text
 scripts/lib/scope.mjs -text
+flow-assets.json -text

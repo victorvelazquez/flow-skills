@@ -102,9 +102,14 @@ test("manifest and lock define a deterministic, complete, safe mirror", () => {
   assert.ok(!lock.files.some((entry) => entry.path === ".gitattributes"));
 
   const attributeLines = fs.readFileSync(path.join(root, ".gitattributes"), "utf8").split(/\r?\n/).filter(Boolean);
-  const expectedAttributes = [...manifest.liveMirrored.patterns.map((entry) => entry.path), ...manifest.liveMirrored.libraries]
+  const expectedAttributes = ["flow-assets.json", ...manifest.liveMirrored.patterns.map((entry) => entry.path), ...manifest.liveMirrored.libraries]
     .map((entry) => `${entry} -text`).sort();
   assert.deepEqual([...attributeLines].sort(), expectedAttributes);
+
+  assert.doesNotMatch(manifestBytes.toString("utf8"), /\r/);
+  assert.match(execFileSync("git", ["check-attr", "text", "--", "flow-assets.json"], { cwd: root, encoding: "utf8" }).trim(), /: text: unset$/);
+  const manifestOid = crypto.createHash("sha1").update(`blob ${manifestBytes.length}\0`).update(manifestBytes).digest("hex");
+  assert.equal(execFileSync("git", ["hash-object", "--path=flow-assets.json", "--", "flow-assets.json"], { cwd: root, encoding: "utf8" }).trim(), manifestOid);
 
   for (const entry of lock.files) {
     assert.equal(entry.mode, "100644");
@@ -118,6 +123,23 @@ test("manifest and lock define a deterministic, complete, safe mirror", () => {
     assert.equal(sha256(bytes), entry.sha256);
     assert.equal(bytes.length, entry.bytes);
   }
+});
+
+test("manifest bytes survive the core.autocrlf=true commit boundary", () => {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "flow-assets-autocrlf-"));
+  const manifestBytes = fs.readFileSync(path.join(root, "flow-assets.json"));
+  execFileSync("git", ["init", "-q", "-b", "main"], { cwd: repo });
+  execFileSync("git", ["config", "core.autocrlf", "true"], { cwd: repo });
+  execFileSync("git", ["config", "user.email", "test@example.test"], { cwd: repo });
+  execFileSync("git", ["config", "user.name", "Test"], { cwd: repo });
+  write(repo, ".gitattributes", "flow-assets.json -text\n");
+  write(repo, "flow-assets.json", manifestBytes);
+  execFileSync("git", ["add", ".gitattributes", "flow-assets.json"], { cwd: repo });
+  assert.deepEqual(execFileSync("git", ["show", ":flow-assets.json"], { cwd: repo }), manifestBytes);
+  execFileSync("git", ["commit", "-qm", "fixture"], { cwd: repo });
+  fs.unlinkSync(path.join(repo, "flow-assets.json"));
+  execFileSync("git", ["checkout", "--", "flow-assets.json"], { cwd: repo });
+  assert.deepEqual(fs.readFileSync(path.join(repo, "flow-assets.json")), manifestBytes);
 });
 
 test("targeted reconciliation preserves unrelated dirty-file preimages and lock records", () => {

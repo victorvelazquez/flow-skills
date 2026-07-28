@@ -40,7 +40,7 @@ function fixture() {
 
 function commitGeneration(repo, files, options = {}) {
   const data = options.manifest || manifest(options.libraries);
-  const manifestBytes = Buffer.from(`${JSON.stringify(data, null, 2)}\n`);
+  const manifestBytes = options.manifestBytes || Buffer.from(`${JSON.stringify(data, null, 2)}\n`);
   write(repo, "flow-assets.json", manifestBytes);
   for (const [relative, value] of Object.entries(files)) write(repo, relative, value.bytes, value.mode === "100755" ? 0o755 : 0o644);
   let records = Object.entries(files).map(([relative, value]) => ({ path: relative, sha256: sha256(value.bytes), bytes: value.bytes.length,
@@ -69,6 +69,28 @@ test("byte-preserving attributes create the first restore-capable generation", (
   git(generation.repo, ["add", ".gitattributes"]);
   git(generation.repo, ["add", "--renormalize", "--", "scripts/flow-crlf.mjs"]);
   git(generation.repo, ["commit", "-qm", "preserve asset bytes"]);
+  assert.equal(buildRestorePlan({ requestedRef: "HEAD", destinationRoot: generation.live, repoRoot: generation.repo }).target.totals.count, 1);
+});
+
+test("restore validates canonical manifest bytes across autocrlf normalization", () => {
+  const generation = fixture();
+  const data = manifest();
+  const canonical = Buffer.from(`${JSON.stringify(data, null, 2)}\n`);
+  const crlf = Buffer.from(canonical.toString("utf8").replaceAll("\n", "\r\n"));
+  commitGeneration(generation.repo, { "scripts/flow-binary.mjs": file(Buffer.from([0, 255])) }, { manifest: data, manifestBytes: crlf });
+  assert.deepEqual(execFileSync("git", ["show", "HEAD:flow-assets.json"], { cwd: generation.repo }), canonical);
+  assert.throws(() => buildRestorePlan({ requestedRef: "HEAD", destinationRoot: generation.live, repoRoot: generation.repo }), /manifest digest/i);
+
+  write(generation.repo, ".gitattributes", "flow-assets.json -text\nscripts/flow-*.mjs -text\n");
+  write(generation.repo, "flow-assets.json", canonical);
+  const lockPath = path.join(generation.repo, "flow-assets.lock.json");
+  const lock = JSON.parse(fs.readFileSync(lockPath, "utf8"));
+  lock.manifest.sha256 = sha256(canonical);
+  write(generation.repo, "flow-assets.lock.json", `${JSON.stringify(lock, null, 2)}\n`);
+  git(generation.repo, ["add", "."]);
+  git(generation.repo, ["commit", "-qm", "preserve canonical manifest"]);
+
+  assert.deepEqual(execFileSync("git", ["show", "HEAD:flow-assets.json"], { cwd: generation.repo }), canonical);
   assert.equal(buildRestorePlan({ requestedRef: "HEAD", destinationRoot: generation.live, repoRoot: generation.repo }).target.totals.count, 1);
 });
 
