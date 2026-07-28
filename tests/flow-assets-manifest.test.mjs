@@ -92,6 +92,9 @@ test("manifest and lock define a deterministic, complete, safe mirror", () => {
 
   assert.ok(manifest.liveMirrored.libraries.length > 0);
   assert.ok(manifest.liveMirrored.libraries.every((entry) => entry.startsWith("scripts/lib/") && !entry.includes("*")));
+  assert.ok(!manifest.liveMirrored.libraries.includes("scripts/lib/flow-work-units.mjs"));
+  assert.ok(!lock.files.some((entry) => entry.path === "scripts/lib/flow-work-units.mjs"));
+  assert.ok(!lock.files.some((entry) => entry.path === "skills/flow-commit/references/review-delivery.md"));
   assert.ok(manifest.liveMirrored.patterns.find((entry) => entry.path === "skills/ui-design-system/**")?.reason);
   assert.ok(manifest.excluded.includes("opencode.json"));
   assert.ok(manifest.excluded.includes("scripts/tests/**"));
@@ -114,6 +117,45 @@ test("manifest and lock define a deterministic, complete, safe mirror", () => {
     assert.equal(execFileSync("git", ["hash-object", `--path=${entry.path}`, "--", entry.path], { cwd: root, encoding: "utf8" }).trim(), expectedOid);
     assert.equal(sha256(bytes), entry.sha256);
     assert.equal(bytes.length, entry.bytes);
+  }
+});
+
+test("targeted reconciliation preserves unrelated dirty-file preimages and lock records", () => {
+  const item = fixture();
+  const fixtureManifest = {
+    ...manifestFixture,
+    liveMirrored: {
+      ...manifestFixture.liveMirrored,
+      libraries: ["scripts/lib/flow-target.mjs"],
+    },
+  };
+  const manifestBytes = `${JSON.stringify(fixtureManifest, null, 2)}\n`;
+  fs.writeFileSync(path.join(item.repo, "flow-assets.json"), manifestBytes);
+  const manifest = validateManifest(fixtureManifest);
+  for (const [relative, bytes] of [
+    ["scripts/lib/flow-target.mjs", "before\n"],
+    ["commands/flow-skills-sync.md", "unrelated command dirty bytes\n"],
+    ["skills/flow-skills-sync/SKILL.md", "unrelated skill dirty bytes\n"],
+  ]) {
+    write(item.source, relative, bytes);
+  }
+  let plan = buildPlan(item.source, item.repo, manifest);
+  applySnapshot({ sourceRoot: item.source, repoRoot: item.repo, expectedPlanId: plan.planId, metadata });
+  const unrelatedPaths = ["commands/flow-skills-sync.md", "skills/flow-skills-sync/SKILL.md"];
+  const beforeBytes = new Map(unrelatedPaths.map((relative) => [relative, fs.readFileSync(path.join(item.repo, ...relative.split("/")))]));
+  const beforeRecords = new Map(verifyLock(item.repo).files
+    .filter((entry) => unrelatedPaths.includes(entry.path))
+    .map((entry) => [entry.path, structuredClone(entry)]));
+
+  write(item.source, "scripts/lib/flow-target.mjs", "targeted replacement\n");
+  plan = buildPlan(item.source, item.repo, manifest);
+  assert.deepEqual(plan.operations, [{ action: "change", path: "scripts/lib/flow-target.mjs" }]);
+  applySnapshot({ sourceRoot: item.source, repoRoot: item.repo, expectedPlanId: plan.planId, metadata });
+
+  const afterLock = verifyLock(item.repo);
+  for (const relative of unrelatedPaths) {
+    assert.deepEqual(fs.readFileSync(path.join(item.repo, ...relative.split("/"))), beforeBytes.get(relative));
+    assert.deepEqual(afterLock.files.find((entry) => entry.path === relative), beforeRecords.get(relative));
   }
 });
 

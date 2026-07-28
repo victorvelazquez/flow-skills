@@ -53,6 +53,15 @@ test("wrapper works from arbitrary cwd with environment path overrides", () => {
   ]);
 });
 
+test("raw wrapper remains strict for zero arguments", () => {
+  const fixture = harness();
+  const result = run([], fixture);
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Usage:/);
+  assert.equal(fs.existsSync(fixture.capture), false);
+});
+
 test("wrapper forwards snapshot arguments and metadata byte-for-byte", () => {
   const fixture = harness();
   const args = [
@@ -140,12 +149,43 @@ test("restore rejects missing refs, incomplete authority, preview IDs, and unsup
   }
 });
 
-test("sync skill preserves snapshot and adds confirmation-bound restore without Git publication", () => {
+test("bare slash command uses a non-mutating snapshot comparison before unchanged argument forwarding", () => {
   const skill = fs.readFileSync(path.join(root, "skills", "flow-skills-sync", "SKILL.md"), "utf8");
   const command = fs.readFileSync(path.join(root, "commands", "flow-skills-sync.md"), "utf8");
 
+  const emptyBranch = command.search(/empty or whitespace-only/i);
+  const forwarding = command.indexOf("node ~/.config/opencode/scripts/flow-skills.mjs $ARGUMENTS");
+  assert.ok(emptyBranch >= 0 && emptyBranch < forwarding);
+  assert.match(command, /do not invoke the wrapper without arguments/i);
+  assert.match(command, /first and only initial command.*--snapshot --dry-run/i);
+  assert.match(command, /non-empty[\s\S]*forward it unchanged/i);
+  const guided = skill.slice(skill.indexOf("## Guided No-Argument Workflow"), skill.indexOf("## Decision Gates")); assert.match(guided, /read-only comparison preview[\s\S]*--snapshot --dry-run/i); assert.doesNotMatch(guided, /--status/i); assert.match(guided, /Reuse the already-generated exact snapshot preview and `planId`; do not invoke a second preview/i);
+  assert.match(skill, /add: 0[\s\S]*change: 0[\s\S]*delete: 0[\s\S]*synchronized[\s\S]*stop/i);
+  const fixture = harness(), transaction = path.join(fixture.live, ".flow-skills", "transactions", "transaction"), marker = path.join(transaction, "journal.json"); fs.mkdirSync(transaction, { recursive: true }); fs.writeFileSync(marker, "immutable incomplete transaction bytes"); const before = fs.readFileSync(marker), result = run(["--snapshot", "--dry-run"], fixture, { FLOW_SKILLS_REPO: root }); assert.equal(result.status, 0, result.stderr); assert.deepEqual(fs.readFileSync(marker), before);
+});
+
+test("guided drift asks one three-way direction question and choices launch previews only", () => {
+  const skill = fs.readFileSync(path.join(root, "skills", "flow-skills-sync", "SKILL.md"), "utf8");
+
+  assert.match(skill, /question` tool once to ask for exactly one action choice/i);
+  assert.match(skill, /Snapshot live OpenCode into the repository/);
+  assert.match(skill, /Restore repository HEAD into live OpenCode/);
+  assert.match(skill, /Cancel/);
+  assert.match(skill, /do not infer its direction/i);
+  assert.match(skill, /selected action never authorizes apply/i);
   assert.match(skill, /--snapshot --dry-run/);
-  assert.match(skill, /explicit (?:user )?(?:authorization|confirmation)/i);
+  assert.match(skill, /restore HEAD/);
+  assert.match(skill, /live OpenCode -> Git mirror/);
+  assert.match(skill, /repository `HEAD` -> live OpenCode/);
+  assert.match(skill, /repository freshness is user-controlled/i);
+  assert.match(skill, /Cancel Choice[\s\S]*Run no additional command/i);
+});
+
+test("guided apply remains confirmation-bound to exact preview identities", () => {
+  const skill = fs.readFileSync(path.join(root, "skills", "flow-skills-sync", "SKILL.md"), "utf8");
+
+  assert.match(skill, /explicit confirmation bound to that exact `planId`/i);
+  assert.match(skill, /--snapshot --apply --expected-plan-id <planId>/i);
   assert.match(skill, /--expected-plan-id[= ]+<?planId>?/i);
   assert.match(skill, /exact.*planId/i);
   assert.match(skill, /restore <ref>/);
@@ -154,7 +194,14 @@ test("sync skill preserves snapshot and adds confirmation-bound restore without 
   assert.match(skill, /target.*commit.*planId|planId.*target.*commit/is);
   assert.match(skill, /stale.*preview/i);
   assert.match(skill, /backup.*restart/i);
-  assert.doesNotMatch(skill, /git\s+(?:commit|push)|\/flow-(?:commit|pr)/i);
-  assert.match(command, /\$ARGUMENTS/);
+});
+
+test("guided contract introduces no Git publication, repository update, or config mutation command", () => {
+  const skill = fs.readFileSync(path.join(root, "skills", "flow-skills-sync", "SKILL.md"), "utf8");
+  const command = fs.readFileSync(path.join(root, "commands", "flow-skills-sync.md"), "utf8");
+  const contract = `${skill}\n${command}`;
+
+  assert.doesNotMatch(contract, /git\s+(?:fetch|pull|checkout|reset|commit|push)|\/flow-(?:commit|pr)/i);
+  assert.doesNotMatch(contract, /(?:write|edit|update|modify)\s+`?opencode\.json/i);
   assert.match(command, /Working directory:/);
 });

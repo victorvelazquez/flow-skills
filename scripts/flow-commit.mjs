@@ -1,1508 +1,366 @@
 #!/usr/bin/env node
-/**
- * flow-commit.mjs — Universal git workflow automation
- * Node.js ESM, zero external dependencies, cross-platform (Windows + Linux/macOS)
- *
- * Modes:
- *   --auto                                           Run the full automatic happy-path flow
- *     optional: --branch-name "type/slug"
- *     optional: --message-overrides '{"source:auth":"fix(auth): tighten token validation"}'
- *     optional: --lineage <id>                         Select one native review lineage
- *   --analyze                                        Detect changes → output JSON
- *   --analyze --known-files "f1,f2"                  Same but filter to known files only (safe re-scan)
- *   --commit --files "f1,f2" --message "msg"         Stage + commit files
- *   --summary [--count N] [--known-files "f1,f2"]    Show last N commits + post-commit safety check
- *   --create-branch --name "type/slug"               Create and checkout new branch (auto-retry suffixes)
- */
+import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import process from "node:process";
+import { fileURLToPath } from "node:url";
 
-import { run, runSafe, runFileSafe, parseArgs, PROTECTED_BRANCHES } from "./lib/helpers.mjs";
-import {
-  deliveryPlanId,
-  normalizeRequestedLineage,
-  resolveCommitDeliveryPolicy,
-  validateRealStagedDelivery,
-} from "./lib/review-delivery-policy.mjs";
-import { groupWorkUnits } from "./lib/flow-work-units.mjs";
-import process from "process";
-import path from "path";
-import fs from "fs";
-import os from "os";
-import { fileURLToPath } from "url";
+const PROTECTED_BRANCHES = new Set(["main", "master", "dev", "develop", "development"]);
+const INSPECTION_SCHEMA = "flow-commit/inspection-v1";
+const REQUEST_SCHEMA = "flow-commit/request-v1";
+const RESULT_SCHEMA = "flow-commit/result-v1";
+const TITLE = /^[a-z][a-z0-9-]*\([a-z0-9][a-z0-9._/-]*\): [^\r\n]+$/;
 
-const DEFAULT_MAX_AUTO_ROUNDS = 3;
-const DEFAULT_BRANCH_ATTEMPTS = 5;
-let reviewDeliveryRunner = runFileSafe;
-
-export function configureCommitTestDependencies({ runner = runFileSafe } = {}) {
-  reviewDeliveryRunner = runner;
-}
-const BRANCH_PREFIX_ALIASES = new Map([
-  ["feature", "feat"],
-  ["feat", "feat"],
-  ["bugfix", "fix"],
-  ["bug", "fix"],
-  ["fix", "fix"],
-  ["hotfix", "fix"],
-  ["refactor", "refactor"],
-  ["chore", "chore"],
-  ["docs", "docs"],
-  ["doc", "docs"],
-  ["test", "test"],
-  ["tests", "test"],
-  ["ci", "chore"],
-  ["build", "chore"],
-]);
-const THEME_STOP_WORDS = new Set([
-  "src",
-  "app",
-  "lib",
-  "apps",
-  "packages",
-  "modules",
-  "module",
-  "common",
-  "index",
-  "main",
-  "service",
-  "services",
-  "controller",
-  "controllers",
-  "dto",
-  "dtos",
-  "entity",
-  "entities",
-  "model",
-  "models",
-  "type",
-  "types",
-  "util",
-  "utils",
-  "helper",
-  "helpers",
-  "test",
-  "tests",
-  "spec",
-  "specs",
-  "e2e",
-  "unit",
-  "integration",
-  "internal",
-  "feature",
-  "features",
-  "root",
-  "readme",
-  "create",
-  "update",
-  "delete",
-  "remove",
-  "add",
-  "new",
-  "old",
-  "file",
-  "files",
-]);
-
-function hasTruthyFlag(value) {
-  if (value === true) return true;
-  const normalized = String(value || "").toLowerCase();
-  return normalized === "true" || normalized === "1" || normalized === "yes";
+class FlowError extends Error {
+  constructor(message, status = "blocked") {
+    super(message);
+    this.status = status;
+  }
 }
 
-// ─── Stack detection ──────────────────────────────────────────────────────────
-
-function detectStack() {
-  const cwd = process.cwd();
-
-  const exists = (file) => fs.existsSync(path.join(cwd, file));
-  const glob = (pattern) => {
-    try {
-      const files = fs.readdirSync(cwd);
-      return files.some((f) => {
-        if (pattern.startsWith("*.")) return f.endsWith(pattern.slice(1));
-        return f === pattern || f.startsWith(pattern.replace("*", ""));
-      });
-    } catch {
-      return false;
-    }
+function git(args, options = {}) {
+  const result = spawnSync("git", args, {
+    cwd: options.cwd || process.cwd(),
+    env: options.env || process.env,
+    encoding: "utf8",
+    shell: false,
+  });
+  return {
+    ok: result.status === 0 && !result.error,
+    stdout: result.stdout || "",
+    stderr: result.stderr || result.error?.message || "",
   };
-
-  if (exists("package.json")) return "node";
-  if (
-    exists("requirements.txt") ||
-    exists("pyproject.toml") ||
-    exists("setup.py")
-  )
-    return "python";
-  if (exists("pom.xml") || exists("build.gradle") || exists("build.gradle.kts"))
-    return "java";
-  if (exists("go.mod")) return "go";
-  if (exists("Cargo.toml")) return "rust";
-  if (glob("*.csproj") || glob("*.sln")) return "dotnet";
-  return "generic";
 }
 
-// ─── Feature detection (stack-agnostic) ──────────────────────────────────────
-
-function classifyFeature(filePath) {
-  const normalized = filePath.replace(/\\/g, "/");
-  const parts = normalized.split("/").filter(Boolean);
-  const genericContainers = new Set([
-    "modules",
-    "module",
-    "features",
-    "feature",
-    "packages",
-    "package",
-  ]);
-
-  if (parts.length === 0) return "root";
-
-  const rootDirs = ["src", "app", "lib"];
-  for (let i = 0; i < parts.length - 1; i++) {
-    if (rootDirs.includes(parts[i]) && parts[i + 1]) {
-      if (genericContainers.has(parts[i + 1]) && parts[i + 2]) {
-        return parts[i + 2];
-      }
-      return parts[i + 1];
-    }
-  }
-
-  if (parts.length > 1) {
-    return parts[0];
-  }
-
-  return "root";
+function gitValue(args, label) {
+  const result = git(args);
+  if (!result.ok || !result.stdout.trim()) throw new FlowError(`Could not resolve ${label}: ${result.stderr || result.stdout}`);
+  return result.stdout.trim();
 }
 
-// ─── File type detection (agnostic by extension/pattern) ─────────────────────
-
-function classifyType(filePath) {
-  const normalized = filePath.replace(/\\/g, "/");
-  const basename = path.basename(filePath);
-  const ext = path.extname(filePath).toLowerCase();
-
-  if (
-    /\.(test|spec)\.(tsx?|jsx?|mjs|py|go|rs|java|kt|cs|rb)$/.test(basename) ||
-    /_(test|spec)\.(tsx?|jsx?|mjs|py|go|rs|java|kt|cs|rb)$/.test(basename) ||
-    basename === "test.go" ||
-    normalized.includes("/__tests__/") ||
-    normalized.includes("/test/") ||
-    normalized.includes("/tests/") ||
-    normalized.includes("/spec/") ||
-    normalized.includes("/specs/")
-  ) {
-    return "test";
-  }
-
-  if (
-    (ext === ".md" || ext === ".rst" || ext === ".txt") &&
-    (normalized.split("/").filter(Boolean).length === 1 ||
-      normalized.startsWith("docs/") ||
-      normalized.startsWith("doc/") ||
-      normalized.includes("/docs/") ||
-      normalized.includes("/doc/"))
-  ) {
-    return "doc";
-  }
-
-  const configNames = new Set([
-    "package.json",
-    "package-lock.json",
-    "yarn.lock",
-    "pnpm-lock.yaml",
-    "bun.lock",
-    "vite.config.ts",
-    "vite.config.js",
-    "vite.config.mjs",
-    "tsconfig.json",
-    "tsconfig.app.json",
-    "tsconfig.node.json",
-    "tsconfig.base.json",
-    "eslint.config.js",
-    "eslint.config.ts",
-    "eslint.config.mjs",
-    ".eslintrc",
-    ".eslintrc.js",
-    ".eslintrc.ts",
-    ".eslintrc.json",
-    ".eslintrc.cjs",
-    ".prettierrc",
-    ".prettierrc.js",
-    ".prettierrc.json",
-    ".prettierignore",
-    ".gitignore",
-    ".gitattributes",
-    ".editorconfig",
-    ".env",
-    ".env.example",
-    ".env.local",
-    ".env.test",
-    ".env.production",
-    "Dockerfile",
-    "docker-compose.yml",
-    "docker-compose.yaml",
-    "Makefile",
-    "makefile",
-    "requirements.txt",
-    "pyproject.toml",
-    "setup.py",
-    "setup.cfg",
-    "go.mod",
-    "go.sum",
-    "Cargo.toml",
-    "Cargo.lock",
-    "pom.xml",
-    "build.gradle",
-    "build.gradle.kts",
-    "settings.gradle",
-    "jest.config.js",
-    "jest.config.ts",
-    "jest.config.mjs",
-    "vitest.config.ts",
-    "vitest.config.js",
-    "playwright.config.ts",
-    "playwright.config.js",
-    "tailwind.config.js",
-    "tailwind.config.ts",
-    "postcss.config.js",
-    "postcss.config.ts",
-    "babel.config.js",
-    "babel.config.json",
-    "lint-staged.config.js",
-    "commitlint.config.js",
-    ".husky/pre-commit",
-    ".husky/commit-msg",
-  ]);
-
-  if (configNames.has(basename)) return "config";
-
-  if (ext === ".toml" || ext === ".cfg" || ext === ".ini") {
-    const depth = normalized.split("/").length;
-    if (depth <= 2) return "config";
-  }
-
-  if (
-    basename.startsWith("Dockerfile") ||
-    basename.startsWith("docker-compose") ||
-    basename.endsWith(".sh") ||
-    normalized.startsWith(".husky/") ||
-    normalized.startsWith(".circleci/") ||
-    normalized.startsWith(".gitlab/") ||
-    normalized.startsWith(".github/workflows/") ||
-    normalized.startsWith(".github/actions/")
-  ) {
-    return "config";
-  }
-
-  if (normalized.startsWith(".github/")) {
-    return "doc";
-  }
-
-  if (
-    (ext === ".yml" || ext === ".yaml" || ext === ".json") &&
-    !normalized.includes("/")
-  ) {
-    return "config";
-  }
-
-  return "source";
+function gitCommitMessage(commit) {
+  const result = git(["cat-file", "commit", commit]);
+  if (!result.ok) throw new FlowError(`Could not resolve commit message: ${result.stderr || result.stdout}`);
+  const separator = result.stdout.indexOf("\n\n");
+  if (separator < 0) throw new FlowError("Committed object did not contain a message.");
+  return result.stdout.slice(separator + 2);
 }
 
-function normalizeFilePath(filePath) {
-  return filePath.replace(/\\/g, "/").trim();
+export function parseNullDelimitedPaths(value) {
+  return String(value || "").split("\0").filter(Boolean);
 }
 
-function normalizeLiteralFilePath(filePath) {
-  return filePath;
-}
-
-export function parseNullDelimitedPaths(output) {
-  return output.split("\0").filter((file) => file.length > 0);
-}
-
-export function parsePorcelainStatus(output) {
-  const fields = output.split("\0");
+export function parsePorcelainStatus(value) {
+  const fields = String(value || "").split("\0");
   const records = [];
-
-  for (let index = 0; index < fields.length; index++) {
+  for (let index = 0; index < fields.length; index += 1) {
     const field = fields[index];
     if (!field || field.length < 3 || field[2] !== " ") continue;
     const X = field[0];
     const Y = field[1];
-    const hasOriginalPath = X === "R" || X === "C" || Y === "R" || Y === "C";
-    records.push({
-      X,
-      Y,
-      path: field.slice(3),
-      originalPath: hasOriginalPath ? fields[++index] ?? "" : null,
-    });
+    const renamed = X === "R" || X === "C" || Y === "R" || Y === "C";
+    records.push({ X, Y, path: field.slice(3), originalPath: renamed ? fields[++index] || "" : null });
   }
-
   return records;
 }
 
-function enrichFile(filePath, status) {
-  const normalized = normalizeLiteralFilePath(filePath);
+function mergeState() {
+  const gitDir = gitValue(["rev-parse", "--git-dir"], "Git directory");
+  return ["MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-merge", "rebase-apply"]
+    .some((entry) => fs.existsSync(path.join(gitDir, entry)));
+}
+
+function statusSnapshot() {
+  const result = git(["status", "--porcelain=v1", "-z", "--untracked-files=all"]);
+  if (!result.ok) throw new FlowError(`Could not inspect Git status: ${result.stderr}`);
+  const changes = parsePorcelainStatus(result.stdout).map(({ X, Y, path: file }) => ({
+    path: file,
+    indexStatus: X,
+    worktreeStatus: Y,
+  })).sort((left, right) => left.path.localeCompare(right.path));
+  const stagedPaths = changes.filter((change) => change.indexStatus !== " " && change.indexStatus !== "?")
+    .map((change) => change.path).sort();
+  return { changes, stagedPaths };
+}
+
+function currentState() {
+  const repositoryRoot = gitValue(["rev-parse", "--show-toplevel"], "repository root");
+  const branch = gitValue(["symbolic-ref", "--quiet", "--short", "HEAD"], "current branch");
+  const head = gitValue(["rev-parse", "HEAD^{commit}"], "HEAD");
+  const snapshot = statusSnapshot();
   return {
-    path: normalized,
-    feature: classifyFeature(normalized),
-    type: classifyType(normalized),
-    status,
+    repositoryRoot: path.resolve(repositoryRoot),
+    branch,
+    head,
+    protected: PROTECTED_BRANCHES.has(branch),
+    mergeState: mergeState(),
+    ...snapshot,
   };
 }
 
-function parseKnownFilesArg(value) {
-  if (!value) return null;
-  const files = value
-    .split(",")
-    .map((file) => normalizeFilePath(file))
-    .filter(Boolean);
-  return files.length > 0 ? new Set(files) : null;
-}
-
-function parsePositiveInt(value, fallback) {
-  const parsed = Number.parseInt(String(value ?? ""), 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-function pickPrimaryStatus(statuses) {
-  const priority = ["D", "?", "A", "R", "C", "M"];
-  for (const candidate of priority) {
-    if (statuses.includes(candidate)) return candidate;
-  }
-  return statuses[0] || "M";
-}
-
-function dedupeFiles(files) {
-  const byPath = new Map();
-
-  for (const file of files) {
-    const normalized = normalizeLiteralFilePath(file.path);
-    const existing = byPath.get(normalized);
-    const statuses = file.statuses ? [...file.statuses] : [file.status];
-
-    if (!existing) {
-      byPath.set(normalized, {
-        path: normalized,
-        feature: file.feature,
-        type: file.type,
-        statuses: [...new Set(statuses.filter(Boolean))],
-      });
-      continue;
-    }
-
-    existing.feature = existing.feature || file.feature;
-    existing.type = existing.type || file.type;
-    existing.statuses = [
-      ...new Set([...existing.statuses, ...statuses.filter(Boolean)]),
-    ];
-  }
-
-  return [...byPath.values()]
-    .map((file) => ({
-      ...file,
-      status: pickPrimaryStatus(file.statuses),
-    }))
-    .sort((a, b) => a.path.localeCompare(b.path));
-}
-
-function collectAllFiles(changes) {
-  return dedupeFiles([
-    ...changes.staged,
-    ...changes.unstaged,
-    ...changes.untracked,
-    ...changes.deleted,
-  ]);
-}
-
-function collectKnownPathsFromAnalysis(analysis) {
-  return collectAllFiles(analysis.changes).map((file) => file.path);
-}
-
-function getFeaturesFromFiles(files) {
-  const features = [
-    ...new Set(
-      files
-        .map((file) => file.feature.replace(/^\./, ""))
-        .filter(
-          (feature) =>
-            feature !== "root" && feature !== "config" && feature !== "github",
-        ),
-    ),
-  ];
-
-  const hasGithubFiles = files.some(
-    (file) => file.feature === ".github" || file.feature === "github",
-  );
-
-  if (hasGithubFiles) features.push(".github");
-  return features;
-}
-
-function getAnalysisData(flags = {}) {
-  const stack = detectStack();
-  const currentBranch = run("git branch --show-current");
-  const isProtected = PROTECTED_BRANCHES.includes(currentBranch);
-  const knownFiles =
-    flags["known-files"] instanceof Set
-      ? flags["known-files"]
-      : parseKnownFilesArg(flags["known-files"]);
-
-  const { staged, unstaged, untracked, deleted, skipped } =
-    parseGitStatus(knownFiles);
-  const allFiles = collectAllFiles({ staged, unstaged, untracked, deleted });
-  const features = getFeaturesFromFiles(allFiles);
-
-  return {
-    stack,
-    branch: { current: currentBranch, isProtected },
-    changes: { staged, unstaged, untracked, deleted },
-    summary: {
-      total: allFiles.length,
-      features,
-      hasTests: allFiles.some((file) => file.type === "test"),
-      hasConfig: allFiles.some((file) => file.type === "config"),
-    },
-    scope: {
-      knownFilesActive: knownFiles !== null,
-      knownCount: knownFiles ? knownFiles.size : null,
-      skippedArtifacts: [...new Set(skipped)].sort(),
-    },
-  };
-}
-
-// ─── git status parser (shared) ───────────────────────────────────────────────
-
-function parseGitStatus(knownFiles = null) {
-  const statusResult = runFileSafe("git", [
-    "status", "--porcelain=v1", "-z", "--untracked-files=all",
-  ]);
-  if (!statusResult.ok) throw new Error(`Could not inspect Git status: ${statusResult.output}`);
-  const records = parsePorcelainStatus(statusResult.stdout);
-
-  const staged = [];
-  const unstaged = [];
-  const untracked = [];
-  const deleted = [];
-  const skipped = [];
-
-  for (const { X, Y, path: filePath } of records) {
-    if (!filePath) continue;
-
-    if (knownFiles !== null && !knownFiles.has(filePath)) {
-      skipped.push(filePath);
-      continue;
-    }
-
-    if (X === "?" && Y === "?") {
-      untracked.push(enrichFile(filePath, "?"));
-      continue;
-    }
-
-    if (X !== " " && X !== "?") {
-      if (X === "D") deleted.push(enrichFile(filePath, "D"));
-      else staged.push(enrichFile(filePath, X));
-    }
-
-    if (Y !== " " && Y !== "?") {
-      if (Y === "D") deleted.push(enrichFile(filePath, "D"));
-      else unstaged.push(enrichFile(filePath, Y));
-    }
-  }
-
-  return { staged, unstaged, untracked, deleted, skipped };
-}
-
-// ─── Commit planning helpers ──────────────────────────────────────────────────
-
-function sanitizeScope(value) {
-  const normalized = value.replace(/^\./, "").toLowerCase();
-  const cleaned = normalized
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return cleaned || "root";
-}
-
-function slugify(value) {
-  return (
-    value
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "") || "auto-commit"
-  );
-}
-
-function splitIntoTokens(value) {
-  return String(value || "")
-    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .split(/[^a-zA-Z0-9]+/)
-    .map((token) => token.toLowerCase())
-    .filter(Boolean);
-}
-
-function collectScopeScores(files) {
-  const scores = new Map();
-
-  for (const file of files) {
-    const scope =
-      file.type === "config" ? "config" : sanitizeScope(file.feature || "root");
-    const baseWeight =
-      file.type === "source" ? 4 : file.type === "test" ? 2 : 1;
-    const statusWeight = ["?", "A"].includes(file.status) ? 1 : 0;
-    scores.set(scope, (scores.get(scope) || 0) + baseWeight + statusWeight);
-  }
-
-  return scores;
-}
-
-function getPrimaryScope(files) {
-  const scores = collectScopeScores(files);
-  const orderedScopes = [...scores.entries()].sort(
-    ([leftScope, leftScore], [rightScope, rightScore]) => {
-      if (leftScore !== rightScore) return rightScore - leftScore;
-      if (leftScope === "config") return 1;
-      if (rightScope === "config") return -1;
-      return leftScope.localeCompare(rightScope);
-    },
-  );
-
-  return orderedScopes[0]?.[0] || "root";
-}
-
-function collectThemeTokens(files, preferredScope = null) {
-  const weightedTokens = new Map();
-
-  for (const file of files) {
-    const scope =
-      file.type === "config" ? "config" : sanitizeScope(file.feature);
-    if (
-      preferredScope &&
-      preferredScope !== "root" &&
-      scope !== preferredScope &&
-      file.type !== "config"
-    ) {
-      continue;
-    }
-
-    const normalizedPath = normalizeFilePath(file.path);
-    const pathParts = normalizedPath.split("/").filter(Boolean).slice(-3);
-    const basename = path.basename(file.path, path.extname(file.path));
-    const rawTokens = [...pathParts, basename]
-      .flatMap((part) => splitIntoTokens(part))
-      .filter(
-        (token) =>
-          token.length >= 3 &&
-          !THEME_STOP_WORDS.has(token) &&
-          token !== scope &&
-          token !== preferredScope,
-      );
-
-    const tokenWeight =
-      file.type === "source" ? 3 : file.type === "test" ? 2 : 1;
-
-    for (const token of rawTokens) {
-      weightedTokens.set(token, (weightedTokens.get(token) || 0) + tokenWeight);
-    }
-  }
-
-  return [...weightedTokens.entries()]
-    .sort(([leftToken, leftScore], [rightToken, rightScore]) => {
-      if (leftScore !== rightScore) return rightScore - leftScore;
-      return leftToken.localeCompare(rightToken);
-    })
-    .map(([token]) => token);
-}
-
-function buildSubjectContext(files, scope) {
-  const base =
-    scope === "config" ? "tooling" : scope === "root" ? "repository" : scope;
-  const qualifiers = collectThemeTokens(files, scope).slice(0, 2);
-
-  return {
-    base,
-    qualifiers,
-    tokenSet: new Set(qualifiers),
-  };
-}
-
-function composeSubject(base, qualifiers = [], qualifierLimit = 1) {
-  const parts = [base];
-
-  for (const qualifier of qualifiers) {
-    if (!qualifier || qualifier === base || parts.includes(qualifier)) continue;
-    parts.push(qualifier);
-    if (parts.length - 1 >= qualifierLimit) break;
-  }
-
-  return parts.join(" ");
-}
-
-function sanitizeCommitMessage(
-  value,
-  fallback = "chore(root): update repository workflow",
-) {
-  const normalized = String(value || "")
-    .replace(/\s+/g, " ")
-    .trim();
-  return normalized || fallback;
-}
-
-function sanitizeBranchName(value, files = []) {
-  const raw = String(value || "")
-    .trim()
-    .toLowerCase();
-  if (!raw) return buildBranchName(files);
-
-  const segments = raw
-    .split("/")
-    .map((segment) => slugify(segment))
-    .filter(Boolean);
-
-  if (segments.length === 0) return buildBranchName(files);
-
-  const [prefixCandidate, ...rest] = segments;
-  const normalizedPrefix =
-    BRANCH_PREFIX_ALIASES.get(prefixCandidate) || inferBranchPrefix(files);
-
-  const slugSource =
-    BRANCH_PREFIX_ALIASES.has(prefixCandidate) && rest.length > 0
-      ? rest.join("-")
-      : segments.join("-");
-  const slug = slugify(slugSource);
-
-  return `${normalizedPrefix}/${slug}`;
-}
-
-function parseMessageOverridesArg(value) {
-  if (!value) return new Map();
-
-  let parsed;
+export function inspectRepository() {
   try {
-    parsed = JSON.parse(value);
+    const state = currentState();
+    return { schema: INSPECTION_SCHEMA, status: state.changes.length === 0 ? "noop" : "ready", ...state };
   } catch (error) {
-    throw new Error(`Invalid --message-overrides JSON: ${error.message}`);
+    return { schema: INSPECTION_SCHEMA, status: "blocked", error: error.message, changes: [], stagedPaths: [] };
   }
-
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("Invalid --message-overrides JSON: expected an object map");
-  }
-
-  return new Map(
-    Object.entries(parsed)
-      .filter(
-        ([key, message]) =>
-          typeof key === "string" &&
-          key.trim() &&
-          typeof message === "string" &&
-          message.trim(),
-      )
-      .map(([key, message]) => [key.trim(), sanitizeCommitMessage(message)]),
-  );
 }
 
-function getGroupScope(files) {
-  if (files.every((file) => file.type === "config")) return "config";
-
-  const features = [
-    ...new Set(files.map((file) => sanitizeScope(file.feature))),
-  ];
-  return features[0] || "root";
+function sorted(values) {
+  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }
 
-function inferSourceCommitType(files) {
-  const statuses = new Set(
-    files.flatMap((file) => file.statuses || [file.status]),
-  );
-  const names = files
-    .map((file) => path.basename(file.path).toLowerCase())
-    .join(" ");
-
-  if (/(^|[^a-z])(fix|bug|hotfix|regression|patch)([^a-z]|$)/.test(names)) {
-    return "fix";
+function validatePath(value) {
+  if (typeof value !== "string" || !value || value.includes("\0") || path.isAbsolute(value) || value.includes("\\")) {
+    throw new FlowError("Unit paths must be non-empty repository-relative literal paths.");
   }
-
-  if (statuses.has("D")) return "refactor";
-  if (statuses.has("?") || statuses.has("A")) return "feat";
-  if (statuses.size === 1 && statuses.has("M")) return "fix";
-  return "refactor";
-}
-
-function pickVerb(type, files) {
-  const statuses = new Set(
-    files.flatMap((file) => file.statuses || [file.status]),
-  );
-  if (type === "feat")
-    return statuses.has("?") || statuses.has("A") ? "add" : "update";
-  if (type === "test" || type === "docs") {
-    return statuses.has("?") || statuses.has("A") ? "add" : "update";
+  const normalized = value.split("/");
+  if (normalized.some((part) => !part || part === "." || part === "..")) {
+    throw new FlowError(`Unit path is not a safe repository-relative path: ${value}`);
   }
-  if (type === "fix") return "fix";
-  if (type === "refactor") return "refactor";
-  return "update";
+  return value;
 }
 
-function buildDescription(type, scope, files) {
-  const verb = pickVerb(type, files);
-  const { base, qualifiers, tokenSet } = buildSubjectContext(files, scope);
-  const subject = composeSubject(base, qualifiers, type === "docs" ? 2 : 1);
+function validateBranch(branch) {
+  if (!branch || typeof branch !== "object") throw new FlowError("Request must include a branch action.");
+  if (branch.action === "keep" && Object.keys(branch).every((key) => key === "action")) return branch;
+  if (branch.action !== "create" || typeof branch.name !== "string" || !branch.name.trim()) {
+    throw new FlowError("Branch must be { action: 'keep' } or { action: 'create', name }.");
+  }
+  const checked = git(["check-ref-format", "--branch", branch.name]);
+  if (!checked.ok || checked.stdout.trim() !== branch.name) throw new FlowError(`Invalid branch name: ${branch.name}`);
+  return { action: "create", name: branch.name };
+}
 
-  if (type === "chore") {
-    if (tokenSet.has("env")) return "align env configuration";
-    if (
-      tokenSet.has("eslint") ||
-      tokenSet.has("prettier") ||
-      tokenSet.has("jest")
-    ) {
-      return `align ${subject} tooling`;
+function validateRequest(document, state) {
+  if (!document || document.schema !== REQUEST_SCHEMA) throw new FlowError(`Request schema must be ${REQUEST_SCHEMA}.`);
+  const expected = document.expected;
+  if (!expected || typeof expected !== "object" || !path.isAbsolute(expected.repositoryRoot)) {
+    throw new FlowError("Request expected.repositoryRoot must be an absolute repository path.");
+  }
+  if (path.resolve(expected.repositoryRoot) !== state.repositoryRoot) throw new FlowError("Repository root drifted since inspection.", "drift");
+  if (expected.branch !== state.branch) throw new FlowError("Branch drifted since inspection.", "drift");
+  if (expected.head !== state.head) throw new FlowError("HEAD drifted since inspection.", "drift");
+  if (state.mergeState) throw new FlowError("Merge, rebase, cherry-pick, or revert state blocks execution.");
+  if (state.stagedPaths.length > 0) throw new FlowError(`Index already contains staged paths: ${state.stagedPaths.join(", ")}. Unstage intentionally, inspect again, then retry.`);
+  if (!Array.isArray(document.units) || document.units.length === 0) throw new FlowError("Request must contain one or more ordered units.");
+  const units = document.units.map((unit, index) => {
+    if (!unit || !Array.isArray(unit.paths) || unit.paths.length === 0) throw new FlowError(`Unit ${index + 1} must include paths.`);
+    if (typeof unit.title !== "string" || !TITLE.test(unit.title)) throw new FlowError(`Unit ${index + 1} title must use type(scope): outcome.`);
+    if (unit.body !== undefined && (typeof unit.body !== "string" || !unit.body || unit.body.includes("\0"))) {
+      throw new FlowError(`Unit ${index + 1} body must be a non-empty text value when supplied.`);
     }
-    return subject === "tooling"
-      ? "align repository tooling"
-      : `align ${subject} configuration`;
-  }
-  if (type === "docs") {
-    return `document ${subject}`;
-  }
-  if (type === "test") {
-    return `cover ${subject} scenarios`;
-  }
-  if (type === "feat") {
-    if (tokenSet.has("validation")) return `add ${subject} validation`;
-    return `${verb} ${subject} support`;
-  }
-  if (type === "fix") {
-    if (tokenSet.has("validation")) return `tighten ${subject} validation`;
-    if (tokenSet.has("health")) return `stabilize ${subject} health checks`;
-    if (tokenSet.has("auth") || tokenSet.has("jwt") || tokenSet.has("token")) {
-      return `stabilize ${subject} authentication`;
-    }
-    return `align ${subject} behavior`;
-  }
-  if (tokenSet.has("validation")) return `simplify ${subject} validation flow`;
-  return `refine ${subject} internals`;
+    const paths = unit.paths.map(validatePath);
+    if (new Set(paths).size !== paths.length) throw new FlowError(`Unit ${index + 1} repeats a path.`);
+    return { paths: sorted(paths), title: unit.title, ...(unit.body === undefined ? {} : { body: unit.body }) };
+  });
+  const supplied = units.flatMap((unit) => unit.paths);
+  if (new Set(supplied).size !== supplied.length) throw new FlowError("Unit paths must be disjoint.");
+  const actual = state.changes.map((change) => change.path);
+  const missing = actual.filter((file) => !supplied.includes(file));
+  const extra = supplied.filter((file) => !actual.includes(file));
+  if (missing.length || extra.length) throw new FlowError(`Unit coverage must exactly match inspection changes (missing: ${missing.join(", ") || "none"}; extra: ${extra.join(", ") || "none"}).`);
+  const branch = validateBranch(document.branch);
+  if (state.protected && branch.action !== "create") throw new FlowError(`Protected branch '${state.branch}' requires an explicit create branch action.`);
+  return { units, branch, expected };
 }
 
-function buildCommitGroups(files, options = {}) {
-  const messageOverrides = options.messageOverrides || new Map();
-  const workUnits = groupWorkUnits(dedupeFiles(files));
-  if (workUnits.ambiguities.length > 0) {
-    const details = workUnits.ambiguities
-      .map((item) => `${item.file} -> ${item.candidateGroups.join(" | ")}`)
-      .join("; ");
-    throw new Error(`Automatic work-unit grouping is ambiguous: ${details}. Use explicit staging or reorganize the change; Flow will not guess.`);
-  }
-  const typeOrder = { config: 0, behavior: 1, test: 2, doc: 3 };
-  return workUnits.groups
-    .sort(({ key: leftKey }, { key: rightKey }) => {
-      const [leftType, leftScope] = leftKey.split(":");
-      const [rightType, rightScope] = rightKey.split(":");
-      const leftWeight = typeOrder[leftType] ?? 99;
-      const rightWeight = typeOrder[rightType] ?? 99;
-      if (leftWeight !== rightWeight) return leftWeight - rightWeight;
-      return leftScope.localeCompare(rightScope);
-    })
-    .map(({ key, files: groupFiles }) => {
-      const [bucket] = key.split(":");
-      const scope = getGroupScope(groupFiles);
-      const type =
-        bucket === "config"
-          ? "chore"
-          : bucket === "doc"
-            ? "docs"
-            : bucket === "test"
-              ? "test"
-              : inferSourceCommitType(groupFiles);
-
-      const defaultMessage = `${type}(${scope}): ${buildDescription(type, scope, groupFiles)}`;
-      const message = sanitizeCommitMessage(
-        messageOverrides.get(key),
-        defaultMessage,
-      );
-
-      return {
-        key,
-        type,
-        scope,
-        files: groupFiles,
-        defaultMessage,
-        message,
-      };
-    });
-}
-
-export function buildPhysicalCommitGroups(files, policy, options = {}) {
-  const workUnits = buildCommitGroups(files, options);
-  if (policy.topology !== "single") return { workUnits, groups: workUnits };
-  const messageOverrides = options.messageOverrides || new Map();
-  const primary = workUnits.find((group) => ["feat", "fix", "refactor"].includes(group.type)) || workUnits[0];
-  const defaultMessage = primary?.defaultMessage || "chore(root): deliver reviewed changes";
-  return {
-    workUnits,
-    groups: [{
-      key: "reviewed-delivery",
-      type: primary?.type || "chore",
-      scope: primary?.scope || "root",
-      files: dedupeFiles(files),
-      defaultMessage,
-      message: sanitizeCommitMessage(messageOverrides.get("reviewed-delivery"), defaultMessage),
-      workUnitKeys: workUnits.map((group) => group.key),
-    }],
-  };
-}
-
-function inferBranchPrefix(files) {
-  const sourceGroups = buildCommitGroups(files).filter((group) =>
-    ["feat", "fix", "refactor"].includes(group.type),
-  );
-
-  if (sourceGroups.some((group) => group.type === "feat")) return "feat";
-  if (sourceGroups.some((group) => group.type === "fix")) return "fix";
-  if (sourceGroups.some((group) => group.type === "refactor"))
-    return "refactor";
-  return "chore";
-}
-
-function inferBranchSlug(files) {
-  const primaryScope = getPrimaryScope(files);
-  const themeTokens = collectThemeTokens(files, primaryScope).slice(0, 2);
-  const scopedParts =
-    primaryScope === "root"
-      ? themeTokens
-      : [
-          primaryScope,
-          ...themeTokens.filter((token) => token !== primaryScope),
-        ];
-
-  if (scopedParts.length > 0) {
-    return slugify(scopedParts.join("-"));
-  }
-
-  const basenames = [
-    ...new Set(
-      files
-        .map((file) => path.basename(file.path, path.extname(file.path)))
-        .filter(Boolean),
-    ),
-  ].slice(0, 3);
-
-  return slugify(basenames.join("-") || "auto-commit");
-}
-
-function buildBranchName(files) {
-  return `${inferBranchPrefix(files)}/${inferBranchSlug(files)}`;
-}
-
-function escapeCommitMessage(message) {
-  return message.replace(/"/g, '\\"');
-}
-
-function getStagedFilesForPaths(fileList) {
-  const uniqueFiles = [
-    ...new Set(fileList.map((file) => normalizeLiteralFilePath(file)).filter(Boolean)),
-  ];
-
-  if (uniqueFiles.length === 0) return [];
-
-  const stagedResult = runFileSafe("git", [
-    "diff", "--cached", "--name-only", "-z", "--", ...uniqueFiles,
-  ]);
-  if (!stagedResult.ok) {
-    throw new Error(`git diff --cached failed: ${stagedResult.output}`);
-  }
-
-  return stagedResult.stdout
-    ? parseNullDelimitedPaths(stagedResult.stdout)
-    : [];
-}
-
-function getAllStagedFiles() {
-  const result = runFileSafe("git", ["diff", "--cached", "--name-only", "-z", "HEAD", "--"]);
-  if (!result.ok) throw new Error(`Could not inspect staged paths: ${result.output}`);
-  return parseNullDelimitedPaths(result.stdout).sort();
-}
-
-function captureIndexSnapshot() {
-  const indexResult = runFileSafe("git", ["rev-parse", "--path-format=absolute", "--git-path", "index"]);
-  if (!indexResult.ok) throw new Error(`Could not resolve Git index: ${indexResult.output}`);
-  const indexPath = indexResult.stdout;
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "flow-git-index-"));
+function indexSnapshot() {
+  const indexPath = gitValue(["rev-parse", "--path-format=absolute", "--git-path", "index"], "Git index");
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "flow-commit-index-"));
   const backupPath = path.join(tempDir, "index");
   const existed = fs.existsSync(indexPath);
   if (existed) fs.copyFileSync(indexPath, backupPath);
   return { indexPath, backupPath, tempDir, existed };
 }
 
-function restoreIndexSnapshot(snapshot) {
+function restoreIndex(snapshot) {
   if (snapshot.existed) fs.copyFileSync(snapshot.backupPath, snapshot.indexPath);
   else fs.rmSync(snapshot.indexPath, { force: true });
 }
 
-function withIndexRollback(action) {
-  const snapshot = captureIndexSnapshot();
-  try {
-    return action();
-  } catch (error) {
-    try {
-      restoreIndexSnapshot(snapshot);
-    } catch (restoreError) {
-      throw new Error(`${error.message} Index rollback failed: ${restoreError.message}`);
-    }
-    throw error;
-  } finally {
-    fs.rmSync(snapshot.tempDir, { recursive: true, force: true });
+function disposeIndex(snapshot) {
+  fs.rmSync(snapshot.tempDir, { recursive: true, force: true });
+}
+
+function stagedPaths() {
+  const result = git(["diff", "--cached", "--name-only", "-z", "HEAD", "--"]);
+  if (!result.ok) throw new FlowError(`Could not inspect staged paths: ${result.stderr}`);
+  return sorted(parseNullDelimitedPaths(result.stdout));
+}
+
+function assertEqualPaths(actual, expected, description) {
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new FlowError(`${description} (expected: ${expected.join(", ") || "none"}; actual: ${actual.join(", ") || "none"}).`, "drift");
+}
+
+function rollbackHead(oldHead, createdHead) {
+  if (gitValue(["rev-parse", "HEAD^{commit}"], "current HEAD") !== createdHead) {
+    throw new FlowError("Post-commit verification found a concurrent HEAD change; runtime-created commit was not rolled back.", "drift");
+  }
+  const result = git(["update-ref", "HEAD", oldHead, createdHead]);
+  if (!result.ok) throw new FlowError(`Post-commit verification failed and HEAD CAS rollback was not applied: ${result.stderr}`, "drift");
+}
+
+function verifyCommit(oldHead, createdHead, stagedTree, unit) {
+  const parent = gitValue(["rev-parse", `${createdHead}^`], "commit parent");
+  const tree = gitValue(["rev-parse", `${createdHead}^{tree}`], "commit tree");
+  const result = git(["diff-tree", "--no-commit-id", "--name-only", "-r", "-z", oldHead, createdHead]);
+  if (!result.ok) throw new FlowError(`Could not inspect committed paths: ${result.stderr}`);
+  const message = gitCommitMessage(createdHead);
+  const requestedMessage = unit.body === undefined ? unit.title : `${unit.title}\n\n${unit.body}`;
+  const expectedMessage = requestedMessage.endsWith("\n") ? requestedMessage : `${requestedMessage}\n`;
+  if (parent !== oldHead || tree !== stagedTree || JSON.stringify(sorted(parseNullDelimitedPaths(result.stdout))) !== JSON.stringify(unit.paths) || message !== expectedMessage) {
+    throw new FlowError("Post-commit verification found unexpected parent, tree, paths, or message.", "drift");
   }
 }
 
-function assertSingleDeliveryScope(analysis, targetPaths) {
-  const staged = new Set(analysis.changes.staged.map((file) => file.path));
-  const unstaged = new Set(analysis.changes.unstaged.map((file) => file.path));
-  const partial = [...staged].filter((file) => unstaged.has(file));
-  if (partial.length > 0) {
-    throw new Error(`Single reviewed delivery cannot proceed with partially staged paths: ${partial.join(", ")}`);
-  }
-  const expected = [...new Set(targetPaths)].sort();
-  const existing = getAllStagedFiles();
-  const extra = existing.filter((file) => !expected.includes(file));
-  if (extra.length > 0) {
-    throw new Error(`Staged paths outside the reviewed target: ${extra.join(", ")}`);
-  }
-}
-
-function stageExactPaths(fileList) {
-  const expected = [...new Set(fileList.map(normalizeLiteralFilePath).filter(Boolean))].sort();
-  const result = runFileSafe("git", ["add", "--all", "--", ...expected]);
-  if (!result.ok) throw new Error(`git add failed: ${result.output}`);
-  const actual = getAllStagedFiles();
-  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
-    throw new Error(`Staged snapshot does not exactly match the reviewed target (expected: ${expected.join(", ")}; actual: ${actual.join(", ")}).`);
-  }
-  return result.output;
-}
-
-function executeReviewedDelivery(group, policy) {
-  const files = group.files.map((file) => file.path);
-  const baseResult = runFileSafe("git", ["rev-parse", "HEAD^{commit}"]);
-  if (!baseResult.ok) throw new Error(`Could not resolve delivery base: ${baseResult.output}`);
-  const baseCommit = baseResult.stdout;
-  return withIndexRollback(() => {
-    const addOutput = stageExactPaths(files);
-    validateRealStagedDelivery(policy, { runner: reviewDeliveryRunner });
-    const stagedTree = run("git write-tree");
-    if (stagedTree !== policy.authority.candidateTree) {
-      throw new Error("Staged reviewed-delivery tree differs from the frozen authority.");
-    }
-    const commitResult = runFileSafe("git", ["commit", "-m", group.message]);
-    if (!commitResult.ok) throw new Error(`git commit failed: ${commitResult.output}`);
-    const createdResult = runFileSafe("git", ["rev-parse", "HEAD^{commit}"]);
-    if (!createdResult.ok) throw new Error(`Could not resolve reviewed commit: ${createdResult.output}`);
-    const createdCommit = createdResult.stdout;
-    try {
-      const treeResult = runFileSafe("git", ["rev-parse", "HEAD^{tree}"]);
-      const countResult = runFileSafe("git", ["rev-list", "--count", `${baseCommit}..HEAD`]);
-      if (!treeResult.ok || !countResult.ok) throw new Error(`Could not verify reviewed delivery: ${treeResult.output || countResult.output}`);
-      const commitCount = Number.parseInt(countResult.stdout, 10);
-      if (treeResult.stdout !== policy.authority.candidateTree || commitCount !== 1) {
-        throw new Error("Reviewed delivery verification failed: expected one commit with the frozen candidate tree.");
-      }
-    } catch (error) {
-      const rollback = runFileSafe("git", ["update-ref", "HEAD", baseCommit, createdCommit]);
-      if (!rollback.ok) {
-        throw new Error(`${error.message} HEAD rollback failed closed: ${rollback.output}`);
-      }
-      throw error;
-    }
-    return { addOutput, commitOutput: commitResult.output, stagedFiles: files, skipped: false };
-  });
-}
-
-// ─── Core actions ──────────────────────────────────────────────────────────────
-
-function analyze(flags = {}) {
-  process.stdout.write(JSON.stringify(getAnalysisData(flags), null, 2) + "\n");
-}
-
-function executeCommit(fileList, message) {
-  const uniqueFiles = [
-    ...new Set(fileList.map((file) => normalizeLiteralFilePath(file)).filter(Boolean)),
-  ];
-
-  if (uniqueFiles.length === 0) {
-    throw new Error("--files is empty");
-  }
-
-  return withIndexRollback(() => {
-    const alreadyStaged = getAllStagedFiles();
-    const outsideGroup = alreadyStaged.filter((file) => !uniqueFiles.includes(file));
-    if (outsideGroup.length > 0) {
-      throw new Error(`Git index already contains staged paths outside this group: ${outsideGroup.join(", ")}`);
-    }
-    const filesToAdd = uniqueFiles.filter((file) => !alreadyStaged.includes(file));
-    const addResult = filesToAdd.length > 0
-      ? runFileSafe("git", ["add", "--all", "--", ...filesToAdd])
-      : { ok: true, output: "" };
-    if (!addResult.ok) throw new Error(`git add failed: ${addResult.output}`);
-
-    const stagedFiles = getStagedFilesForPaths(uniqueFiles);
-    if (stagedFiles.length === 0) {
-      return {
-        addOutput: addResult.output,
-        commitOutput: "",
-        stagedFiles,
-        skipped: true,
-        reason: "No effective staged changes remained for this group after git add.",
-      };
-    }
-
-    const commitResult = runFileSafe("git", ["commit", "-m", message]);
-    if (!commitResult.ok) throw new Error(`git commit failed: ${commitResult.output}`);
-
-    return {
-      addOutput: addResult.output,
-      commitOutput: commitResult.output,
-      stagedFiles,
-      skipped: false,
-    };
-  });
-}
-
-function commit(flags) {
-  const files = flags["files"];
-  const message = flags["message"];
-
-  if (!files || !message) {
-    process.stderr.write(
-      'Error: --commit requires --files "file1,file2" and --message "msg"\n',
-    );
-    process.exit(1);
-  }
-
-  try {
-    const result = executeCommit(files.split(","), message);
-    if (result.addOutput) process.stdout.write(result.addOutput + "\n");
-    if (result.skipped) {
-      process.stdout.write(`SKIPPED: ${result.reason}\n`);
-      return;
-    }
-    if (result.commitOutput) process.stdout.write(result.commitOutput + "\n");
-  } catch (error) {
-    process.stderr.write(`${error.message}\n`);
-    process.exit(1);
-  }
-}
-
-function getLeftoverData(knownFiles) {
-  const { staged, unstaged, untracked, deleted, skipped } =
-    parseGitStatus(knownFiles);
+function resultDocument({
+  success,
+  status,
+  state = {},
+  completedUnits = [],
+  failedUnit = null,
+  remainingUnits = [],
+  leftovers = [],
+  recovery = null,
+  nextAction,
+  error,
+}) {
   return {
-    known: collectAllFiles({ staged, unstaged, untracked, deleted }).map(
-      (file) => file.path,
-    ),
-    artifacts: [...new Set(skipped)].sort(),
+    schema: RESULT_SCHEMA,
+    success,
+    status,
+    repository: state.repositoryRoot ?? null,
+    branch: state.branch ?? null,
+    completedUnits,
+    failedUnit,
+    remainingUnits,
+    leftovers,
+    recovery,
+    nextAction,
+    ...(error === undefined ? {} : { error }),
   };
 }
 
-function getRecentCommitLines(count) {
-  const safeCount = Math.max(count, 1);
-  try {
-    const log = run(`git log --oneline -${safeCount}`);
-    return log.split("\n").filter(Boolean);
-  } catch {
-    return [];
-  }
+function safeCurrentState() {
+  try { return currentState(); } catch { return {}; }
 }
 
-function printSummary(count, knownFiles) {
-  const safeCount = Math.max(count, 1);
+export function executeRequest(document) {
+  let state;
+  const completedUnits = [];
+  let units = [];
   try {
-    const log = run(`git log --oneline -${safeCount}`);
-    process.stdout.write(log + "\n");
-  } catch (error) {
-    throw new Error(`git log failed: ${error.message}`);
-  }
-
-  const leftover = getLeftoverData(knownFiles);
-
-  if (leftover.known.length === 0 && leftover.artifacts.length === 0) {
-    process.stdout.write("\nWorking tree is clean - all changes committed.\n");
-    process.stdout.write(
-      "\n__LEFTOVER__:" + JSON.stringify({ known: [], artifacts: [] }) + "\n",
-    );
-    return leftover;
-  }
-
-  if (leftover.known.length > 0) {
-    process.stdout.write(
-      "\nWARNING: " +
-        leftover.known.length +
-        " known file(s) still uncommitted — next automatic round would include:\n",
-    );
-    leftover.known.forEach((file) =>
-      process.stdout.write("   - " + file + "\n"),
-    );
-  }
-
-  if (leftover.artifacts.length > 0) {
-    process.stdout.write(
-      "\nSKIPPED: " +
-        leftover.artifacts.length +
-        " file(s) detected but NOT in original scope (artifact guard — skipped):\n",
-    );
-    leftover.artifacts.forEach((file) =>
-      process.stdout.write("   - " + file + "\n"),
-    );
-  }
-
-  process.stdout.write("\n__LEFTOVER__:" + JSON.stringify(leftover) + "\n");
-  return leftover;
-}
-
-function summary(flags) {
-  const count = parsePositiveInt(flags["count"], 5);
-  const knownFiles = parseKnownFilesArg(flags["known-files"]);
-
-  try {
-    printSummary(count, knownFiles);
-  } catch (error) {
-    process.stderr.write(`${error.message}\n`);
-    process.exit(1);
-  }
-}
-
-function createUniqueBranch(name, maxAttempts = DEFAULT_BRANCH_ATTEMPTS) {
-  const baseName = name.trim();
-  const errors = [];
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const candidate = attempt === 1 ? baseName : `${baseName}-${attempt}`;
-    const result = runSafe(
-      `git checkout -b "${escapeCommitMessage(candidate)}"`,
-    );
-
-    if (result.ok) {
-      return {
-        name: candidate,
-        output: result.output || `Switched to a new branch '${candidate}'`,
-      };
+    state = currentState();
+    const request = validateRequest(document, state);
+    units = request.units;
+    if (request.branch.action === "create") {
+      const created = git(["switch", "-c", request.branch.name]);
+      if (!created.ok) throw new FlowError(`Requested branch '${request.branch.name}' already exists or could not be created: ${created.stderr}`);
+      state = currentState();
+      if (state.head !== request.expected.head) throw new FlowError("HEAD drifted while creating the requested branch.", "drift");
+      if (state.branch !== request.branch.name) throw new FlowError("Requested branch was not active after creation.", "drift");
     }
-
-    errors.push(`${candidate}: ${result.output}`);
-  }
-
-  throw new Error(
-    `git checkout -b failed after ${maxAttempts} attempt(s): ${errors.join(" | ")}`,
-  );
-}
-
-function createBranch(flags) {
-  const name = flags["name"];
-  if (!name) {
-    process.stderr.write(
-      'Error: --create-branch requires --name "type/slug"\n',
-    );
-    process.exit(1);
-  }
-
-  try {
-    const result = createUniqueBranch(
-      name,
-      parsePositiveInt(flags["max-attempts"], DEFAULT_BRANCH_ATTEMPTS),
-    );
-    process.stdout.write(result.output + "\n");
-  } catch (error) {
-    process.stderr.write(`${error.message}\n`);
-    process.exit(1);
-  }
-}
-
-export function autoCommitWorkflow(flags) {
-  const maxRounds = parsePositiveInt(
-    flags["max-rounds"],
-    DEFAULT_MAX_AUTO_ROUNDS,
-  );
-  const branchAttempts = parsePositiveInt(
-    flags["branch-attempts"],
-    DEFAULT_BRANCH_ATTEMPTS,
-  );
-  const dryRun = hasTruthyFlag(flags["dry-run"]);
-  const requestedLineage = normalizeRequestedLineage(flags["lineage"]);
-  const branchNameOverride = flags["branch-name"];
-  const messageOverrides = parseMessageOverridesArg(flags["message-overrides"]);
-  const log = (message) => process.stderr.write(message);
-
-  let analysis = getAnalysisData();
-  let inScopeFiles = collectKnownPathsFromAnalysis(analysis);
-
-  if (inScopeFiles.length === 0) {
-    process.stdout.write(
-      JSON.stringify(
-        {
-          success: true,
-          mode: "auto",
-          dryRun,
-          currentBranch: analysis.branch.current,
-          protectedBranchDetected: analysis.branch.isProtected,
-          plannedBranch: null,
-          commitCount: 0,
-          plannedCommitGroups: [],
-          leftovers: { known: [], artifacts: [] },
-          nextAction: "noop",
-        },
-        null,
-        2,
-      ) + "\n",
-    );
-    return;
-  }
-
-  const deliveryPolicy = resolveCommitDeliveryPolicy({
-    targetPaths: inScopeFiles,
-    lineage: requestedLineage,
-    runner: reviewDeliveryRunner,
-  });
-  if (deliveryPolicy.topology === "single") assertSingleDeliveryScope(analysis, inScopeFiles);
-  const initialPlanning = buildPhysicalCommitGroups(collectAllFiles(analysis.changes), deliveryPolicy, { messageOverrides });
-  const planId = deliveryPlanId(deliveryPolicy, {
-    targetPaths: [...inScopeFiles].sort(),
-    physicalGroups: initialPlanning.groups.map((group) => ({ key: group.key, files: group.files.map((file) => file.path).sort() })),
-    requestedLineage: requestedLineage || null,
-  });
-  if (!dryRun && flags["expected-plan-id"] !== planId) {
-    throw new Error("Commit plan identity is missing or drifted; rerun --auto --dry-run and pass its planId with --expected-plan-id.");
-  }
-
-  let plannedBranch = null;
-  if (analysis.branch.isProtected) {
-    const initialFiles = collectAllFiles(analysis.changes);
-    const branchName = sanitizeBranchName(branchNameOverride, initialFiles);
-    plannedBranch = branchName;
-
-    log(
-      `Protected branch detected (${analysis.branch.current}). ${dryRun ? "Planning" : "Creating"} a working branch automatically...\n`,
-    );
-
-    if (dryRun) {
-      log(`DRY RUN: branch creation skipped (planned branch: ${branchName})\n`);
-    } else {
-      const branchResult = createUniqueBranch(branchName, branchAttempts);
-      plannedBranch = branchResult.name;
-      log(branchResult.output + "\n");
-
-      analysis = getAnalysisData();
-      inScopeFiles = collectKnownPathsFromAnalysis(analysis);
-
-      if (inScopeFiles.length === 0) {
-        process.stdout.write(
-          JSON.stringify(
-            {
-              success: true,
-              mode: "auto",
-              dryRun,
-              currentBranch: plannedBranch,
-              protectedBranchDetected: true,
-              plannedBranch,
-              commitCount: 0,
-              plannedCommitGroups: [],
-              leftovers: { known: [], artifacts: [] },
-              nextAction: "noop",
-            },
-            null,
-            2,
-          ) + "\n",
-        );
-        return;
+    let activeHead = state.head;
+    const activeBranch = state.branch;
+    for (let index = 0; index < units.length; index += 1) {
+      const unit = units[index];
+      state = currentState();
+      const remaining = sorted(units.slice(index).flatMap((candidate) => candidate.paths));
+      if (state.branch !== activeBranch || state.head !== activeHead || state.mergeState || state.stagedPaths.length > 0) throw new FlowError("Repository state drifted before the next unit.", "drift");
+      assertEqualPaths(state.changes.map((change) => change.path), remaining, "Worktree paths drifted before the next unit");
+      const snapshot = indexSnapshot();
+      let createdHead = null;
+      let runtimeCreatedHead = false;
+      let retainedCompletedUnit = false;
+      try {
+        const added = git(["add", "--all", "--", ...unit.paths]);
+        if (!added.ok) throw new FlowError(`Could not stage unit paths: ${added.stderr}`);
+        assertEqualPaths(stagedPaths(), unit.paths, "Staged paths differ from the requested unit");
+        const stagedState = currentState();
+        if (stagedState.branch !== activeBranch || stagedState.head !== activeHead || stagedState.mergeState) throw new FlowError("Repository state drifted before commit hooks.", "drift");
+        const stagedTree = gitValue(["write-tree"], "staged tree");
+        const committed = git(["commit", "--cleanup=verbatim", "-m", unit.title, ...(unit.body === undefined ? [] : ["-m", unit.body])]);
+        createdHead = gitValue(["rev-parse", `refs/heads/${activeBranch}`], "created commit");
+        if (!committed.ok) throw new FlowError(`Git commit failed: ${committed.stderr}`);
+        runtimeCreatedHead = gitValue(["rev-parse", `${createdHead}^`], "created commit parent") === activeHead;
+        if (!runtimeCreatedHead) throw new FlowError("Post-commit hook or external process moved HEAD; concurrent HEAD was preserved.", "drift");
+        try {
+          verifyCommit(activeHead, createdHead, stagedTree, unit);
+          const after = currentState();
+          if (after.branch !== activeBranch) {
+            completedUnits.push({ oid: createdHead, paths: unit.paths, title: unit.title, ...(unit.body === undefined ? {} : { body: unit.body }) });
+            retainedCompletedUnit = true;
+            throw new FlowError("Active symbolic branch drifted after commit hooks; completed work was preserved.", "drift");
+          }
+          if (after.head !== createdHead) throw new FlowError("HEAD drifted after commit hooks.", "drift");
+          assertEqualPaths(stagedPaths(), [], "Index was not empty after commit");
+          assertEqualPaths(after.changes.map((change) => change.path), remaining.filter((file) => !unit.paths.includes(file)), "Worktree paths drifted after commit");
+        } catch (error) {
+          if (!retainedCompletedUnit) rollbackHead(activeHead, createdHead);
+          throw error;
+        }
+        completedUnits.push({ oid: createdHead, paths: unit.paths, title: unit.title, ...(unit.body === undefined ? {} : { body: unit.body }) });
+        retainedCompletedUnit = true;
+        activeHead = createdHead;
+      } catch (error) {
+        if (!retainedCompletedUnit && runtimeCreatedHead && createdHead && gitValue(["rev-parse", "HEAD^{commit}"], "current HEAD") === createdHead) rollbackHead(activeHead, createdHead);
+        restoreIndex(snapshot);
+        throw error;
+      } finally {
+        disposeIndex(snapshot);
       }
     }
-  }
-
-  const originalKnownFiles = new Set(inScopeFiles);
-  let pendingKnownFiles = [...originalKnownFiles];
-  let previousSignature = "";
-  let commitCount = 0;
-  const plannedCommitGroups = [];
-  const skippedCommitGroups = [];
-
-  for (let round = 1; round <= maxRounds; round++) {
-    const roundKnownSet = new Set(pendingKnownFiles);
-    const roundAnalysis = getAnalysisData({ "known-files": roundKnownSet });
-    const roundFiles = collectAllFiles(roundAnalysis.changes);
-
-    if (roundFiles.length === 0) {
-      break;
-    }
-
-    const planning = buildPhysicalCommitGroups(roundFiles, deliveryPolicy, { messageOverrides });
-    const groups = planning.groups;
-    if (groups.length === 0) {
-      throw new Error(
-        "Automatic commit flow could not determine commit groups.",
-      );
-    }
-
-    log(`\nAuto commit round ${round}/${maxRounds}\n`);
-
-    for (const group of groups) {
-      plannedCommitGroups.push({
-        round,
-        key: group.key,
-        type: group.type,
-        scope: group.scope,
-        defaultMessage: group.defaultMessage,
-        message: group.message,
-        files: group.files.map((file) => file.path),
-      });
-      log(`\n- ${group.message}\n`);
-      group.files.forEach((file) => log(`   - ${file.path}\n`));
-
-      if (dryRun) {
-        log("DRY RUN: git add/git commit skipped\n");
-        continue;
-      }
-
-      const result = deliveryPolicy.topology === "single"
-        ? executeReviewedDelivery(group, deliveryPolicy)
-        : executeCommit(group.files.map((file) => file.path), group.message);
-
-      if (result.addOutput) log(result.addOutput + "\n");
-      if (result.skipped) {
-        const skippedMessage = `SKIPPED: ${group.message} — ${result.reason}`;
-        log(skippedMessage + "\n");
-        skippedCommitGroups.push({
-          round,
-          key: group.key,
-          message: group.message,
-          reason: result.reason,
-          files: group.files.map((file) => file.path),
-        });
-        continue;
-      }
-      if (result.commitOutput) log(result.commitOutput + "\n");
-      commitCount += 1;
-      if (deliveryPolicy.topology === "single") break;
-    }
-
-    if (dryRun) {
-      const dryRunResult = {
-        success: true,
-        mode: "auto",
-        dryRun: true,
-        protectedBranchDetected: analysis.branch.isProtected,
-        currentBranch: analysis.branch.current,
-        plannedBranch,
-        commitCount: 0,
-        knownFiles: [...originalKnownFiles],
-        planId,
-        deliveryPolicy,
-        workUnits: initialPlanning.workUnits.map((group) => ({
-          key: group.key,
-          type: group.type,
-          scope: group.scope,
-          files: group.files.map((file) => file.path),
-          defaultMessage: group.defaultMessage,
-        })),
-        plannedCommitGroups,
-        skippedCommitGroups: [],
-        leftovers: { known: [...originalKnownFiles], artifacts: [] },
-        nextAction: "review-plan",
-      };
-      process.stdout.write(JSON.stringify(dryRunResult, null, 2) + "\n");
-      return;
-    }
-
-    const leftover = getLeftoverData(originalKnownFiles);
-
-    if (leftover.artifacts.length > 0) {
-      log(
-        `\nArtifact guard skipped ${leftover.artifacts.length} file(s) outside the original scope.\n`,
-      );
-      leftover.artifacts.forEach((file) => log(`   - ${file}\n`));
-    }
-
-    if (leftover.known.length === 0) {
-      process.stdout.write(
-        JSON.stringify(
-          {
-            success: true,
-            mode: "auto",
-            dryRun: false,
-            currentBranch: getAnalysisData().branch.current,
-            protectedBranchDetected: analysis.branch.isProtected,
-            plannedBranch,
-            planId,
-            deliveryPolicy,
-            workUnits: initialPlanning.workUnits.map((group) => ({
-              key: group.key,
-              type: group.type,
-              scope: group.scope,
-              files: group.files.map((file) => file.path),
-              defaultMessage: group.defaultMessage,
-            })),
-            commitCount,
-            plannedCommitGroups,
-            skippedCommitGroups,
-            recentCommits: getRecentCommitLines(commitCount),
-            leftovers: leftover,
-            nextAction: "done",
-          },
-          null,
-          2,
-        ) + "\n",
-      );
-      return;
-    }
-
-    const signature = leftover.known.join("|");
-    if (signature === previousSignature) {
-      throw new Error(
-        `Automatic leftover resolution stalled after round ${round}. Remaining files: ${leftover.known.join(", ")}`,
-      );
-    }
-
-    previousSignature = signature;
-    pendingKnownFiles = leftover.known;
-
-    log(
-      `\nWARNING: ${leftover.known.length} known file(s) still pending. Continuing automatically...\n`,
-    );
-  }
-
-  const finalLeftover = getLeftoverData(originalKnownFiles);
-  log("\nWARNING: Automatic commit flow reached the round limit.\n\n");
-
-  if (finalLeftover.known.length > 0) {
-    throw new Error(
-      `Automatic commit flow stopped with uncommitted known files: ${finalLeftover.known.join(", ")}`,
-    );
+    return resultDocument({ success: true, status: "success", state: currentState(), completedUnits, nextAction: "run /flow-pr when ready" });
+  } catch (error) {
+    const current = safeCurrentState().repositoryRoot ? safeCurrentState() : state || {};
+    const failedIndex = completedUnits.length;
+    const remainingUnits = units.slice(failedIndex);
+    const leftovers = current.changes ? current.changes.map((change) => change.path) : [];
+    const status = completedUnits.length > 0 ? "partial" : error.status || "failure";
+    const nextAction = status === "partial" ? "preserve completed commits; inspect remaining changes and submit a new request" : "inspect and submit a corrected request";
+    return resultDocument({ success: false, status, state: current, completedUnits, failedUnit: remainingUnits[0] || null, remainingUnits, leftovers, recovery: nextAction, nextAction, error: error.message });
   }
 }
 
-// ─── Entry point ──────────────────────────────────────────────────────────────
+function parseArgs(argv) {
+  const flags = {};
+  for (let index = 0; index < argv.length; index += 1) {
+    const value = argv[index];
+    if (!value.startsWith("--")) throw new FlowError(`Unsupported argument: ${value}`);
+    const key = value.slice(2);
+    if (["inspect", "execute"].includes(key)) flags[key] = true;
+    else flags[key] = argv[++index];
+  }
+  return flags;
+}
+
+function readRequest(value) {
+  if (!value) throw new FlowError("--execute requires --request <file|->.");
+  const content = value === "-" ? fs.readFileSync(0, "utf8") : fs.readFileSync(value, "utf8");
+  try { return JSON.parse(content); } catch (error) { throw new FlowError(`Request JSON is invalid: ${error.message}`); }
+}
+
+function main() {
+  const flags = parseArgs(process.argv.slice(2));
+  if (flags.inspect && !flags.execute) return { document: inspectRepository(), exitCode: 0 };
+  if (flags.execute && !flags.inspect) {
+    const document = executeRequest(readRequest(flags.request));
+    return { document, exitCode: document.status === "success" ? 0 : document.status === "partial" ? 2 : 1 };
+  }
+  throw new FlowError("Usage: node flow-commit.mjs --inspect | --execute --request <file|->.");
+}
 
 if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))) {
-const flags = parseArgs();
-try {
-  if (flags["auto"]) {
-    autoCommitWorkflow(flags);
-  } else if (flags["analyze"]) {
-    analyze(flags);
-  } else if (flags["commit"]) {
-    commit(flags);
-  } else if (flags["summary"]) {
-    summary(flags);
-  } else if (flags["create-branch"]) {
-    createBranch(flags);
-  } else {
-    process.stderr.write(
-      "Usage:\n" +
-        '  node flow-commit.mjs --auto [--dry-run] [--expected-plan-id <id>] [--lineage <id>] [--branch-name "type/slug"] [--message-overrides "{...}"] [--max-rounds 3] [--branch-attempts 5]\n' +
-        "  node flow-commit.mjs --analyze\n" +
-        '  node flow-commit.mjs --analyze --known-files "f1,f2"\n' +
-        '  node flow-commit.mjs --commit --files "f1.ts,f2.tsx" --message "feat(scope): desc"\n' +
-        '  node flow-commit.mjs --summary [--count 5] [--known-files "f1,f2"]\n' +
-        '  node flow-commit.mjs --create-branch --name "feature/slug" [--max-attempts 5]\n',
-    );
-    process.exit(1);
+  try {
+    const { document, exitCode } = main();
+    process.stdout.write(`${JSON.stringify(document, null, 2)}\n`);
+    process.exitCode = exitCode;
+  } catch (error) {
+    const nextAction = "inspect repository state and submit a corrected request";
+    process.stdout.write(`${JSON.stringify(resultDocument({ success: false, status: error.status || "failure", state: safeCurrentState(), recovery: nextAction, nextAction, error: error.message }), null, 2)}\n`);
+    process.exitCode = 1;
   }
-} catch (error) {
-  process.stderr.write(`${error.message}\n`);
-  process.exit(1);
-}
 }

@@ -1,23 +1,23 @@
 {
   "$schema": "flow-assets-lock/v1",
-  "capturedAt": "2026-07-24T01:36:11.551Z",
+  "capturedAt": "2026-07-27T13:00:00.000Z",
   "source": {
     "kind": "opencode-user-config",
-    "opencodeVersion": "1.18.4",
-    "gentleAiVersion": "2.1.6"
+    "opencodeVersion": "1.18.7",
+    "gentleAiVersion": "gentle-ai 2.1.6"
   },
   "manifest": {
-    "sha256": "e1fd1c66db6af835a7f0a4d8ef08a2e63e8d191682e86fef88424cc11a16c597"
+    "sha256": "426bdd43ec67e37c1b661eb6d787645c717114899b56637882ae0f9cbdca80d6"
   },
   "totals": {
-    "bytes": 826978,
-    "count": 78
+    "bytes": 782525,
+    "count": 76
   },
   "files": [
     {
       "path": "agents/flow-git-agent.md",
-      "sha256": "812b849acb044275794f9c039b62f0e4c50726efbb2d30a280f1893b5418b4b8",
-      "bytes": 1380,
+      "sha256": "d23a2e0bcad5b57249007ef5e8d785c27537abc3a10cf5d7c4624ec8ce4fd142",
+      "bytes": 1119,
       "mode": "100644",
       "executable": false
     },
@@ -44,8 +44,8 @@
     },
     {
       "path": "commands/flow-auto-deliver.md",
-      "sha256": "b58478a12a7b7d748ef115180b4401e466024fcfece7301d1adc4629c7f09385",
-      "bytes": 7316,
+      "sha256": "ed3e5d3c400f4300a04400fa131aa38e5202d4539c3e1b332237b202a2bfdb14",
+      "bytes": 1081,
       "mode": "100644",
       "executable": false
     },
@@ -65,8 +65,8 @@
     },
     {
       "path": "commands/flow-commit.md",
-      "sha256": "b5c78fb23b58cbad8f0f2c980309cb08abf956ff45723dd635e2400c20c8568b",
-      "bytes": 441,
+      "sha256": "c79f7f649f6fdab03a6a7bc40685639bd1a769d03144f35873e64974441a3078",
+      "bytes": 569,
       "mode": "100644",
       "executable": false
     },
@@ -121,8 +121,8 @@
     },
     {
       "path": "commands/flow-skills-sync.md",
-      "sha256": "729756646732cf68772576d718b197ef1391a37b33c279daec15177c7b662a54",
-      "bytes": 435,
+      "sha256": "0c12c71e4a03e2608a7cc74d3d7050684453ac401200cc37e05351f9228a49e4",
+      "bytes": 850,
       "mode": "100644",
       "executable": false
     },
@@ -156,8 +156,8 @@
     },
     {
       "path": "scripts/flow-commit.mjs",
-      "sha256": "c3dc0c7df35ea71bae9f768ec99d97343c42870d13c4840738349632dccfd024",
-      "bytes": 46146,
+      "sha256": "61b45d0ec8002806c4670220e4860ffba054897238b7ccc1c0c02627180865ac",
+      "bytes": 18175,
       "mode": "100644",
       "executable": false
     },
@@ -281,13 +281,6 @@
       "executable": false
     },
     {
-      "path": "scripts/lib/flow-work-units.mjs",
-      "sha256": "fa887bb98ae8acb52a63eff38e047470c7acb15423546f28400483567b454ee4",
-      "bytes": 1690,
-      "mode": "100644",
-      "executable": false
-    },
-    {
       "path": "scripts/lib/helpers.mjs",
       "sha256": "c633de92953f9d912fdae0074ebf571de95fa85550e1d2580bea61d377954604",
       "bytes": 7720,
@@ -317,8 +310,8 @@
     },
     {
       "path": "scripts/lib/review-delivery-policy.mjs",
-      "sha256": "90ab676d48cadb76a409fa4602e72fd7be7e730e8ea5c7a77e983ef89878c295",
-      "bytes": 20724,
+      "sha256": "4b3e4dc56ddf779343a7a87bba19a37b9c2889ec6e4e18d4d48a380c7db4b689",
+      "bytes": 11396,
       "mode": "100644",
       "executable": false
     },
@@ -471,15 +464,8 @@
     },
     {
       "path": "skills/flow-commit/SKILL.md",
-      "sha256": "126ccc2a1bd99297fbe62f2d69de2ea3e18afa1272eaf0bdd0325380bde830b7",
-      "bytes": 2505,
-      "mode": "100644",
-      "executable": false
-    },
-    {
-      "path": "skills/flow-commit/references/review-delivery.md",
-      "sha256": "4d6ca956083f9563900735b2c9495483037811f1e0dffb87b4f49b3f1b9d0bf1",
-      "bytes": 2186,
+      "sha256": "aadb80f0089efd9c553469a41929d742c96809f83a046135ead0e4bd2ec3e731",
+      "bytes": 2264,
       "mode": "100644",
       "executable": false
     },
@@ -541,8 +527,8 @@
     },
     {
       "path": "skills/flow-skills-sync/SKILL.md",
-      "sha256": "50d1d2c776c2f389dc9008abe9ec10f95358626ef51282788cf49cba180a44d7",
-      "bytes": 2352,
+      "sha256": "cc85a066997124ebaa4c85e466b5e2748134c27884bb55f995b57a97b7ce5da0",
+      "bytes": 5268,
       "mode": "100644",
       "executable": false
     },

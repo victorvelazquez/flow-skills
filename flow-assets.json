@@ -33,7 +33,6 @@
       "scripts/lib/flow-pr-body.mjs",
       "scripts/lib/flow-pr-labels.mjs",
       "scripts/lib/flow-pr-prs.mjs",
-      "scripts/lib/flow-work-units.mjs",
       "scripts/lib/helpers.mjs",
       "scripts/lib/process-control.mjs",
       "scripts/lib/promotion-review-coordinator.mjs",

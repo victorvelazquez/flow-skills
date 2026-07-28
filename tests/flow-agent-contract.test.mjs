@@ -53,15 +53,13 @@ test("flow-pr routes through the parent orchestrator and keeps its executor non-
   assert.match(agent, /^  task:\r?\n    "\*": deny$/m);
 });
 
-test("installed commit and PR agents preserve their permission boundaries", () => {
+test("commit source and installed PR agent preserve their permission boundaries", () => {
   const target = installDestination();
-  const commitRules = debugAgent(target, "flow-git-agent");
-  const commitScript = 'node "$HOME/.config/opencode/scripts/flow-commit.mjs"';
-  for (const args of ["--auto --dry-run", "--analyze", "--summary"]) {
-    assert.equal(resolveBashPermission(commitRules, `${commitScript} ${args}`), "allow");
-    assert.equal(resolveBashPermission(commitRules, `${commitScript} ${args} && git push`), "ask");
-  }
-  assert.equal(resolveBashPermission(commitRules, `${commitScript} --commit`), "deny");
+  const commitAgent = fs.readFileSync(path.join(root, "agents", "flow-git-agent.md"), "utf8");
+  assert.match(commitAgent, /flow-commit\.mjs\* --inspect": allow/);
+  assert.match(commitAgent, /flow-commit\.mjs\* --execute\*": ask/);
+  assert.match(commitAgent, /flow-commit\.mjs\* --auto\*": deny/);
+  assert.match(commitAgent, /git (?:add|commit|push)\*": deny/);
 
   const prRules = debugAgent(target, "flow-pr-agent");
   const prScript = 'node "$HOME/.config/opencode/scripts/flow-pr.mjs"';
@@ -72,6 +70,19 @@ test("installed commit and PR agents preserve their permission boundaries", () =
   }
   assert.equal(resolveBashPermission(prRules, `${prScript} --push`), "deny");
   assert.equal(resolveBashPermission(prRules, "git push origin branch"), "deny");
+});
+
+test("commit surfaces require inspect, explicit request, and mutation approval", () => {
+  const skill = fs.readFileSync(path.join(root, "skills", "flow-commit", "SKILL.md"), "utf8");
+  const agent = fs.readFileSync(path.join(root, "agents", "flow-git-agent.md"), "utf8");
+  const command = fs.readFileSync(path.join(root, "commands", "flow-commit.md"), "utf8");
+  const autoDeliver = fs.readFileSync(path.join(root, "commands", "flow-auto-deliver.md"), "utf8");
+  const contract = `${skill}\n${agent}\n${command}\n${autoDeliver}`;
+  assert.match(contract, /--inspect/);
+  assert.match(contract, /--execute --request/);
+  assert.match(contract, /mutation approval/i);
+  assert.doesNotMatch(contract, /planId|lineage|reviewed-delivery|--auto --dry-run|suffix retries/i);
+  assert.doesNotMatch(autoDeliver, /flow-audit|\/flow-pr/i);
 });
 
 test("flow-pr publication remains bound to its canonical override preview", () => {

@@ -1,10 +1,10 @@
 ---
 name: flow-commit
-description: "Trigger: /flow-commit. Plan and create isolated Conventional Commit groups while honoring reviewed-delivery authority."
+description: "Trigger: /flow-commit. Inspect changes, choose explicit work units, and execute verified Conventional Commits."
 license: Apache-2.0
 metadata:
   author: gentleman-programming
-  version: "4.0"
+  version: "5.0"
 ---
 
 # flow-commit
@@ -15,37 +15,27 @@ Load for `/flow-commit` or a request to commit current local changes through Flo
 
 ## Hard Rules
 
-- Treat `scripts/flow-commit.mjs` as the execution source of truth.
-- Run `--auto --dry-run` before `--auto`; pass the exact returned `planId` as `--expected-plan-id`.
-- Never push. This skill alone owns ordinary branch creation, staging, and commits.
-- Never rewrite existing commits with squash, reset, rebase, or amend to satisfy reviewed topology.
-- Keep work units as reporting metadata. When `deliveryPolicy.topology` is `single`, the one physical `reviewed-delivery` group is authoritative.
-- Stop on authority, plan, candidate-tree, path, partial-staging, or index-isolation drift.
-
-## Decision Gates
-
-| State | Action |
-| --- | --- |
-| Clean tree | Return noop; create no branch or commit |
-| Protected branch with changes | Use one semantic task branch |
-| `single` reviewed delivery | Commit all and only reviewed paths once |
-| Grouped/no authority | Preserve planned work-unit groups |
-| Required lifecycle unavailable or denied | Stop with zero commits |
+- Treat `scripts/flow-commit.mjs` as the Git execution source of truth.
+- Inspect first with `node ~/.config/opencode/scripts/flow-commit.mjs --inspect`; inspection is read-only and ephemeral.
+- The agent chooses the branch and ordered semantic units. The runtime never groups files, generates messages, retries branch names, or retains an inspection token.
+- Each unit must have a Conventional title in `type(scope): outcome` form. Include a body only when it adds useful context; preserve it exactly.
+- Every inspected path belongs to exactly one explicit unit. Paths must be literal, relative, non-empty, and disjoint.
+- Never push, open a PR, run an audit, or invoke direct `git add` / `git commit`. The execute request is the only mutation path.
+- Stop on staged changes, inspection drift, merge state, hook drift, or a branch collision. Do not retry a different branch name.
 
 ## Execution Steps
 
-1. Run `node ~/.config/opencode/scripts/flow-commit.mjs --auto --dry-run`. When native review discovery is ambiguous, rerun planning with the explicitly chosen `--lineage <id>`; never infer or auto-select one.
-2. Compare `plannedCommitGroups[].files` with `git status --short`; retain `planId`.
-3. Choose one branch name and messages supported by the plan. Use `reviewed-delivery` as the override key for a single physical group.
-4. Run `--auto --expected-plan-id <planId>` with unchanged scope, selected overrides, and the same explicit `--lineage <id>` used for planning.
-5. Report commits, work units, skipped groups, leftovers, and the next `/flow-pr` action.
+1. Run `--inspect` and read the JSON document. A `noop` result ends the workflow.
+2. Compare every `changes[].path` with the intended work units. Choose `branch: {"action":"create","name":"type/slug"}` on a protected branch; otherwise use `{"action":"keep"}` unless an explicit new branch is wanted.
+3. Present the exact request JSON and obtain approval for mutation.
+4. Write the approved `flow-commit/request-v1` document to a temporary file (or pass it on stdin), then run:
+
+   ```bash
+   node ~/.config/opencode/scripts/flow-commit.mjs --execute --request <request.json>
+   ```
+
+5. Report the structured result. `success` has no leftovers; `partial` retains earlier verified commits and reports remaining units; all other outcomes require a new inspection.
 
 ## Output Contract
 
-Return the branch decision, immutable plan ID, delivery policy/source, each physical commit and files, preserved work-unit metadata, skipped groups, leftovers, and next action.
-
-## References
-
-- `../../scripts/flow-commit.mjs` - runtime implementation.
-- `../../scripts/lib/review-delivery-policy.mjs` - versioned lifecycle compatibility adapter.
-- `references/review-delivery.md` - configuration, lineage selection, precedence, and failure semantics.
+Report the inspected branch and HEAD, requested branch action, each ordered unit and exact paths, completed commit OIDs, failed/remaining units, leftovers, recovery guidance, and the next user-approved action.
