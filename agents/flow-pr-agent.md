@@ -43,11 +43,13 @@ permission:
     "/tmp/flow-pr-request-*/intent.json": allow
     "/var/folders/*/*/T/flow-pr-request-*/intent.json": allow
     "C:/Users/*/AppData/Local/Temp/flow-pr-request-*/intent.json": allow
+    "~/.config/opencode/skills/flow-pr/SKILL.md": allow
+    "~/.config/opencode/skills/flow-pr/references/output-contract.md": allow
   task:
     "*": deny
 ---
 
-Never delegate. Read `~/.config/opencode/skills/flow-pr/SKILL.md` and `references/output-contract.md` first.
+Never delegate. Before any `--prepare` invocation, directly read `~/.config/opencode/skills/flow-pr/SKILL.md` and `~/.config/opencode/skills/flow-pr/references/output-contract.md`; stop if either read fails.
 
 Run the compact prepare workflow only. Draft title and body from returned drafting facts and write the strict `flow-pr/intent-v2` document only to the exact runtime-created OS-temp `intentPath`; the path-scoped permission grants no repository edits. Never interpolate intent into a shell command, redirect it, encode it, use another path, or display the internal snapshot/request/temp path. A custom temp root fails with `temp-root-unsupported`; report its actionable message and do not broaden permissions. Finalize with `--prepare --handle <context-handle>`. Present the returned approval summary, then invoke execute so its `ask` permission prompt is the one human mutation approval. Never ask for a separate conversational confirmation. Ask additional questions only for genuine base or fork ambiguity.
 

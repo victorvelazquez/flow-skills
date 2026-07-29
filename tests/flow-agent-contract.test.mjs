@@ -6,6 +6,11 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (file) => fs.readFileSync(path.join(root, ...file.split("/")), "utf8");
+const permissionRules = (source, permission) => {
+  const block = source.match(new RegExp(`^  ${permission}:\\n([\\s\\S]*?)(?=^  [a-z_]+:|^---$)`, "m"))?.[1] || "";
+  return [...block.matchAll(/^    (["'])(.*?)\1: (allow|ask|deny)$/gm)].map(([, , pattern, action]) => ({ pattern, action }));
+};
+const permissionFor = (rules, target) => rules.reduce((action, rule) => rule.pattern === "*" || rule.pattern === target ? rule.action : action, undefined);
 const jiraTemplate = `### <FEATURE|FIX|REFACTOR|CHORE|DOCS>: <human-readable title>
 
 <what changed and why>
@@ -36,6 +41,30 @@ test("flow-pr command, agent, and skill expose prepare, one approval, and execut
   assert.match(agent, /task:\n    "\*": deny/); assert.match(agent, /git push\*": deny/); assert.match(agent, /"gh \*": deny/); assert.match(agent, /edit:\n    "\*": deny/); assert.match(agent, /flow-pr-request-\*\/intent\.json": allow/); assert.match(agent, /--prepare\*": allow/); assert.match(agent, /--execute --handle \*": ask/);
   assert.match(contract, /runtime-created OS-temp|runtime-owned `intentPath`/i); assert.match(contract, /no repository edits|Never edit the repository/i); assert.match(contract, /never.*(?:interpolat|shell|redirect|generic shell writes)/i);
   assert.doesNotMatch(contract, /materialize-request|request-base64|base64url|flow-pr\/request-v1/);
+});
+test("flow-pr agent externally reads only its installed contracts before prepare", () => {
+  const agent = read("agents/flow-pr-agent.md");
+  const external = permissionRules(agent, "external_directory");
+  const edit = permissionRules(agent, "edit");
+  const contracts = [
+    "~/.config/opencode/skills/flow-pr/SKILL.md",
+    "~/.config/opencode/skills/flow-pr/references/output-contract.md",
+  ];
+
+  for (const contract of contracts) {
+    assert.equal(permissionFor(external, contract), "allow");
+    assert.notEqual(permissionFor(edit, contract), "allow");
+  }
+  for (const unrelated of [
+    "~/.config/opencode/opencode.json",
+    "~/.config/opencode/skills/flow-commit/SKILL.md",
+    "~/.config/opencode/skills/flow-pr/references/other.md",
+  ]) assert.equal(permissionFor(external, unrelated), "deny");
+
+  const externalAllows = external.filter(({ action }) => action === "allow").map(({ pattern }) => pattern);
+  assert.deepEqual(externalAllows.filter((pattern) => pattern.startsWith("~/.config/opencode/")), contracts);
+  assert.doesNotMatch(externalAllows.join("\n"), /~\/\.config\/opencode\/(?:\*\*|skills\/\*|skills\/\*\*)/);
+  assert.match(agent, /Before any `--prepare` invocation, directly read[^\n]+output-contract\.md`; stop if either read fails\./);
 });
 test("flow-pr surfaces omit retired publication authority and direct mutation semantics", () => {
   const contract = ["commands/flow-pr.md", "agents/flow-pr-agent.md", "skills/flow-pr/SKILL.md", "scripts/flow-pr.mjs"].map(read).join("\n");
