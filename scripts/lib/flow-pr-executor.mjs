@@ -9,8 +9,8 @@ function result(status, phase, snapshot, effects, extra = {}) {
   return { schema: "flow-pr/result-v1", status, exit, phase, snapshot, effects, pr: extra.pr || null, blocker: extra.blocker || null, error: extra.error || null, recovery: extra.recovery || null };
 }
 function recovery(code, message) { return { code, message, requiresFreshInspection: true }; }
-function block(phase, snapshot, effects, code, message, pr = null, recover = false) { return result("blocked", phase, snapshot, effects, { pr, blocker: { code, message }, recovery: recover ? recovery("inspect-again", "Create a fresh inspection and approval.") : null }); }
-function drift(phase, expected, observed, facts, effects) { return result("drift", phase, { expected, observed, facts }, effects, { blocker: { code: "snapshot-drift", message: "The approved snapshot no longer matches current repository authority." }, recovery: recovery("inspect-again", "Create a fresh inspection and approval.") }); }
+function block(phase, snapshot, effects, code, message, pr = null, recover = true) { return result("blocked", phase, snapshot, effects, { pr, blocker: { code, message }, recovery: recover ? recovery("prepare-again", "Prepare and approve a fresh request.") : null }); }
+function drift(phase, expected, observed, facts, effects) { return result("drift", phase, { expected, observed, facts }, effects, { blocker: { code: "snapshot-drift", message: "The approved snapshot no longer matches current repository authority." }, recovery: recovery("prepare-again", "Prepare and approve a fresh request.") }); }
 function run(command, args, options = {}) { const value = spawnSync(command, args, { cwd: options.cwd, input: options.input, encoding: "utf8", shell: false, env: options.env || process.env }); return { ok: value.status === 0 && !value.error, stdout: value.stdout || "", stderr: value.stderr || value.error?.message || "" }; }
 function effect(state, before, after) { return { state, before, after }; }
 function unknownPrEffects(effects) {
@@ -39,7 +39,7 @@ function verifyPr(cwd, env, target, number) {
 }
 
 export function failureResult(error) {
-  return result("failure", "inspect", { expected: null, observed: null, facts: null }, blankEffects(), { error: { code: error.code || "runtime-failure", message: error.message }, recovery: recovery("inspect-again", "Inspect the repository before retrying.") });
+  return result("failure", "preflight", { expected: null, observed: null, facts: null }, blankEffects(), { error: { code: error.code || "runtime-failure", message: error.message }, recovery: recovery("prepare-again", "Prepare and approve a fresh request before retrying.") });
 }
 
 export function execute(requestValue, { cwd = process.cwd(), env = process.env } = {}) {
@@ -48,7 +48,7 @@ export function execute(requestValue, { cwd = process.cwd(), env = process.env }
   catch (error) { return result("blocked", "preflight", { expected: null, observed: null, facts: null }, blankEffects(), { blocker: { code: error.code || "invalid-request", message: error.message } }); }
   const effects = blankEffects(); const expected = request.expected.snapshot;
   const facts = inspectNow(request, cwd, env);
-  if (!facts) return result("failure", "preflight", { expected: expected.identity, observed: null, facts: null }, effects, { error: { code: "inspection-failure", message: "Fresh inspection could not establish authority." }, recovery: recovery("inspect-again", "Inspect the repository before retrying.") });
+  if (!facts) return result("failure", "preflight", { expected: expected.identity, observed: null, facts: null }, effects, { error: { code: "inspection-failure", message: "Fresh inspection could not establish authority." }, recovery: recovery("prepare-again", "Prepare and approve a fresh request.") });
   if (!facts.clean || facts.detached || !facts.committed || facts.mergeState !== "none" || !facts.branch || PROTECTED.has(facts.branch)) return block("preflight", { expected: expected.identity, observed: facts.identity, facts }, effects, "unsafe-local-state", "A clean, committed, non-protected task branch is required.", null, true);
   const binding = sameRepo(facts.target, request.delivery.target) && sameRepo(facts.push.repository, request.delivery.push.repository) && facts.push.remote === request.delivery.push.remote && facts.head.owner === request.delivery.head.owner && facts.head.ref === request.delivery.head.ref && sameRepo(facts.head.repository, request.delivery.head.repository);
   if (!binding || facts.identity !== expected.identity) return drift("preflight", expected.identity, facts.identity, facts, effects);
@@ -59,14 +59,15 @@ export function execute(requestValue, { cwd = process.cwd(), env = process.env }
   let current = facts;
   if (request.expected.intent.push === "publish") {
     if (["behind", "diverged", "unknown"].includes(facts.relation.divergence)) return block("push", { expected: expected.identity, observed: facts.identity, facts }, effects, "non-fast-forward", "The remote branch cannot be proven to fast-forward safely.");
-    if (facts.relation.divergence !== "equal") {
+    const upstreamExact = facts.upstream?.remote === request.delivery.push.remote && facts.upstream.ref === facts.branch;
+    if (facts.relation.divergence !== "equal" || !upstreamExact) {
       effects.push = effect("attempted", facts.push.remoteHeadOid, facts.headOid);
       const pushed = run("git", ["push", "--set-upstream", request.delivery.push.remote, `HEAD:refs/heads/${facts.branch}`], { cwd, env });
-      if (!pushed.ok) { effects.push.state = "unknown"; return result("partial", "push", { expected: expected.identity, observed: facts.identity, facts }, effects, { error: { code: "push-unknown", message: pushed.stderr || pushed.stdout }, recovery: recovery("inspect-again", "The push may have completed; inspect before retrying.") }); }
+      if (!pushed.ok) { effects.push.state = "unknown"; return result("partial", "push", { expected: expected.identity, observed: facts.identity, facts }, effects, { error: { code: "push-unknown", message: pushed.stderr || pushed.stdout }, recovery: recovery("prepare-again", "The push may have completed; prepare and approve again.") }); }
       const checked = inspectNow(request, cwd, env);
-      if (!checked || checked.push.remoteHeadOid !== facts.headOid || !checked.upstream || checked.upstream.remote !== request.delivery.push.remote || checked.upstream.ref !== facts.branch) { effects.push.state = "unknown"; return result("partial", "push", { expected: expected.identity, observed: checked?.identity || null, facts: checked }, effects, { error: { code: "push-unverified", message: "Push or upstream postconditions could not be verified." }, recovery: recovery("inspect-again", "Inspect before retrying.") }); }
+      if (!checked || checked.push.remoteHeadOid !== facts.headOid || !checked.upstream || checked.upstream.remote !== request.delivery.push.remote || checked.upstream.ref !== facts.branch) { effects.push.state = "unknown"; return result("partial", "push", { expected: expected.identity, observed: checked?.identity || null, facts: checked }, effects, { error: { code: "push-unverified", message: "Push or upstream postconditions could not be verified." }, recovery: recovery("prepare-again", "Prepare and approve again before retrying.") }); }
       effects.push = effect("confirmed", facts.push.remoteHeadOid, checked.push.remoteHeadOid); effects.upstream = effect("confirmed", facts.upstream, checked.upstream);
-      if (canonical(immutableAuthority(expected)) !== canonical(immutableAuthority(checked))) return result("partial", "push", { expected: expected.identity, observed: checked.identity, facts: checked }, effects, { blocker: { code: "post-push-authority-drift", message: "Immutable repository or pull request authority changed during push." }, recovery: recovery("inspect-again", "The push is preserved; inspect and approve the observed authority before any PR mutation.") });
+      if (canonical(immutableAuthority(expected)) !== canonical(immutableAuthority(checked))) return result("partial", "push", { expected: expected.identity, observed: checked.identity, facts: checked }, effects, { blocker: { code: "post-push-authority-drift", message: "Immutable repository or pull request authority changed during push." }, recovery: recovery("prepare-again", "The push is preserved; prepare and approve the observed authority before any PR mutation.") });
       current = checked;
     }
   } else if (facts.push.remoteHeadOid !== facts.headOid || !facts.upstream || facts.upstream.remote !== request.delivery.push.remote || facts.upstream.ref !== facts.branch) return block("preflight", { expected: expected.identity, observed: facts.identity, facts }, effects, "existing-not-verified", "verify-existing requires exact remote and upstream state.");
@@ -82,7 +83,7 @@ export function execute(requestValue, { cwd = process.cwd(), env = process.env }
       const args = ["pr", "create", "--repo", `${request.delivery.target.owner}/${request.delivery.target.name}`, "--base", current.base.ref, "--head", `${request.delivery.head.owner}:${request.delivery.head.ref}`, "--title", request.pr.title, "--body-file", "-"];
       if (request.pr.draft) args.push("--draft"); for (const label of request.pr.labels.add) args.push("--label", label);
       const created = run(gh(env), ghArgs(env, args), { cwd, env, input: request.pr.body });
-      if (!created.ok) { unknownPrEffects(effects); return result(effects.push.state === "confirmed" ? "partial" : "failure", "reconcile", { expected: expected.identity, observed: current.identity, facts: current }, effects, { error: { code: "pr-create-unknown", message: created.stderr || created.stdout }, recovery: recovery("inspect-again", "Push effects were preserved; inspect before retrying.") }); }
+      if (!created.ok) { unknownPrEffects(effects); return result(effects.push.state === "confirmed" ? "partial" : "failure", "reconcile", { expected: expected.identity, observed: current.identity, facts: current }, effects, { error: { code: "pr-create-unknown", message: created.stderr || created.stdout }, recovery: recovery("prepare-again", "Push effects were preserved; prepare and approve again.") }); }
       const url = created.stdout.trim(); const number = url.match(/\/(\d+)\/?$/)?.[1]; if (!number) throw new Error("GitHub did not return a pull request URL."); pr = verifyPr(cwd, env, request.delivery.target, number); effects.prCreate = effect("confirmed", null, pr); if (request.pr.labels.add.length) effects.labels = effect("confirmed", [], pr.labels);
     } else {
       const changes = [];
@@ -96,12 +97,12 @@ export function execute(requestValue, { cwd = process.cwd(), env = process.env }
       if (editable.length) {
         const args = ["pr", "edit", String(pr.number), "--repo", `${request.delivery.target.owner}/${request.delivery.target.name}`]; if (changes.includes("title")) args.push("--title", request.pr.title); if (changes.includes("body")) args.push("--body-file", "-"); if (changes.includes("labels")) { request.pr.labels.add.forEach((label) => args.push("--add-label", label)); request.pr.labels.remove.forEach((label) => args.push("--remove-label", label)); }
         const edited = run(gh(env), ghArgs(env, args), { cwd, env, input: changes.includes("body") ? request.pr.body : undefined });
-        if (!edited.ok) { unknownPrEffects(effects); return result(effects.push.state === "confirmed" ? "partial" : "failure", "reconcile", { expected: expected.identity, observed: current.identity, facts: current }, effects, { error: { code: "pr-update-unknown", message: edited.stderr || edited.stdout }, recovery: recovery("inspect-again", "Inspect before retrying.") }); }
+        if (!edited.ok) { unknownPrEffects(effects); return result(effects.push.state === "confirmed" ? "partial" : "failure", "reconcile", { expected: expected.identity, observed: current.identity, facts: current }, effects, { error: { code: "pr-update-unknown", message: edited.stderr || edited.stdout }, recovery: recovery("prepare-again", "Prepare and approve again before retrying.") }); }
       }
       if (changes.includes("draft")) { const readyArgs = request.pr.draft ? ["pr", "ready", String(pr.number), "--undo", "--repo", `${request.delivery.target.owner}/${request.delivery.target.name}`] : ["pr", "ready", String(pr.number), "--repo", `${request.delivery.target.owner}/${request.delivery.target.name}`]; const ready = run(gh(env), ghArgs(env, readyArgs), { cwd, env }); if (!ready.ok) throw new Error(`Draft transition could not be verified: ${ready.stderr || ready.stdout}`); }
       pr = verifyPr(cwd, env, request.delivery.target, pr.number); effects.prUpdate = effect("confirmed", effects.prUpdate.before, pr); if (changes.includes("labels")) effects.labels = effect("confirmed", effects.prUpdate.before.labels, pr.labels);
     }
-    if (!postconditions(pr, request, current)) { unknownPrEffects(effects); return result(effects.push.state === "confirmed" ? "partial" : "failure", "verify", { expected: expected.identity, observed: current.identity, facts: current }, effects, { pr, error: { code: "postcondition-failed", message: "GitHub PR postconditions did not match the approved request." }, recovery: recovery("inspect-again", "Inspect before retrying.") }); }
+    if (!postconditions(pr, request, current)) { unknownPrEffects(effects); return result(effects.push.state === "confirmed" ? "partial" : "failure", "verify", { expected: expected.identity, observed: current.identity, facts: current }, effects, { pr, error: { code: "postcondition-failed", message: "GitHub PR postconditions did not match the approved request." }, recovery: recovery("prepare-again", "Prepare and approve again before retrying.") }); }
     return result("success", "verify", { expected: expected.identity, observed: current.identity, facts: current }, effects, { pr });
-  } catch (error) { unknownPrEffects(effects); return result(effects.push.state === "confirmed" ? "partial" : "failure", "reconcile", { expected: expected.identity, observed: current.identity, facts: current }, effects, { error: { code: "pr-unknown", message: error.message }, recovery: recovery("inspect-again", "Inspect before retrying.") }); }
+  } catch (error) { unknownPrEffects(effects); return result(effects.push.state === "confirmed" ? "partial" : "failure", "reconcile", { expected: expected.identity, observed: current.identity, facts: current }, effects, { error: { code: "pr-unknown", message: error.message }, recovery: recovery("prepare-again", "Prepare and approve again before retrying.") }); }
 }

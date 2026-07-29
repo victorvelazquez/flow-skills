@@ -12,7 +12,7 @@ The current branch is clean: `feat/guided-flow-skills-sync` is two commits ahead
 | Responsibility | Classification | Direction |
 |---|---|---|
 | Clean committed branch, repository identity, exact ref/HEAD checks, safe `git push`, `gh` PR query/create/update, postcondition verification, recovery output | Core Flow value | Retain in a small executor using argv arrays and `shell: false` |
-| Preview snapshot, explicit request, request revalidation, title/body/label pass-through | Simplify | Replace `--auto`/`planId` with inspect → approved request → execute |
+| Internal snapshot, semantic intent, revalidation, title/body/label pass-through | Simplify | Replace `--auto`/`planId` with compact prepare → one approval → claimed handle execute |
 | Project issue policy, type-label mapping, Jira text, playbook sync, fork policy extensions | Optional adapters | Keep outside the core runtime and invoke only when explicitly configured/selected |
 | Gentle AI capabilities, status/start/finalize/validate, lineages, receipts, authority schemas, review gates/topology, causal admission, private review state | Gentle AI duplication | Remove from `/flow-pr` completely |
 | Chain plans/trackers, release/version/tag automation, integration-to-production promotion, dynamic lifecycle aliases, CI evidence, managed PR-body policy | Historical/speculative complexity | Remove; none is needed to publish one committed branch without rewriting history |
@@ -20,8 +20,8 @@ The current branch is clean: `feat/guided-flow-skills-sync` is two commits ahead
 The current runtime uses argv-safe `runFileSafe` for most Git and `gh` calls, including explicit `--repo` routing. However, legacy scan/version helpers still use shell-string `runSafe` commands. The replacement should use argv-only process execution throughout and treat all refs, paths, labels, titles, and body content as data.
 
 ### Affected Areas
-- `scripts/flow-pr.mjs` — replace the 3,976-line multi-mode runtime with a Git/GitHub-only inspect/execute executor; remove `--auto`, promotion, chain, version, tag, and review modes.
-- `commands/flow-pr.md`, `agents/flow-pr-agent.md`, `skills/flow-pr/SKILL.md` — replace orchestrator/reviewer loops and automatic publication with preview, semantic request construction, explicit approval, execution, and recovery guidance.
+- `scripts/flow-pr.mjs` — replace the 3,976-line multi-mode runtime with a Git/GitHub-only prepare/execute executor; remove `--auto`, promotion, chain, version, tag, and review modes.
+- `commands/flow-pr.md`, `agents/flow-pr-agent.md`, `skills/flow-pr/SKILL.md` — replace orchestrator/reviewer loops with compact preparation, path-scoped semantic intent, one execute permission approval, and recovery guidance.
 - `tests/flow-pr.test.mjs` — replace 57 authority/promotion/chain-heavy tests with focused temporary-repository tests for inspection, request drift, push, PR reconciliation, and partial recovery.
 - `tests/flow-pr-harness.mjs`, `tests/promotion-review-runtime.test.mjs`, `tests/promotion-review-coordinator.test.mjs`, `tests/review-delivery-policy.test.mjs`, `tests/review-causal-admission.test.mjs`, `tests/flow-chain-plan.test.mjs` — delete: they test only the removed review, authority, or chain mechanisms.
 - `scripts/lib/review-delivery-policy.mjs`, `scripts/lib/promotion-review-coordinator.mjs`, `scripts/lib/review-causal-admission.mjs`, `scripts/lib/flow-chain-plan.mjs` — delete after the `/flow-pr` rewrite; repository search found no production callers other than `/flow-pr`.
@@ -31,7 +31,7 @@ The current runtime uses argv-safe `runFileSafe` for most Git and `gh` calls, in
 - `flow-assets.json`, `flow-assets.lock.json`, `.gitattributes` and associated asset tests — remove deleted library/reference records and refresh only final affected mirror records.
 
 ### Approaches
-1. **First-principles inspect/request executor** — Mirror the `/flow-commit` boundary: inspection produces facts; the skill/agent chooses semantics; one approved immutable request performs deterministic publication.
+1. **First-principles prepare/handle executor** — Preparation exposes compact drafting facts; the skill/agent writes small semantics to a runtime-owned temp file; one approved, atomically claimed handle performs deterministic publication.
    - Pros: Removes all Gentle AI coupling and historical modes; preserves safe Git/GitHub mutations; makes approval and recovery explicit; supports create/update/noop idempotency without persistent authority state.
    - Cons: Requires a deliberately incompatible runtime/skill/test rewrite and an explicit decision about optional project adapters.
    - Effort: High.
@@ -49,11 +49,11 @@ The current runtime uses argv-safe `runFileSafe` for most Git and `gh` calls, in
 ### Recommendation
 Adopt the first-principles executor and intentionally break the legacy CLI. The minimal flow should be:
 
-1. `--inspect` emits `flow-pr/inspection-v1`: repository root, origin fetch/push identity, GitHub destination, current branch/HEAD, clean/merge state, upstream (including `null`), selected or candidate base facts, merge-base comparison, and a factual change summary. It performs no push or PR mutation.
-2. The skill/agent selects the base, title, body, optional labels, and whether a same-repository or explicitly declared fork delivery is appropriate. These are semantic decisions, not runtime inference.
-3. `--execute --request <file|->` accepts `flow-pr/request-v1` containing the inspection expectations plus the exact base/ref/OID, target repository, head identity, title, body, and optional labels. It revalidates root, branch, HEAD, clean state, remote identities, base movement, ref formats, and GitHub destination before the first mutation.
-4. On approval, the executor pushes only the exact branch with normal non-force semantics and establishes upstream when the approved request says to do so. It then queries open PRs by exact repository/head/base: one exact match is `noop`; one compatible match is updated and re-verified; ambiguity blocks; otherwise it creates and verifies one PR.
-5. Every result reports a schema, `action`, exact remote effects, PR URL/number when present, and a recovery state. A push followed by PR failure is `partial`; rerunning a fresh inspection/request reconciles rather than rewriting history.
+1. `--prepare --base <ref>` keeps the canonical SHA-bound snapshot internal and emits `flow-pr/prepare-context-v2` with compact repository, branch/base, delivery, existing-PR metadata, commit subjects, and changed paths. It creates a random expiring handle plus one empty `intent.json` under a supported standard OS temp root.
+2. The skill/agent selects title, body, optional labels, update authorization, publish/verify mode, and same-repository or explicit fork delivery, then writes only `flow-pr/intent-v2` to the returned path. Custom temp roots fail early rather than gaining broad permissions.
+3. `--prepare --handle <handle>` reinspects authority, validates intent, stores the full `flow-pr/request-v2` internally, and returns only a concise approval summary with body length/digest. Full snapshots, bodies, and request JSON do not round-trip by default.
+4. The single human approval is the permission prompt for `--execute --handle <handle>`. Execute atomically creates an exclusive claim before reinspection or mutation; concurrent and abandoned claims fail closed. It then revalidates root, branch, HEAD, clean state, remotes, upstream, base, delivery, and PR authority.
+5. The executor pushes only the exact branch with normal non-force semantics, reconciles create/update/noop, and verifies GitHub postconditions. Default `flow-pr/result-v1` output contains compact effect states and verified public PR metadata; `--verbose` explicitly adds diagnostics. Partial, failed, drifted, or unknown outcomes require fresh preparation and approval.
 
 The MVP should require an explicit base and target repository in the request. Same-repository delivery is the default safe case. Fork delivery is feasible only as an explicit request that separately validates the push remote and PR target repository and uses an approved `<owner>:<branch>` head; it must never be inferred from a URL heuristic. Do not fetch or publish during this exploration.
 

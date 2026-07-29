@@ -1,10 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { contentFactsFingerprint, executeHandle, prepareRepository, repositoryLockPath, sealHandle } from "../scripts/flow-commit.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const runtime = path.join(root, "scripts", "flow-commit.mjs");
@@ -13,12 +16,8 @@ function git(cwd, args, options = {}) {
   return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], ...options }).trim();
 }
 
-function gitRaw(cwd, args) {
-  return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-}
-
 function repo(branch = "feat/current") {
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "flow-commit-contract-"));
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "flow-commit-v2-test-"));
   git(cwd, ["init", "-q", "-b", branch]);
   git(cwd, ["config", "user.email", "flow@example.test"]);
   git(cwd, ["config", "user.name", "Flow Test"]);
@@ -28,292 +27,475 @@ function repo(branch = "feat/current") {
   return cwd;
 }
 
-function run(cwd, args, input) {
-  return spawnSync(process.execPath, [runtime, ...args], {
-    cwd,
-    input,
-    encoding: "utf8",
-    shell: false,
-  });
+function run(cwd, args) {
+  return spawnSync(process.execPath, [runtime, ...args], { cwd, encoding: "utf8", shell: false });
 }
 
-function inspect(cwd) {
-  const result = run(cwd, ["--inspect"]);
-  assert.equal(result.status, 0, result.stderr);
+function output(result) {
+  assert.ok(result.stdout, result.stderr);
   return JSON.parse(result.stdout);
 }
 
-function request(inspection, units, branch = { action: "keep" }) {
-  return {
-    schema: "flow-commit/request-v1",
-    expected: {
-      repositoryRoot: inspection.repositoryRoot,
-      branch: inspection.branch,
-      head: inspection.head,
-    },
-    branch,
-    units,
-  };
+function prepare(cwd) {
+  const result = run(cwd, ["--prepare"]);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  return output(result);
 }
 
-function execute(cwd, document) {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "flow-commit-request-"));
-  const file = path.join(directory, "request.json");
-  fs.writeFileSync(file, `${JSON.stringify(document)}\n`);
-  const result = run(cwd, ["--execute", "--request", file]);
-  return { result, output: JSON.parse(result.stdout) };
+function intent(prepared, units, branch = { action: "keep" }, extra = {}) {
+  const document = { schema: "flow-commit/intent-v2", branch, units, ...extra };
+  fs.writeFileSync(prepared.intentPath, `${JSON.stringify(document)}\n`);
+  return document;
+}
+
+function seal(cwd, prepared) {
+  const result = run(cwd, ["--prepare", "--handle", prepared.handle]);
+  return { result, output: output(result) };
+}
+
+function execute(cwd, prepared) {
+  const result = run(cwd, ["--execute", "--handle", prepared.handle]);
+  return { result, output: output(result) };
+}
+
+function ready(cwd, units, branch = { action: "keep" }) {
+  const prepared = prepare(cwd);
+  intent(prepared, units, branch);
+  const sealed = seal(cwd, prepared);
+  assert.equal(sealed.result.status, 0, sealed.result.stdout);
+  return { prepared: { ...prepared, handle: sealed.output.executeHandle }, sealed: sealed.output };
+}
+
+function store(prepared) {
+  return path.dirname(prepared.intentPath);
 }
 
 function changedPaths(cwd) {
-  return execFileSync("git", ["status", "--porcelain=v1", "-z", "--untracked-files=all"], { cwd })
-    .toString("utf8").split("\0").filter(Boolean).map((item) => item.slice(3)).sort();
-}
-
-function indexBytes(cwd) {
-  return fs.readFileSync(git(cwd, ["rev-parse", "--path-format=absolute", "--git-path", "index"]));
-}
-
-function assertCompleteResult(output) {
-  for (const field of ["schema", "success", "status", "repository", "branch", "completedUnits", "failedUnit", "remainingUnits", "leftovers", "recovery", "nextAction"]) {
-    assert.ok(Object.hasOwn(output, field), `missing result field: ${field}`);
+  const raw = execFileSync("git", ["status", "--porcelain=v1", "-z", "--untracked-files=all"], { cwd });
+  const fields = raw.toString("utf8").split("\0");
+  const paths = [];
+  for (let index = 0; index < fields.length; index += 1) {
+    const field = fields[index];
+    if (!field) continue;
+    paths.push(field.slice(3));
+    if (field[0] === "R" || field[0] === "C" || field[1] === "R" || field[1] === "C") index += 1;
   }
-  assert.equal(output.schema, "flow-commit/result-v1");
+  return paths.sort();
 }
 
-test("inspection is ephemeral, NUL-safe, and reports noop", () => {
-  const cwd = repo();
-  const clean = inspect(cwd);
-  assert.equal(clean.schema, "flow-commit/inspection-v1");
-  assert.equal(clean.status, "noop");
-  assert.deepEqual(clean.changes, []);
-  assert.deepEqual(clean.stagedPaths, []);
+function hook(cwd, name, script) {
+  const file = path.join(cwd, ".git", "hooks", name);
+  fs.writeFileSync(file, `#!/bin/sh\n${script}\n`, { mode: 0o755 });
+  fs.chmodSync(file, 0o755);
+}
 
-  const hostile = " leading $(touch should-not-run); `quoted` ";
+function asyncRun(cwd, args) {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [runtime, ...args], { cwd, encoding: "utf8", shell: false });
+    let stdout = ""; let stderr = "";
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.on("close", (status) => resolve({ status, stdout, stderr }));
+  });
+}
+
+test("prepare is compact, NUL-safe, and covers hostile, untracked, and deleted paths", () => {
+  const cwd = repo();
+  const clean = prepare(cwd);
+  assert.deepEqual(clean, { schema: "flow-commit/prepare-v2", status: "noop", branch: "feat/current", head: clean.head, protected: false, changes: [] });
+  const hostile = process.platform === "win32" ? " leading $(touch nope); `quoted` name.txt" : " leading $(touch nope); `quoted`\nname.txt";
   fs.writeFileSync(path.join(cwd, hostile), "literal\n");
-  for (const name of ["requirements.txt", "CMakeLists.txt", "README.sh", "guide.mdx"]) fs.writeFileSync(path.join(cwd, name), "literal\n");
-  fs.chmodSync(path.join(cwd, "guide.mdx"), 0o755);
-  const document = inspect(cwd);
-  assert.equal(document.status, "ready");
-  assert.ok(document.changes.some((change) => change.path === hostile));
-  assert.deepEqual(document.changes.map((change) => change.path).sort(), changedPaths(cwd));
-  assert.equal(fs.existsSync(path.join(cwd, "should-not-run")), false);
+  fs.unlinkSync(path.join(cwd, "base.txt"));
+  const prepared = prepare(cwd);
+  assert.equal(prepared.status, "ready");
+  assert.deepEqual(prepared.changes.map((item) => item.path).sort(), changedPaths(cwd));
+  assert.ok(prepared.changes.some((item) => item.path === hostile));
+  assert.ok(prepared.changes.some((item) => item.path === "base.txt" && item.worktreeStatus === "D"));
+  assert.match(prepared.handle, /^[a-f0-9]{64}\.[a-f0-9]{64}$/);
+  assert.equal(fs.existsSync(path.join(cwd, "nope")), false);
+  for (const forbidden of ["repositoryRoot", "commonDir", "fingerprint", "snapshot", "request"]) assert.equal(Object.hasOwn(prepared, forbidden), false);
 });
 
-test("request validation blocks gaps, overlaps, unsafe paths, invalid messages, and drift", () => {
+test("prepare rejects a preexisting index and repository operation without mutation", () => {
+  const stagedRepo = repo();
+  fs.writeFileSync(path.join(stagedRepo, "base.txt"), "staged\n");
+  git(stagedRepo, ["add", "base.txt"]);
+  const indexPath = git(stagedRepo, ["rev-parse", "--path-format=absolute", "--git-path", "index"]);
+  const before = fs.readFileSync(indexPath);
+  let response = run(stagedRepo, ["--prepare"]); let document = output(response);
+  assert.equal(response.status, 1);
+  assert.equal(document.error.code, "index-not-empty");
+  assert.deepEqual(fs.readFileSync(indexPath), before);
+
+  const mergingRepo = repo();
+  fs.writeFileSync(path.join(mergingRepo, "change.txt"), "change\n");
+  fs.writeFileSync(path.join(mergingRepo, ".git", "MERGE_HEAD"), `${"0".repeat(40)}\n`);
+  response = run(mergingRepo, ["--prepare"]); document = output(response);
+  assert.equal(response.status, 1);
+  assert.equal(document.error.code, "operation-in-progress");
+  assert.deepEqual(changedPaths(mergingRepo), ["change.txt"]);
+});
+
+test("seal detects changed bytes under the same path", () => {
   const cwd = repo();
-  fs.writeFileSync(path.join(cwd, "one.txt"), "one\n");
-  fs.writeFileSync(path.join(cwd, "two.txt"), "two\n");
-  const state = inspect(cwd);
-  const cases = [
-    [request(state, [{ paths: ["one.txt"], title: "fix(commit): keep coverage" }]), /coverage/i],
-    [request(state, [{ paths: ["one.txt", "two.txt"], title: "not conventional" }]), /title/i],
-    [request(state, [{ paths: ["one.txt", "../two.txt"], title: "fix(commit): reject traversal" }]), /relative/i],
-    [request(state, [{ paths: ["one.txt", "two.txt"], title: "fix(commit): reject absolute" }], { action: "create", name: "bad ref.." }), /branch/i],
-  ];
-  for (const [document, expected] of cases) {
-    const { result, output } = execute(cwd, document);
-    assert.equal(result.status, 1);
-    assert.equal(output.status, "blocked");
-    assert.match(output.error, expected);
-  }
-  const drift = request(state, [{ paths: ["one.txt", "two.txt"], title: "fix(commit): detect drift" }]);
-  fs.writeFileSync(path.join(cwd, "third.txt"), "third\n");
-  const response = execute(cwd, drift);
-  assert.equal(response.output.status, "blocked");
+  fs.writeFileSync(path.join(cwd, "change.txt"), "one\n");
+  const prepared = prepare(cwd);
+  intent(prepared, [{ paths: ["change.txt"], title: "fix(commit): bind changed bytes" }]);
+  fs.writeFileSync(path.join(cwd, "change.txt"), "two\n");
+  const response = seal(cwd, prepared);
   assert.equal(response.result.status, 1);
+  assert.equal(response.output.error.code, "content-drift");
 });
 
-test("root, branch, HEAD, and detached-state drift block before staging", () => {
-  const cwd = repo();
-  fs.writeFileSync(path.join(cwd, "change.txt"), "change\n");
-  const state = inspect(cwd);
-  const unit = [{ paths: ["change.txt"], title: "fix(commit): detect identity drift" }];
-  const rootMismatch = request(state, unit);
-  rootMismatch.expected.repositoryRoot = path.join(state.repositoryRoot, "other");
-  assert.equal(execute(cwd, rootMismatch).output.status, "drift");
-  const branchMismatch = request(state, unit);
-  git(cwd, ["branch", "-M", "feat/renamed"]);
-  assert.equal(execute(cwd, branchMismatch).output.status, "drift");
-  const renamed = inspect(cwd);
-  const headMismatch = request(renamed, unit);
-  fs.writeFileSync(path.join(cwd, "other.txt"), "other\n");
-  git(cwd, ["add", "other.txt"]); git(cwd, ["commit", "-qm", "chore: drift"]);
-  assert.equal(execute(cwd, headMismatch).output.status, "drift");
-  git(cwd, ["checkout", "--detach", "-q"]);
-  assert.equal(inspect(cwd).status, "blocked");
+test("seal detects executable-mode and symlink-target drift", { skip: process.platform === "win32" && "Windows fixture cannot reliably create POSIX symlinks and executable modes." }, () => {
+  const modeRepo = repo();
+  fs.writeFileSync(path.join(modeRepo, "mode.sh"), "exit 0\n", { mode: 0o644 });
+  let prepared = prepare(modeRepo);
+  intent(prepared, [{ paths: ["mode.sh"], title: "fix(commit): bind executable mode" }]);
+  fs.chmodSync(path.join(modeRepo, "mode.sh"), 0o755);
+  assert.equal(seal(modeRepo, prepared).output.error.code, "content-drift");
+
+  const linkRepo = repo();
+  fs.writeFileSync(path.join(linkRepo, "one"), "one\n");
+  fs.writeFileSync(path.join(linkRepo, "two"), "two\n");
+  fs.symlinkSync("one", path.join(linkRepo, "link"));
+  prepared = prepare(linkRepo);
+  intent(prepared, [
+    { paths: ["link", "one", "two"], title: "fix(commit): bind symlink target" },
+  ]);
+  fs.unlinkSync(path.join(linkRepo, "link"));
+  fs.symlinkSync("two", path.join(linkRepo, "link"));
+  assert.equal(seal(linkRepo, prepared).output.error.code, "content-drift");
 });
 
-test("rejects any staged or partially staged index without mutation", () => {
-  const cwd = repo();
-  fs.writeFileSync(path.join(cwd, "base.txt"), "staged\n");
-  git(cwd, ["add", "base.txt"]);
-  fs.writeFileSync(path.join(cwd, "base.txt"), "staged\nworktree\n");
-  const before = indexBytes(cwd);
-  const state = inspect(cwd);
-  assert.deepEqual(state.stagedPaths, ["base.txt"]);
-  const { result, output } = execute(cwd, request(state, [{ paths: ["base.txt"], title: "fix(commit): reject staging" }]));
-  assert.equal(result.status, 1);
-  assert.equal(output.status, "blocked");
-  assert.match(output.error, /staged/i);
-  assert.deepEqual(indexBytes(cwd), before);
+test("content fingerprint binds executable mode and symlink target on every platform", () => {
+  const file = { path: "tool.sh", indexStatus: " ", worktreeStatus: "M", kind: "file", bytes: 4, mode: "100644", content: "a".repeat(64) };
+  const link = { path: "link", indexStatus: "?", worktreeStatus: "?", kind: "symlink", bytes: 3, mode: "120000", content: "b".repeat(64) };
+  assert.notEqual(contentFactsFingerprint([file]), contentFactsFingerprint([{ ...file, mode: "100755" }]));
+  assert.notEqual(contentFactsFingerprint([link]), contentFactsFingerprint([{ ...link, bytes: 4, content: "c".repeat(64) }]));
 });
 
-test("protected branches require the exact requested branch and collisions never retry", () => {
-  const cwd = repo("main");
-  fs.writeFileSync(path.join(cwd, "change.txt"), "change\n");
-  const state = inspect(cwd);
-  const unit = { paths: ["change.txt"], title: "fix(commit): create task branch" };
-  const missing = execute(cwd, request(state, [unit]));
-  assert.equal(missing.output.status, "blocked");
-  assert.match(missing.output.error, /protected/i);
-  git(cwd, ["branch", "feat/exact-name"]);
-  const collision = execute(cwd, request(state, [unit], { action: "create", name: "feat/exact-name" }));
-  assert.equal(collision.result.status, 1);
-  assert.match(collision.output.error, /already exists|collision/i);
-  assert.equal(git(cwd, ["branch", "--show-current"]), "main");
-  const success = execute(cwd, request(state, [unit], { action: "create", name: "feat/no-retry" }));
-  assert.equal(success.result.status, 0, success.result.stderr);
-  assert.equal(success.output.status, "success");
-  assert.equal(success.output.branch, "feat/no-retry");
-});
-
-test("executes explicit ordered units and preserves titles and bodies", () => {
+test("seal strictly validates intent, coverage, branch collision, and compact summary", () => {
   const cwd = repo();
   fs.writeFileSync(path.join(cwd, "one.txt"), "one\n");
   fs.writeFileSync(path.join(cwd, "two.txt"), "two\n");
-  const state = inspect(cwd);
-  const body = "Why this is needed.\n\nIt remains byte-for-byte supplied.";
-  const { result, output } = execute(cwd, request(state, [
+  for (const [document, expected] of [
+    [{ schema: "flow-commit/intent-v2", branch: { action: "keep" }, units: [{ paths: ["one.txt"], title: "fix(commit): miss coverage" }] }, "coverage-mismatch"],
+    [{ schema: "flow-commit/intent-v2", branch: { action: "keep" }, units: [{ paths: ["one.txt", "../two.txt"], title: "fix(commit): reject traversal" }] }, "invalid-intent"],
+    [{ schema: "flow-commit/intent-v2", branch: { action: "keep" }, units: [{ paths: ["one.txt", "two.txt"], title: "not conventional" }] }, "invalid-intent"],
+    [{ schema: "flow-commit/intent-v2", branch: { action: "keep" }, units: [{ paths: ["one.txt", "two.txt"], title: "fix(commit): reject extras", extra: true }] }, "invalid-intent"],
+    [{ schema: "flow-commit/intent-v2", branch: { action: "keep" }, units: [{ paths: ["one.txt", "two.txt"], title: "fix(commit): reject root extras" }], extra: true }, "invalid-intent"],
+  ]) {
+    const prepared = prepare(cwd);
+    fs.writeFileSync(prepared.intentPath, JSON.stringify(document));
+    assert.equal(seal(cwd, prepared).output.error.code, expected);
+  }
+  const body = "Useful context.";
+  const prepared = prepare(cwd);
+  intent(prepared, [
     { paths: ["one.txt"], title: "feat(commit): add first unit", body },
     { paths: ["two.txt"], title: "fix(commit): add second unit" },
-  ]));
-  assert.equal(result.status, 0, result.stderr);
-  assert.equal(output.completedUnits.length, 2);
-  assert.equal(git(cwd, ["log", "-1", "--format=%s"]), "fix(commit): add second unit");
-  assert.equal(git(cwd, ["log", "-2", "--format=%B"]).includes(body), true);
-  assert.deepEqual(changedPaths(cwd), []);
+  ]);
+  const summary = seal(cwd, prepared);
+  assert.equal(summary.result.status, 0);
+  assert.deepEqual(summary.output.repository, { name: path.basename(cwd), branch: "feat/current", head: git(cwd, ["rev-parse", "--short=12", "HEAD"]) });
+  assert.deepEqual(summary.output.counts, { commits: 2, files: 2 });
+  assert.deepEqual(summary.output.units[0].paths, ["one.txt"]);
+  assert.deepEqual(summary.output.units[0].body, { present: true, bytes: Buffer.byteLength(body) });
+  assert.doesNotMatch(summary.result.stdout, /Useful context|fingerprint|snapshot|request-v2/);
+
+  const collisionRepo = repo("main");
+  fs.writeFileSync(path.join(collisionRepo, "change.txt"), "change\n");
+  git(collisionRepo, ["branch", "feat/collision"]);
+  const collision = prepare(collisionRepo);
+  intent(collision, [{ paths: ["change.txt"], title: "fix(commit): reject collision" }], { action: "create", name: "feat/collision" });
+  assert.equal(seal(collisionRepo, collision).output.error.code, "branch-collision");
 });
 
-test("preserves leading and trailing body whitespace through the commit message", () => {
-  for (const body of [" leading body", "trailing space ", "body ending in newline\n", "\nleading and trailing\n"]) {
-    const cwd = repo();
-    fs.writeFileSync(path.join(cwd, "body.txt"), "body\n");
-    const response = execute(cwd, request(inspect(cwd), [{ paths: ["body.txt"], title: "fix(commit): preserve body boundaries", body }]));
-    assert.equal(response.result.status, 0, response.result.stderr);
-    assert.equal(response.output.status, "success");
-    assert.equal(gitRaw(cwd, ["log", "-1", "--format=%B"]).includes(body), true, JSON.stringify({ body, message: gitRaw(cwd, ["log", "-1", "--format=%B"]) }));
-  }
-});
-
-test("later hook failure retains completed units and restores only the failing index", () => {
-  const cwd = repo();
-  fs.writeFileSync(path.join(cwd, "one.txt"), "one\n");
-  fs.writeFileSync(path.join(cwd, "two.txt"), "two\n");
-  const state = inspect(cwd);
-  const hook = path.join(cwd, ".git", "hooks", "pre-commit");
-  fs.writeFileSync(hook, "#!/bin/sh\n[ \"$(git diff --cached --name-only)\" = \"two.txt\" ] && exit 1\nexit 0\n", { mode: 0o755 });
-  fs.chmodSync(hook, 0o755);
-  const { result, output } = execute(cwd, request(state, [
-    { paths: ["one.txt"], title: "feat(commit): retain first" },
-    { paths: ["two.txt"], title: "fix(commit): fail second" },
-  ]));
-  assert.equal(result.status, 2);
-  assert.equal(output.status, "partial");
-  assert.equal(output.completedUnits.length, 1);
-  assert.equal(output.failedUnit.title, "fix(commit): fail second");
-  assert.deepEqual(output.leftovers, ["two.txt"]);
-  assert.deepEqual(execFileSync("git", ["diff", "--cached", "--name-only"], { cwd, encoding: "utf8" }).trim(), "");
-  assert.equal(git(cwd, ["log", "-1", "--format=%s"]), "feat(commit): retain first");
-});
-
-test("hook-added paths cause post-commit rollback and concurrent CAS is preserved", () => {
-  const cwd = repo();
-  fs.writeFileSync(path.join(cwd, "change.txt"), "change\n");
-  fs.writeFileSync(path.join(cwd, ".git", "info", "exclude"), "hook-extra.txt\n");
-  fs.writeFileSync(path.join(cwd, "hook-extra.txt"), "extra\n");
-  const hook = path.join(cwd, ".git", "hooks", "pre-commit");
-  fs.writeFileSync(hook, "#!/bin/sh\ngit add -f -- hook-extra.txt\n", { mode: 0o755 });
-  fs.chmodSync(hook, 0o755);
-  const state = inspect(cwd);
-  const response = execute(cwd, request(state, [{ paths: ["change.txt"], title: "fix(commit): reject hook drift" }]));
+test("prepared authority digest and strict envelope block repository substitution", () => {
+  const repoA = repo(); const repoB = repo();
+  fs.writeFileSync(path.join(repoA, "a.txt"), "a\n");
+  fs.writeFileSync(path.join(repoB, "b.txt"), "b\n");
+  let preparedA = prepare(repoA); let preparedB = prepare(repoB);
+  intent(preparedA, [{ paths: ["a.txt"], title: "fix(commit): keep repository a" }]);
+  fs.copyFileSync(path.join(store(preparedB), "prepared.json"), path.join(store(preparedA), "prepared.json"));
+  let response = seal(repoA, preparedA);
   assert.equal(response.result.status, 1);
-  assert.match(response.output.error, /verification|unexpected/i);
-  assert.equal(git(cwd, ["log", "-1", "--format=%s"]), "chore: initial");
-  assert.deepEqual(changedPaths(cwd), ["change.txt"]);
-  assert.equal(fs.readFileSync(path.join(cwd, "hook-extra.txt"), "utf8"), "extra\n");
+  assert.equal(response.output.error.code, "prepared-tamper");
+  assert.equal(git(repoA, ["rev-list", "--count", "HEAD"]), "1");
+  assert.equal(git(repoB, ["rev-list", "--count", "HEAD"]), "1");
+
+  preparedA = ready(repoA, [{ paths: ["a.txt"], title: "fix(commit): seal repository a" }]).prepared;
+  preparedB = prepare(repoB);
+  fs.copyFileSync(path.join(store(preparedB), "prepared.json"), path.join(store(preparedA), "prepared.json"));
+  response = execute(repoA, preparedA);
+  assert.equal(response.result.status, 1);
+  assert.equal(response.output.error.code, "prepared-tamper");
+  assert.equal(git(repoA, ["rev-list", "--count", "HEAD"]), "1");
+  assert.equal(git(repoB, ["rev-list", "--count", "HEAD"]), "1");
+  assert.deepEqual(changedPaths(repoA), ["a.txt"]);
+  assert.deepEqual(changedPaths(repoB), ["b.txt"]);
+
+  const strictRepo = repo();
+  fs.writeFileSync(path.join(strictRepo, "change.txt"), "change\n");
+  const strictPrepared = prepare(strictRepo);
+  intent(strictPrepared, [{ paths: ["change.txt"], title: "fix(commit): reject prepared extras" }]);
+  const preparedPath = path.join(store(strictPrepared), "prepared.json");
+  const envelope = JSON.parse(fs.readFileSync(preparedPath, "utf8"));
+  envelope.extra = true;
+  const bytes = Buffer.from(`${JSON.stringify(envelope)}\n`);
+  fs.writeFileSync(preparedPath, bytes);
+  const forgedHandle = `${strictPrepared.handle.split(".")[0]}.${crypto.createHash("sha256").update(bytes).digest("hex")}`;
+  assert.throws(() => sealHandle(forgedHandle), (error) => error.code === "prepared-tamper");
+  assert.equal(git(strictRepo, ["rev-list", "--count", "HEAD"]), "1");
 });
 
-test("a post-commit concurrent HEAD is never rolled back", () => {
+test("sealed execute handle binds the exact approved request", () => {
+  const repoA = repo(); const repoB = repo();
+  fs.writeFileSync(path.join(repoA, "a.txt"), "a\n");
+  fs.writeFileSync(path.join(repoB, "b.txt"), "b\n");
+  const preparedA = ready(repoA, [{ paths: ["a.txt"], title: "fix(commit): approve repository a" }]).prepared;
+  const preparedB = ready(repoB, [{ paths: ["b.txt"], title: "fix(commit): approve repository b" }]).prepared;
+  fs.copyFileSync(path.join(store(preparedB), "intent.json"), path.join(store(preparedA), "intent.json"));
+  fs.copyFileSync(path.join(store(preparedB), "sealed.json"), path.join(store(preparedA), "sealed.json"));
+  const response = execute(repoA, preparedA);
+  assert.equal(response.result.status, 1);
+  assert.equal(response.output.error.code, "sealed-tamper");
+  assert.equal(git(repoA, ["rev-list", "--count", "HEAD"]), "1");
+  assert.equal(git(repoB, ["rev-list", "--count", "HEAD"]), "1");
+});
+
+test("intent tamper, expiry, consumed handle, and reuse fail closed", () => {
   const cwd = repo();
   fs.writeFileSync(path.join(cwd, "change.txt"), "change\n");
-  const hook = path.join(cwd, ".git", "hooks", "post-commit");
-  fs.writeFileSync(hook, "#!/bin/sh\nnext=$(git commit-tree HEAD^{tree} -p HEAD -m 'chore: concurrent head')\ngit update-ref HEAD $next HEAD\n", { mode: 0o755 });
-  fs.chmodSync(hook, 0o755);
-  const { result, output } = execute(cwd, request(inspect(cwd), [{ paths: ["change.txt"], title: "fix(commit): preserve concurrent head" }]));
-  assert.equal(result.status, 1);
-  assert.equal(output.status, "drift");
-  assert.equal(git(cwd, ["log", "-1", "--format=%s"]), "chore: concurrent head");
-  assert.match(output.error, /concurrent HEAD/i);
+  let prepared = ready(cwd, [{ paths: ["change.txt"], title: "fix(commit): reject intent tamper" }]).prepared;
+  fs.writeFileSync(prepared.intentPath, `${JSON.stringify({ schema: "flow-commit/intent-v2", branch: { action: "keep" }, units: [{ paths: ["change.txt"], title: "fix(commit): tampered title" }] })}\n`);
+  assert.equal(execute(cwd, prepared).output.error.code, "intent-tamper");
+
+  prepared = prepareRepository({ cwd, now: 1000, ttlMs: 10 });
+  intent(prepared, [{ paths: ["change.txt"], title: "fix(commit): reject expiry" }]);
+  assert.throws(() => sealHandle(prepared.handle, { now: 1011 }), (error) => error.code === "handle-expired");
+
+  prepared = ready(cwd, [{ paths: ["change.txt"], title: "fix(commit): consume once" }]).prepared;
+  assert.equal(execute(cwd, prepared).result.status, 0);
+  assert.equal(fs.existsSync(store(prepared)), false);
+  assert.equal(execute(cwd, prepared).output.error.code, "handle-unavailable");
 });
 
-test("post-commit branch drift at the same HEAD preserves completed work and stops later units", () => {
+test("execute hashing is linear and rereads only the current future unit", () => {
   const cwd = repo();
-  fs.writeFileSync(path.join(cwd, "one.txt"), "one\n");
-  fs.writeFileSync(path.join(cwd, "two.txt"), "two\n");
-  git(cwd, ["branch", "hijacked"]);
-  const hook = path.join(cwd, ".git", "hooks", "post-commit");
-  fs.writeFileSync(hook, "#!/bin/sh\n[ \"$(git log -1 --format=%s)\" = \"feat(commit): complete first\" ] && git switch -q hijacked\n", { mode: 0o755 });
-  fs.chmodSync(hook, 0o755);
-  const response = execute(cwd, request(inspect(cwd), [
-    { paths: ["one.txt"], title: "feat(commit): complete first" },
-    { paths: ["two.txt"], title: "fix(commit): must not run" },
-  ]));
-  assert.equal(response.result.status, 2, JSON.stringify(response.output));
+  const units = [];
+  for (let index = 1; index <= 4; index += 1) {
+    const file = `unit-${index}.txt`;
+    fs.writeFileSync(path.join(cwd, file), `${index}\n`);
+    units.push({ paths: [file], title: `fix(commit): commit unit ${index}` });
+  }
+  const prepared = ready(cwd, units).prepared;
+  const reads = [];
+  const result = executeHandle(prepared.handle, { onContentRead: ({ path: file }) => reads.push(file) });
+  assert.equal(result.status, "success");
+  const counts = Object.fromEntries(units.map((unit) => [unit.paths[0], reads.filter((file) => file === unit.paths[0]).length]));
+  assert.deepEqual(counts, { "unit-1.txt": 1, "unit-2.txt": 2, "unit-3.txt": 2, "unit-4.txt": 2 });
+  assert.equal(reads.length, 7);
+});
+
+test("symbolic-link handle stores fail closed", { skip: process.platform === "win32" && "Windows symlink creation requires elevated fixture privileges." }, () => {
+  const cwd = repo();
+  fs.writeFileSync(path.join(cwd, "change.txt"), "change\n");
+  const prepared = prepare(cwd);
+  const unsafe = store(prepared); const moved = `${unsafe}-real`;
+  fs.renameSync(unsafe, moved); fs.symlinkSync(moved, unsafe, "dir");
+  assert.equal(seal(cwd, prepared).output.error.code, "unsafe-handle-store");
+  fs.unlinkSync(unsafe); fs.rmSync(moved, { recursive: true, force: true });
+});
+
+test("same-handle concurrent claim allows exactly one mutation", async () => {
+  const cwd = repo();
+  fs.writeFileSync(path.join(cwd, "change.txt"), "change\n");
+  hook(cwd, "pre-commit", "sleep 1\nexit 0");
+  const prepared = ready(cwd, [{ paths: ["change.txt"], title: "fix(commit): claim once" }]).prepared;
+  const responses = await Promise.all([
+    asyncRun(cwd, ["--execute", "--handle", prepared.handle]),
+    asyncRun(cwd, ["--execute", "--handle", prepared.handle]),
+  ]);
+  const documents = responses.map(output);
+  assert.equal(documents.filter((item) => item.status === "success").length, 1);
+  assert.equal(documents.filter((item) => item.error?.code === "handle-claimed" || item.error?.code === "handle-unavailable").length, 1);
+  assert.equal(git(cwd, ["rev-list", "--count", "HEAD"]), "2");
+});
+
+test("distinct handles for one common-dir allow exactly one execution to mutate", async () => {
+  const cwd = repo();
+  fs.writeFileSync(path.join(cwd, "change.txt"), "change\n");
+  hook(cwd, "pre-commit", "sleep 1\nexit 0");
+  const first = ready(cwd, [{ paths: ["change.txt"], title: "fix(commit): first authority" }]).prepared;
+  const second = ready(cwd, [{ paths: ["change.txt"], title: "fix(commit): second authority" }]).prepared;
+  const responses = await Promise.all([
+    asyncRun(cwd, ["--execute", "--handle", first.handle]),
+    asyncRun(cwd, ["--execute", "--handle", second.handle]),
+  ]);
+  const documents = responses.map(output);
+  assert.equal(documents.filter((item) => item.status === "success").length, 1);
+  assert.equal(documents.filter((item) => item.error?.code === "repository-locked").length, 1);
+  assert.equal(git(cwd, ["rev-list", "--count", "HEAD"]), "2");
+});
+
+test("abandoned handle claim and repository lock fail closed", () => {
+  const claimedRepo = repo();
+  fs.writeFileSync(path.join(claimedRepo, "change.txt"), "change\n");
+  let prepared = ready(claimedRepo, [{ paths: ["change.txt"], title: "fix(commit): reject abandoned claim" }]).prepared;
+  fs.writeFileSync(path.join(store(prepared), "execute.claim"), "abandoned\n", { flag: "wx" });
+  assert.equal(execute(claimedRepo, prepared).output.error.code, "handle-claimed");
+
+  const lockedRepo = repo();
+  fs.writeFileSync(path.join(lockedRepo, "change.txt"), "change\n");
+  prepared = ready(lockedRepo, [{ paths: ["change.txt"], title: "fix(commit): reject abandoned lock" }]).prepared;
+  const commonDir = fs.realpathSync.native(git(lockedRepo, ["rev-parse", "--path-format=absolute", "--git-common-dir"]));
+  const lock = repositoryLockPath(commonDir);
+  fs.mkdirSync(lock);
+  const response = execute(lockedRepo, prepared);
+  assert.equal(response.output.error.code, "repository-locked");
+  assert.match(response.output.error.message, /remove it manually/i);
+  assert.equal(fs.existsSync(lock), true);
+  assert.equal(fs.existsSync(store(prepared)), false);
+  fs.rmSync(lock, { recursive: true, force: true });
+});
+
+test("index restoration refuses to overwrite hook-created foreign staging", () => {
+  const cwd = repo();
+  fs.writeFileSync(path.join(cwd, "change.txt"), "change\n");
+  fs.writeFileSync(path.join(cwd, "foreign.txt"), "foreign\n");
+  fs.appendFileSync(path.join(cwd, ".git", "info", "exclude"), "foreign.txt\n");
+  hook(cwd, "pre-commit", "git add -f -- foreign.txt\nexit 1");
+  const prepared = ready(cwd, [{ paths: ["change.txt"], title: "fix(commit): preserve foreign staging" }]).prepared;
+  const response = execute(cwd, prepared);
+  assert.equal(response.output.status, "drift");
+  assert.equal(response.output.error.code, "foreign-index-change");
+  assert.match(git(cwd, ["diff", "--cached", "--name-only"]), /foreign\.txt/);
+  assert.equal(response.output.effects.worktree.state, "changed");
+  assert.ok(response.output.effects.worktree.paths.includes("foreign.txt"));
+});
+
+test("first-unit failure after branch creation is partial with explicit branch effect", () => {
+  const cwd = repo("main");
+  fs.writeFileSync(path.join(cwd, "change.txt"), "change\n");
+  hook(cwd, "pre-commit", "exit 1");
+  const prepared = ready(cwd, [{ paths: ["change.txt"], title: "fix(commit): report created branch" }], { action: "create", name: "fix/created-effect" }).prepared;
+  const response = execute(cwd, prepared);
+  assert.equal(response.result.status, 2);
   assert.equal(response.output.status, "partial");
-  assert.equal(response.output.branch, "hijacked");
-  assert.equal(response.output.completedUnits.length, 1);
-  assert.equal(response.output.failedUnit.title, "fix(commit): must not run");
-  assert.deepEqual(response.output.leftovers, ["two.txt"]);
-  assert.equal(git(cwd, ["branch", "--show-current"]), "hijacked");
-  assert.equal(git(cwd, ["log", "-1", "--format=%s", "feat/current"]), "feat(commit): complete first");
-  assert.equal(git(cwd, ["log", "-1", "--format=%s", "hijacked"]), "chore: initial");
+  assert.deepEqual(response.output.effects.branch, { state: "created" });
+  assert.equal(response.output.branch, "fix/created-effect");
+  assert.deepEqual(response.output.remaining[0].paths, ["change.txt"]);
 });
 
-test("merge state, detached HEAD, and request stdin are handled explicitly", () => {
+test("subdirectory invocation normalizes all Git work to the canonical root", () => {
   const cwd = repo();
-  fs.writeFileSync(path.join(cwd, "change.txt"), "change\n");
-  fs.writeFileSync(path.join(cwd, ".git", "MERGE_HEAD"), "0".repeat(40));
-  const blocked = inspect(cwd);
-  assert.equal(blocked.mergeState, true);
-  const response = execute(cwd, request(blocked, [{ paths: ["change.txt"], title: "fix(commit): reject merge state" }]));
-  assert.equal(response.output.status, "blocked");
-  fs.rmSync(path.join(cwd, ".git", "MERGE_HEAD"));
-  const state = inspect(cwd);
-  const stdin = run(cwd, ["--execute", "--request", "-"], JSON.stringify(request(state, [{ paths: ["change.txt"], title: "fix(commit): accept stdin" }])));
-  assert.equal(stdin.status, 0, stdin.stderr);
-});
-
-test("all CLI failures use a complete result-v1 document", () => {
-  const cwd = repo();
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "flow-commit-invalid-"));
-  const malformed = path.join(directory, "request.json");
-  fs.writeFileSync(malformed, "{not json");
-  for (const args of [["--execute", "--request", malformed], ["--unknown"], ["--execute"]]) {
-    const result = run(cwd, args);
-    assert.equal(result.status, 1);
-    const output = JSON.parse(result.stdout);
-    assertCompleteResult(output);
-    assert.equal(output.success, false);
-    assert.equal(output.completedUnits.length, 0);
-    assert.equal(output.failedUnit, null);
-    assert.deepEqual(output.remainingUnits, []);
-    assert.deepEqual(output.leftovers, []);
+  const subdir = path.join(cwd, "nested"); fs.mkdirSync(subdir);
+  fs.writeFileSync(path.join(subdir, "change.txt"), "change\n");
+  const prepared = ready(subdir, [{ paths: ["nested/change.txt"], title: "fix(commit): normalize repository root" }]).prepared;
+  const response = execute(subdir, prepared);
+  assert.equal(response.result.status, 0, response.result.stdout);
+  assert.equal(git(cwd, ["log", "-1", "--format=%s"]), "fix(commit): normalize repository root");
+  if (process.platform === "win32") {
+    fs.writeFileSync(path.join(subdir, "case.txt"), "case\n");
+    const alias = subdir.toUpperCase();
+    const casePrepared = ready(alias, [{ paths: ["nested/case.txt"], title: "fix(commit): normalize root casing" }]).prepared;
+    assert.equal(execute(alias, casePrepared).result.status, 0);
   }
 });
 
-test("runtime has no legacy planner, review authority, or commit -a invocation", () => {
-  const source = fs.readFileSync(runtime, "utf8");
-  assert.doesNotMatch(source, /gentle-ai|planId|lineage|lifecycle|topology|max-rounds|flow-work-units/i);
-  assert.doesNotMatch(source, /\["commit", "-a"\]/);
-  assert.match(source, /\["add", "--all", "--"/);
+test("CLI rejects unknown, duplicate, missing, and incompatible options", () => {
+  const cwd = repo();
+  for (const [args, pattern] of [
+    [["--unknown"], /Unsupported option/],
+    [["--prepare", "--prepare"], /Duplicate option/],
+    [["--prepare", "--execute", "--handle", "a".repeat(64)], /incompatible/],
+    [["--execute"], /requires --handle/],
+    [["--prepare", "--handle"], /Missing value/],
+    [["--execute", "--handle", "a".repeat(64), "--handle", "b".repeat(64)], /Duplicate option/],
+  ]) {
+    const response = run(cwd, args); const document = output(response);
+    assert.equal(response.status, 1);
+    assert.match(document.error.message, pattern);
+  }
+});
+
+test("ordered units retain commit verification and compact success omits sensitive payloads", () => {
+  const cwd = repo();
+  fs.writeFileSync(path.join(cwd, "one.txt"), "one\n");
+  fs.writeFileSync(path.join(cwd, "two.txt"), "two\n");
+  const body = "Why this unit exists.";
+  const prepared = ready(cwd, [
+    { paths: ["one.txt"], title: "feat(commit): create first unit", body },
+    { paths: ["two.txt"], title: "fix(commit): create second unit" },
+  ]).prepared;
+  const response = execute(cwd, prepared);
+  assert.equal(response.result.status, 0, response.result.stdout);
+  assert.equal(response.output.schema, "flow-commit/result-v2");
+  assert.equal(response.output.status, "success");
+  assert.deepEqual(response.output.completed.map((unit) => unit.title), ["feat(commit): create first unit", "fix(commit): create second unit"]);
+  assert.deepEqual(response.output.counts, { completed: 2, remaining: 0, leftovers: 0 });
+  assert.deepEqual(response.output.leftovers, []);
+  assert.deepEqual(response.output.effects.branch, { state: "kept" });
+  assert.doesNotMatch(response.result.stdout, /Why this unit exists|request-v2|snapshot|fingerprint|"paths"/);
+  assert.equal(git(cwd, ["log", "-1", "--format=%s"]), "fix(commit): create second unit");
+  assert.match(git(cwd, ["log", "-2", "--format=%B"]), /Why this unit exists/);
+});
+
+test("later hook failure preserves completed units and actionable remaining paths", () => {
+  const cwd = repo();
+  fs.writeFileSync(path.join(cwd, "one.txt"), "one\n");
+  fs.writeFileSync(path.join(cwd, "two.txt"), "two\n");
+  hook(cwd, "pre-commit", "[ \"$(git diff --cached --name-only)\" = \"two.txt\" ] && exit 1\nexit 0");
+  const prepared = ready(cwd, [
+    { paths: ["one.txt"], title: "feat(commit): retain first unit" },
+    { paths: ["two.txt"], title: "fix(commit): fail second unit", body: "Not repeated in output." },
+  ]).prepared;
+  const response = execute(cwd, prepared);
+  assert.equal(response.result.status, 2);
+  assert.equal(response.output.status, "partial");
+  assert.equal(response.output.completed.length, 1);
+  assert.deepEqual(response.output.failed.paths, ["two.txt"]);
+  assert.deepEqual(response.output.remaining[0].paths, ["two.txt"]);
+  assert.deepEqual(response.output.leftovers, ["two.txt"]);
+  assert.doesNotMatch(response.result.stdout, /Not repeated in output/);
+  assert.equal(git(cwd, ["log", "-1", "--format=%s"]), "feat(commit): retain first unit");
+});
+
+test("hook path effects trigger CAS rollback and observable-effect reporting", () => {
+  const cwd = repo();
+  fs.writeFileSync(path.join(cwd, "change.txt"), "change\n");
+  fs.writeFileSync(path.join(cwd, "hook-extra.txt"), "extra\n");
+  fs.appendFileSync(path.join(cwd, ".git", "info", "exclude"), "hook-extra.txt\n");
+  hook(cwd, "pre-commit", "git add -f -- hook-extra.txt");
+  const prepared = ready(cwd, [{ paths: ["change.txt"], title: "fix(commit): reject hook path effect" }]).prepared;
+  const response = execute(cwd, prepared);
+  assert.notEqual(response.result.status, 0);
+  assert.match(response.output.error.message, /postcondition|parent, tree, paths/i);
+  assert.equal(git(cwd, ["log", "-1", "--format=%s"]), "chore: initial");
+  assert.ok(response.output.leftovers.includes("change.txt"));
+  assert.equal(response.output.effects.worktree.state, "unchanged");
+  assert.match(response.output.recovery, /observed hook effects/i);
+});
+
+test("post-commit concurrent HEAD is preserved and never globally rolled back", () => {
+  const cwd = repo();
+  fs.writeFileSync(path.join(cwd, "change.txt"), "change\n");
+  hook(cwd, "post-commit", "next=$(git commit-tree HEAD^{tree} -p HEAD -m 'chore: concurrent head')\ngit update-ref HEAD $next HEAD");
+  const prepared = ready(cwd, [{ paths: ["change.txt"], title: "fix(commit): preserve concurrent head" }]).prepared;
+  const response = execute(cwd, prepared);
+  assert.equal(response.output.status, "drift");
+  assert.equal(response.output.error.code, "concurrent-head");
+  assert.equal(git(cwd, ["log", "-1", "--format=%s"]), "chore: concurrent head");
+});
+
+test("handle stores are cleaned after ordinary failure", () => {
+  const cwd = repo();
+  fs.writeFileSync(path.join(cwd, "change.txt"), "change\n");
+  hook(cwd, "pre-commit", "exit 1");
+  const prepared = ready(cwd, [{ paths: ["change.txt"], title: "fix(commit): clean failed handle" }]).prepared;
+  const response = execute(cwd, prepared);
+  assert.equal(response.result.status, 1);
+  assert.equal(fs.existsSync(store(prepared)), false);
 });

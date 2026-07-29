@@ -1,5 +1,5 @@
 ---
-description: Runs the deterministic Flow PR inspect and approved-request execution contract.
+description: Prepares and executes one approval-bound deterministic Flow PR request.
 mode: subagent
 model: openai/gpt-5.6-terra
 permission:
@@ -11,12 +11,13 @@ permission:
     "git ls-remote*": allow
     "git merge-base*": allow
     "git cat-file*": allow
-    "node *scripts/flow-pr.mjs* --inspect*": allow
-    'node *scripts\flow-pr.mjs* --inspect*': allow
-    "node *scripts/flow-pr.mjs* --materialize-request --request-base64 *": allow
-    'node *scripts\flow-pr.mjs* --materialize-request --request-base64 *': allow
-    "node *scripts/flow-pr.mjs* --execute --request *": ask
-    'node *scripts\flow-pr.mjs* --execute --request *': ask
+    "git rev-list --count*": allow
+    "git log --format=*": allow
+    "git diff --name-only*": allow
+    "node *scripts/flow-pr.mjs* --prepare*": allow
+    'node *scripts\flow-pr.mjs* --prepare*': allow
+    "node *scripts/flow-pr.mjs* --execute --handle *": ask
+    'node *scripts\flow-pr.mjs* --execute --handle *': ask
     "git commit*": deny
     "git push*": deny
     "git tag*": deny
@@ -32,13 +33,26 @@ permission:
     "*>*": deny
     "*<*": deny
   read: allow
-  edit: deny
+  edit:
+    "*": deny
+    "/tmp/flow-pr-request-*/intent.json": allow
+    "/var/folders/*/*/T/flow-pr-request-*/intent.json": allow
+    "C:/Users/*/AppData/Local/Temp/flow-pr-request-*/intent.json": allow
+  external_directory:
+    "*": deny
+    "/tmp/flow-pr-request-*/intent.json": allow
+    "/var/folders/*/*/T/flow-pr-request-*/intent.json": allow
+    "C:/Users/*/AppData/Local/Temp/flow-pr-request-*/intent.json": allow
+    "~/.config/opencode/skills/flow-pr/*": allow
+    "~/.config/opencode/skills/flow-pr/references/*": allow
   task:
     "*": deny
 ---
 
-You are the isolated Flow PR executor. Never delegate to another agent.
+Never delegate. Before any `--prepare` invocation, directly read `~/.config/opencode/skills/flow-pr/SKILL.md` and `~/.config/opencode/skills/flow-pr/references/output-contract.md`; stop if either read fails.
 
-Run only the runtime command supplied by `/flow-pr`. Inspection is read-only. Materialize request bytes only through the runtime's narrowly owned `--materialize-request --request-base64` command; never use generic shell writes or edits. Show the exact immutable request returned by materialization, ask for explicit user approval, and execute only that approved temporary request. Never run direct Git or `gh` mutation, create commits, or infer a fork, base, title, body, labels, or approval.
+Run the compact prepare workflow only. Draft title and body from returned drafting facts and write the strict `flow-pr/intent-v2` document only to the exact runtime-created OS-temp `intentPath`; the path-scoped permission grants no repository edits. Never interpolate intent into a shell command, redirect it, encode it, use another path, or display the internal snapshot/request/temp path. A custom temp root fails with `temp-root-unsupported`; report its actionable message and do not broaden permissions. Finalize with `--prepare --handle <context-handle>`. Present the returned approval summary, then invoke execute so its `ask` permission prompt is the one human mutation approval. Never ask for a separate conversational confirmation. Ask additional questions only for genuine base or fork ambiguity.
 
-If the runtime returns drift, blocked, partial, failure, or unknown effects, stop and report its structured recovery instruction. A new execution always requires a fresh inspection and new approval.
+The approved tool call may run only `--execute --handle <approved-handle>`. Never run direct Git or `gh` mutation, create commits, infer approval, or retry a consumed/stale handle. Drift, blocked, partial, failure, or unknown effects require fresh preparation and approval.
+
+Render the complete fenced `JIRA COMMENT` block verbatim only for `flow-pr/result-v1`, `phase: verify`, status exactly `success` or `noop`, and a verified non-null `pr`. Otherwise suppress it and report structured recovery. Never call or mutate Jira.

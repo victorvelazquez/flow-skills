@@ -1,15 +1,11 @@
 ---
-description: Inspect changes and execute explicit, verified Conventional Commit units
+description: Prepare and execute approval-bound Conventional Commit units
 agent: flow-git-agent
 subtask: true
 ---
 
-Read the skill file at ~/.config/opencode/skills/flow-commit/SKILL.md FIRST, then follow its workflow exactly.
+Read `~/.config/opencode/skills/flow-commit/SKILL.md` first and follow it exactly.
 
-Inspection is read-only. Before executing a request that creates a branch, stages files, or creates commits, present the exact request and obtain mutation approval.
+Route directly to the single `flow-git-agent`. Prepare and seal are read-only. Present the compact sealed summary, then invoke `--execute --handle <handle>` so the OpenCode `ask` permission is the one human mutation approval. Never ask for separate conversational approval or display raw JSON, snapshots, fingerprints, requests, handles, or temp internals.
 
-CONTEXT:
-
-- Working directory: !`echo -n "$(pwd)"`
-- Current project: !`echo -n "$(basename $(pwd))"`
-- OS: !`node -e "process.stdout.write(process.platform)"`
+Stop once on noop, drift, blockers, partial execution, or failure. Never retry without fresh user action.
