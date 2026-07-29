@@ -16,8 +16,8 @@ For `blocked`, `drift`, `partial`, `failure`, any unknown status, an incomplete 
 ## Evidence Rules
 
 - Render verified or evidenced values only. The PR row MUST use `result.pr.url` directly.
-- Derive branch and target values from the verified result snapshot and approved request.
-- Derive candidate metrics only from the approved request, verified snapshot/base/head facts, already-available completed task context, or narrowly scoped read-only Git inspection anchored to the verified base and head OIDs.
+- Derive branch and target values from `result.publication`.
+- Derive candidate metrics only from verified publication facts, already-available completed task context, or narrowly scoped read-only Git inspection anchored to the verified base and head OIDs.
 - Use `No detectado` when evidence cannot establish a value. Never guess.
 - Resolve subtasks from already-available completed SDD task context first, meaningful commits second, and changed architectural layers last. Do not make Engram mandatory.
 - Limit subtasks to 10. Write each as a verb plus what, with at most 8 words.
