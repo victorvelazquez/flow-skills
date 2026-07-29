@@ -78,3 +78,26 @@ test("flow-commit and flow-auto-deliver remain commit-only", () => {
   const commit = read("commands/flow-commit.md"); const auto = read("commands/flow-auto-deliver.md"); const runtime = read("scripts/flow-commit.mjs");
   assert.match(`${commit}\n${auto}\n${runtime}`, /flow-commit/); assert.doesNotMatch(auto, /\/flow-pr/i); assert.match(auto, /Do not audit, edit, push, publish, create a PR/i);
 });
+
+test("flow-commit exposes compact prepare, semantic intent, seal, and one approval", () => {
+  const command = read("commands/flow-commit.md"); const agent = read("agents/flow-git-agent.md"); const skill = read("skills/flow-commit/SKILL.md"); const contract = `${command}\n${agent}\n${skill}`;
+  assert.match(command, /^agent: flow-git-agent$/m);
+  assert.match(contract, /--prepare/); assert.match(contract, /flow-commit\/intent-v2/); assert.match(contract, /--prepare --handle/); assert.match(contract, /--execute --handle/);
+  for (const surface of [command, agent, skill]) {
+    assert.match(surface, /one human mutation approval|one human mutation approval|one approval/i);
+    assert.match(surface, /Never ask for (?:a )?separate|Do not ask for separate/i);
+    assert.match(surface, /raw JSON|Never repeat bodies|without raw JSON/i);
+  }
+  assert.match(agent, /bash:\n    "\*": deny/);
+  assert.match(agent, /task:\n    "\*": deny/);
+  assert.match(agent, /--prepare": allow/);
+  assert.match(agent, /--prepare --handle \*": allow/);
+  assert.match(agent, /--execute --handle \*": ask/);
+  assert.match(agent, /git add\*": deny/); assert.match(agent, /git commit\*": deny/); assert.match(agent, /git push\*": deny/); assert.match(agent, /git switch\*": deny/); assert.match(agent, /git update-ref\*": deny/);
+  assert.match(agent, /edit:\n    "\*": deny/); assert.match(agent, /flow-commit-\*\/intent\.json": allow/);
+  assert.match(agent, /Never delegate/); assert.doesNotMatch(contract, /flow-pr\.mjs|flow-pr-agent|--execute --request|flow-commit\/request-v1|--inspect/);
+  assert.match(`${agent}\n${skill}`, /repository basename.*(?:branch\/HEAD|branch.*HEAD)/i);
+  assert.match(skill, /prepared-envelope bytes.*opaque prepare handle digest/i);
+  assert.match(contract, /Never run.*automatic retry|Never use.*automatic retries/i);
+  assert.doesNotMatch(contract, /base64|planId|journal|full request.*approv|exact request.*approv/i);
+});

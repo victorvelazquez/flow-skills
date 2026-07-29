@@ -1,6 +1,6 @@
 {
   "$schema": "flow-assets-lock/v1",
-  "capturedAt": "2026-07-29T16:27:07.000Z",
+  "capturedAt": "2026-07-29T18:13:16.000Z",
   "source": {
     "kind": "opencode-user-config",
     "opencodeVersion": "1.18.7",
@@ -10,14 +10,14 @@
     "sha256": "cb6a71bb0a9225af324cfc45183793c29dfe29cfb740e447c893de9856c58b8d"
   },
   "totals": {
-    "bytes": 576145,
+    "bytes": 603444,
     "count": 68
   },
   "files": [
     {
       "path": "agents/flow-git-agent.md",
-      "sha256": "d23a2e0bcad5b57249007ef5e8d785c27537abc3a10cf5d7c4624ec8ce4fd142",
-      "bytes": 1119,
+      "sha256": "4fcf85cb34cb241861178c5ff24385937c744914e1df5187eb6c3c8fbdb9004c",
+      "bytes": 2650,
       "mode": "100644",
       "executable": false
     },
@@ -44,8 +44,8 @@
     },
     {
       "path": "commands/flow-auto-deliver.md",
-      "sha256": "ed3e5d3c400f4300a04400fa131aa38e5202d4539c3e1b332237b202a2bfdb14",
-      "bytes": 1081,
+      "sha256": "08c8650c1d28f117104315bae0bed59b410c97b2f13df0333fa8953a0bd52e7f",
+      "bytes": 729,
       "mode": "100644",
       "executable": false
     },
@@ -65,8 +65,8 @@
     },
     {
       "path": "commands/flow-commit.md",
-      "sha256": "c79f7f649f6fdab03a6a7bc40685639bd1a769d03144f35873e64974441a3078",
-      "bytes": 569,
+      "sha256": "69048fee934af4d9640093ffe3359d80a63a5953135405c4648bb72ad9a58695",
+      "bytes": 667,
       "mode": "100644",
       "executable": false
     },
@@ -156,8 +156,8 @@
     },
     {
       "path": "scripts/flow-commit.mjs",
-      "sha256": "61b45d0ec8002806c4670220e4860ffba054897238b7ccc1c0c02627180865ac",
-      "bytes": 18175,
+      "sha256": "d77cb69149f9e0cbb743b577a2d84ee25d19f1060b753d764a84d5a9d2bf5bcd",
+      "bytes": 42448,
       "mode": "100644",
       "executable": false
     },
@@ -415,8 +415,8 @@
     },
     {
       "path": "skills/flow-commit/SKILL.md",
-      "sha256": "aadb80f0089efd9c553469a41929d742c96809f83a046135ead0e4bd2ec3e731",
-      "bytes": 2264,
+      "sha256": "739b7f012323976714807c81d3f35b3673c04c9dd37b5e5cf724a13da6897b23",
+      "bytes": 4013,
       "mode": "100644",
       "executable": false
     },

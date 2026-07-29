@@ -1,10 +1,10 @@
 ---
 name: flow-commit
-description: "Trigger: /flow-commit. Inspect changes, choose explicit work units, and execute verified Conventional Commits."
+description: "Trigger: /flow-commit. Prepare semantic commit units and execute one sealed, verified Git transaction."
 license: Apache-2.0
 metadata:
   author: gentleman-programming
-  version: "5.0"
+  version: "6.0"
 ---
 
 # flow-commit
@@ -16,26 +16,35 @@ Load for `/flow-commit` or a request to commit current local changes through Flo
 ## Hard Rules
 
 - Treat `scripts/flow-commit.mjs` as the Git execution source of truth.
-- Inspect first with `node ~/.config/opencode/scripts/flow-commit.mjs --inspect`; inspection is read-only and ephemeral.
-- The agent chooses the branch and ordered semantic units. The runtime never groups files, generates messages, retries branch names, or retains an inspection token.
-- Each unit must have a Conventional title in `type(scope): outcome` form. Include a body only when it adds useful context; preserve it exactly.
-- Every inspected path belongs to exactly one explicit unit. Paths must be literal, relative, non-empty, and disjoint.
-- Never push, open a PR, run an audit, or invoke direct `git add` / `git commit`. The execute request is the only mutation path.
-- Stop on staged changes, inspection drift, merge state, hook drift, or a branch collision. Do not retry a different branch name.
+- Keep one specialized agent. It reads necessary diffs, chooses branch action and ordered semantic units, and never delegates or sends full diff/request context through another agent.
+- Each unit owns exact disjoint paths and uses `type(scope): outcome`. Add a body only when useful.
+- Never use direct Git mutation, push, PR, audit, build, install, sync, automatic retries, hook skipping, or global rollback.
+- Raw JSON, snapshots, fingerprints, sealed requests, handles, and temp paths are internal. User output is compact prose.
+- The OpenCode `ask` permission on `--execute --handle` is the one human mutation approval. Never ask for a separate conversational confirmation.
+- Stop once on noop, blocker, drift, partial, failure, or unknown effects. A retry requires fresh user action and preparation.
 
-## Execution Steps
+## Workflow
 
-1. Run `--inspect` and read the JSON document. A `noop` result ends the workflow.
-2. Compare every `changes[].path` with the intended work units. Choose `branch: {"action":"create","name":"type/slug"}` on a protected branch; otherwise use `{"action":"keep"}` unless an explicit new branch is wanted.
-3. Present the exact request JSON and obtain approval for mutation.
-4. Write the approved `flow-commit/request-v1` document to a temporary file (or pass it on stdin), then run:
+1. Run `node ~/.config/opencode/scripts/flow-commit.mjs --prepare`. It returns only compact drafting facts plus a runtime-owned OS-temp `intentPath` and opaque handle. `noop` ends the workflow.
+2. Read only necessary `git diff`, `git log`, `git show`, and `git status` information in this same agent session.
+3. Write exactly this strict document to the returned `intentPath` using the path-scoped edit permission:
 
-   ```bash
-   node ~/.config/opencode/scripts/flow-commit.mjs --execute --request <request.json>
+   ```json
+   {"schema":"flow-commit/intent-v2","branch":{"action":"keep"},"units":[{"paths":["literal/path"],"title":"type(scope): outcome","body":"Optional useful context."}]}
    ```
 
-5. Report the structured result. `success` has no leftovers; `partial` retains earlier verified commits and reports remaining units; all other outcomes require a new inspection.
+4. Run `--prepare --handle <prepare-handle>` to seal it. Present repository basename, current branch/HEAD abbreviation, branch action, ordered titles, exact paths, body presence/byte counts, and totals. Keep both opaque handles internal. The returned sealed execute handle binds the approved request digest in addition to the original prepared digest. Do not display the raw runtime document and do not ask for approval separately.
+5. Invoke `--execute --handle <sealed-execute-handle>`. Its permission prompt is the approval. Report compact verified results; success lists commit OID/title and counts without bodies or repeated path arrays. Partial/failure includes actionable remaining paths and recovery.
+
+## Safety Contract
+
+Preparation binds the exact strict prepared-envelope bytes into the opaque prepare handle digest, then internally binds canonical repository/common-dir identity, branch, HEAD, empty index, operation state, path statuses, bytes, executable mode, deletions, untracked content, and symlink targets. Seal returns an internal execute handle carrying both the prepared digest and sealed request digest. Execute validates both caller-carried digests before trusting authority, then reinspects repository authority and atomically claims the handle and repository-scoped lock before mutation.
+
+Commits retain hooks, exact staging, write-tree, parent/tree/path/message postconditions, CAS rollback for a rejected runtime commit, partial completed commits, and leftovers. Hook identity is never claimed; only observable hook effects and postconditions are reported. Abandoned claims/locks and consumed handles fail closed and require fresh preparation.
 
 ## Output Contract
 
-Report the inspected branch and HEAD, requested branch action, each ordered unit and exact paths, completed commit OIDs, failed/remaining units, leftovers, recovery guidance, and the next user-approved action.
+- Before execute: repository basename, current branch/HEAD abbreviation, current/create branch action, ordered titles, exact paths, body presence/bytes, and file/commit totals.
+- Success: status, branch effect, OID/title per commit, counts, empty leftovers.
+- Partial/failure: completed commits, failed/remaining titles and exact paths, leftovers, observed effects, and fresh-prepare recovery.
+- Never repeat bodies or expose request/snapshot/fingerprint internals.
