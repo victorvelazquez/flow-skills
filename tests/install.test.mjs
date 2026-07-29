@@ -9,7 +9,23 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const installer = path.join(root, "install.mjs");
-const lock = JSON.parse(fs.readFileSync(path.join(root, "flow-assets.lock.json"), "utf8"));
+
+function git(args, label) {
+  const result = spawnSync("git", args, { cwd: root, encoding: "utf8" });
+  assert.equal(result.status, 0, [
+    `Failed to read ${label} from Git.`,
+    result.error?.message,
+    result.stderr,
+  ].filter(Boolean).join("\n"));
+  return result.stdout;
+}
+
+const committedHead = git(["rev-parse", "HEAD"], "committed HEAD").trim();
+const committedLock = (() => {
+  const bytes = git(["show", "HEAD:flow-assets.lock.json"], "flow-assets.lock.json at committed HEAD");
+  try { return JSON.parse(bytes); }
+  catch (error) { assert.fail(`Committed HEAD flow-assets.lock.json is invalid JSON: ${error.message}`); }
+})();
 const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
 function destination() {
@@ -86,11 +102,12 @@ test("no-argument preview and --dry-run are read-only and do not recover transac
   assert.deepEqual(snapshot(target), blockedBefore);
 });
 
-test("ready empty destination previews additions and installs every locked asset", () => {
+test("ready empty destination previews and installs every committed HEAD asset", () => {
   const target = destination(), configBytes = seedConfig(target);
   const plan = preview(target);
-  assert.deepEqual(plan.counts, { add: lock.totals.count, change: 0, delete: 0 });
-  assert.deepEqual(plan.totals, lock.totals);
+  assert.equal(plan.target.commit, committedHead);
+  assert.deepEqual(plan.counts, { add: committedLock.totals.count, change: 0, delete: 0 });
+  assert.deepEqual(plan.totals, committedLock.totals);
   assert.equal(plan.configuration.ready, true);
   assert.match(plan.applyCommand, new RegExp(plan.planId));
   assert.match(plan.applyCommand, new RegExp(plan.target.commit));
@@ -98,12 +115,12 @@ test("ready empty destination previews additions and installs every locked asset
   const result = json(apply(target, plan));
   assert.equal(result.verified, true);
   assert.deepEqual(result.counts, plan.counts);
-  assert.deepEqual(result.totals, lock.totals);
+  assert.deepEqual(result.totals, committedLock.totals);
   assert.equal(result.configChanged, false);
   assert.equal(result.gitChanged, false);
   assert.equal(result.restartRequired, true);
   assert.deepEqual(fs.readFileSync(path.join(target, "opencode.json"), "utf8"), configBytes);
-  for (const entry of lock.files) {
+  for (const entry of committedLock.files) {
     const installed = path.join(target, ...entry.path.split("/"));
     assert.equal(fs.existsSync(installed), true, entry.path);
     assert.equal(digest(fs.readFileSync(installed)), entry.sha256, entry.path);
@@ -137,7 +154,7 @@ test("apply requires both accepted IDs and rejects target or destination drift b
 
 test("existing managed assets receive a persistent verified backup and unrelated files survive", () => {
   const target = destination(); seedConfig(target);
-  const managed = lock.files[0].path, managedPath = path.join(target, ...managed.split("/"));
+  const managed = committedLock.files[0].path, managedPath = path.join(target, ...managed.split("/"));
   fs.mkdirSync(path.dirname(managedPath), { recursive: true }); fs.writeFileSync(managedPath, "previous bytes\n");
   const unrelated = path.join(target, "scripts", "personal-tool.mjs");
   fs.mkdirSync(path.dirname(unrelated), { recursive: true }); fs.writeFileSync(unrelated, "personal\n");
