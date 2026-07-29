@@ -10,7 +10,12 @@ const permissionRules = (source, permission) => {
   const block = source.match(new RegExp(`^  ${permission}:\\n([\\s\\S]*?)(?=^  [a-z_]+:|^---$)`, "m"))?.[1] || "";
   return [...block.matchAll(/^    (["'])(.*?)\1: (allow|ask|deny)$/gm)].map(([, , pattern, action]) => ({ pattern, action }));
 };
-const permissionFor = (rules, target) => rules.reduce((action, rule) => rule.pattern === "*" || rule.pattern === target ? rule.action : action, undefined);
+const expandHome = (value, home) => value.replace(/^~/, home);
+const externalResource = (file) => `${file.slice(0, file.lastIndexOf("/"))}/*`;
+const permissionFor = (rules, resource, home) => rules.reduce((action, rule) => {
+  const pattern = expandHome(rule.pattern, home);
+  return pattern === "*" || pattern === resource ? rule.action : action;
+}, undefined);
 const jiraTemplate = `### <FEATURE|FIX|REFACTOR|CHORE|DOCS>: <human-readable title>
 
 <what changed and why>
@@ -46,24 +51,29 @@ test("flow-pr agent externally reads only its installed contracts before prepare
   const agent = read("agents/flow-pr-agent.md");
   const external = permissionRules(agent, "external_directory");
   const edit = permissionRules(agent, "edit");
-  const contracts = [
-    "~/.config/opencode/skills/flow-pr/SKILL.md",
-    "~/.config/opencode/skills/flow-pr/references/output-contract.md",
+  const home = "C:/Users/opencode-test";
+  const files = [
+    `${home}/.config/opencode/skills/flow-pr/SKILL.md`,
+    `${home}/.config/opencode/skills/flow-pr/references/output-contract.md`,
   ];
+  const resources = files.map(externalResource);
 
-  for (const contract of contracts) {
-    assert.equal(permissionFor(external, contract), "allow");
-    assert.notEqual(permissionFor(edit, contract), "allow");
+  for (const resource of resources) {
+    assert.equal(permissionFor(external, resource, home), "allow");
+    assert.notEqual(permissionFor(edit, resource, home), "allow");
   }
-  for (const unrelated of [
-    "~/.config/opencode/opencode.json",
-    "~/.config/opencode/skills/flow-commit/SKILL.md",
-    "~/.config/opencode/skills/flow-pr/references/other.md",
-  ]) assert.equal(permissionFor(external, unrelated), "deny");
+  for (const unrelatedResource of [
+    `${home}/.config/opencode/*`,
+    `${home}/.config/opencode/skills/flow-commit/*`,
+    `${home}/.config/opencode/skills/skill-improver/references/*`,
+  ]) assert.equal(permissionFor(external, unrelatedResource, home), "deny");
 
   const externalAllows = external.filter(({ action }) => action === "allow").map(({ pattern }) => pattern);
-  assert.deepEqual(externalAllows.filter((pattern) => pattern.startsWith("~/.config/opencode/")), contracts);
-  assert.doesNotMatch(externalAllows.join("\n"), /~\/\.config\/opencode\/(?:\*\*|skills\/\*|skills\/\*\*)/);
+  assert.deepEqual(externalAllows.filter((pattern) => pattern.startsWith("~/.config/opencode/")), [
+    "~/.config/opencode/skills/flow-pr/*",
+    "~/.config/opencode/skills/flow-pr/references/*",
+  ]);
+  for (const broad of ["~/.config/opencode/**", "~/.config/opencode/skills/*", "~/.config/opencode/skills/**"]) assert.ok(!externalAllows.includes(broad));
   assert.match(agent, /Before any `--prepare` invocation, directly read[^\n]+output-contract\.md`; stop if either read fails\./);
 });
 test("flow-pr surfaces omit retired publication authority and direct mutation semantics", () => {

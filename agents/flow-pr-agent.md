@@ -43,8 +43,8 @@ permission:
     "/tmp/flow-pr-request-*/intent.json": allow
     "/var/folders/*/*/T/flow-pr-request-*/intent.json": allow
     "C:/Users/*/AppData/Local/Temp/flow-pr-request-*/intent.json": allow
-    "~/.config/opencode/skills/flow-pr/SKILL.md": allow
-    "~/.config/opencode/skills/flow-pr/references/output-contract.md": allow
+    "~/.config/opencode/skills/flow-pr/*": allow
+    "~/.config/opencode/skills/flow-pr/references/*": allow
   task:
     "*": deny
 ---
