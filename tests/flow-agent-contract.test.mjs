@@ -29,15 +29,24 @@ const jiraTemplate = `### <FEATURE|FIX|REFACTOR|CHORE|DOCS>: <human-readable tit
 ### Subtareas
 - <verb + what, max 8 words>`;
 
-test("flow-pr command, agent, and skill require an explicit approved execute request", () => {
+test("flow-pr command, agent, and skill expose prepare, one approval, and execute", () => {
   const command = read("commands/flow-pr.md"); const agent = read("agents/flow-pr-agent.md"); const skill = read("skills/flow-pr/SKILL.md"); const contract = `${command}\n${agent}\n${skill}`;
-  assert.match(command, /^agent: flow-pr-agent$/m); assert.match(contract, /--inspect --base/); assert.match(contract, /--materialize-request --request-base64/); assert.match(contract, /--execute --request/); assert.match(contract, /explicit user approval/i); assert.match(agent, /task:\n    "\*": deny/); assert.match(agent, /git push\*": deny/); assert.match(agent, /"gh \*": deny/); assert.match(agent, /edit: deny/); assert.match(agent, /--materialize-request --request-base64 \*": allow/); assert.match(agent, /--execute --request \*": ask/);
-  assert.match(contract, /OS-temporary request file/i); assert.match(contract, /Never use generic shell writes or edits|Do not use shell redirection, generic writes, or edits/i);
+  assert.match(command, /^agent: flow-pr-agent$/m); assert.match(contract, /--prepare --base/); assert.match(contract, /--prepare --handle/); assert.match(contract, /intentPath/); assert.match(contract, /--execute --handle/);
+  for (const surface of [command, agent, skill]) { assert.match(surface, /one human mutation approval|one approval/i); assert.match(surface, /Never ask for a separate|do not ask separately/i); }
+  assert.match(agent, /task:\n    "\*": deny/); assert.match(agent, /git push\*": deny/); assert.match(agent, /"gh \*": deny/); assert.match(agent, /edit:\n    "\*": deny/); assert.match(agent, /flow-pr-request-\*\/intent\.json": allow/); assert.match(agent, /--prepare\*": allow/); assert.match(agent, /--execute --handle \*": ask/);
+  assert.match(contract, /runtime-created OS-temp|runtime-owned `intentPath`/i); assert.match(contract, /no repository edits|Never edit the repository/i); assert.match(contract, /never.*(?:interpolat|shell|redirect|generic shell writes)/i);
+  assert.doesNotMatch(contract, /materialize-request|request-base64|base64url|flow-pr\/request-v1/);
 });
 test("flow-pr surfaces omit retired publication authority and direct mutation semantics", () => {
   const contract = ["commands/flow-pr.md", "agents/flow-pr-agent.md", "skills/flow-pr/SKILL.md", "scripts/flow-pr.mjs"].map(read).join("\n");
-  assert.match(contract, /Never use `--auto`/);
-  assert.doesNotMatch(read("scripts/flow-pr.mjs"), /gentle-ai|planId|journal|--auto|create-tag|promotion|release|chain|tracker/i);
+  assert.match(contract, /Never use automatic modes|Do not.*automatic modes/i);
+  assert.doesNotMatch(read("scripts/flow-pr.mjs"), /gentle-ai|planId|journal|--auto|create-tag|promotion|release|chain|tracker|materialize-request|request-base64/i);
+});
+test("flow-pr candidate docs contain only v2 callable contracts", () => {
+  const paths = ["commands/flow-pr.md", "agents/flow-pr-agent.md", "skills/flow-pr/SKILL.md", "openspec/changes/simplify-flow-pr/design.md", "openspec/changes/simplify-flow-pr/exploration.md", "openspec/changes/simplify-flow-pr/specs/flow-pr/spec.md"];
+  const contract = paths.map(read).join("\n");
+  assert.doesNotMatch(contract, /--materialize-request|--request-base64|flow-pr\/request-v1|--execute --request|full request.*approv|exact request.*approv/i);
+  assert.match(contract, /flow-pr\/intent-v2/); assert.match(contract, /flow-pr\/request-v2/); assert.match(contract, /--execute --handle/); assert.match(contract, /execute\.claim|exclusive claim/i);
 });
 test("flow-pr renders the historical Jira block only after verified success or noop", () => {
   const skill = read("skills/flow-pr/SKILL.md"); const agent = read("agents/flow-pr-agent.md"); const output = read("skills/flow-pr/references/output-contract.md"); const contract = `${skill}\n${agent}\n${output}`;
