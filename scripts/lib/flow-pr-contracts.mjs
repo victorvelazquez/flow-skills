@@ -93,10 +93,23 @@ export function validateSnapshot(value) {
 }
 
 export function validateRequest(value) {
-  exact(value, ["approved", "delivery", "expected", "pr", "schema"], "request");
-  if (value.schema !== "flow-pr/request-v1" || value.approved !== true) throw new ContractError("request must be an approved flow-pr/request-v1.");
+  exact(value, ["delivery", "expected", "pr", "schema"], "request");
+  if (value.schema !== "flow-pr/request-v2") throw new ContractError("request must be a runtime-owned flow-pr/request-v2.");
   exact(value.expected, ["intent", "snapshot"], "request.expected"); validateSnapshot(value.expected.snapshot); exact(value.expected.intent, ["push", "upstream"], "request.expected.intent"); if (!["publish", "verify-existing"].includes(value.expected.intent.push) || !["set", "verify"].includes(value.expected.intent.upstream)) throw new ContractError("request intent is invalid.");
   exact(value.delivery, ["head", "mode", "push", "target"], "request.delivery"); if (!["same-repo", "fork"].includes(value.delivery.mode)) throw new ContractError("request delivery mode is invalid."); validateRepo(value.delivery.target, "request.delivery.target"); exact(value.delivery.push, ["remote", "repository"], "request.delivery.push"); text(value.delivery.push.remote, "request.delivery.push.remote"); validateRepo(value.delivery.push.repository, "request.delivery.push.repository"); exact(value.delivery.head, ["owner", "ref", "repository"], "request.delivery.head"); text(value.delivery.head.owner, "request.delivery.head.owner"); validateRef(value.delivery.head.ref, "request.delivery.head.ref"); validateRepo(value.delivery.head.repository, "request.delivery.head.repository");
   exact(value.pr, ["body", "draft", "labels", "title", "updateExisting"], "request.pr"); text(value.pr.title, "request.pr.title"); multiline(value.pr.body, "request.pr.body"); if (typeof value.pr.draft !== "boolean") throw new ContractError("request.pr.draft is invalid."); exact(value.pr.labels, ["add", "remove"], "request.pr.labels"); list(value.pr.labels.add, "request.pr.labels.add"); list(value.pr.labels.remove, "request.pr.labels.remove"); if (value.pr.labels.add.some((label) => value.pr.labels.remove.includes(label))) throw new ContractError("request labels add/remove overlap."); if (!Array.isArray(value.pr.updateExisting) || value.pr.updateExisting.some((field) => !["title", "body", "draft", "labels"].includes(field)) || new Set(value.pr.updateExisting).size !== value.pr.updateExisting.length) throw new ContractError("request.pr.updateExisting is invalid.");
+  return value;
+}
+
+export function validateIntent(value) {
+  exact(value, ["body", "deliveryMode", "draft", "labels", "push", "schema", "title", "updateExisting"], "intent");
+  if (value.schema !== "flow-pr/intent-v2") throw new ContractError("intent must be flow-pr/intent-v2.");
+  text(value.title, "intent.title"); multiline(value.body, "intent.body");
+  if (typeof value.draft !== "boolean") throw new ContractError("intent.draft is invalid.");
+  if (!["same-repo", "fork"].includes(value.deliveryMode)) throw new ContractError("intent.deliveryMode is invalid.");
+  if (!["publish", "verify-existing"].includes(value.push)) throw new ContractError("intent.push is invalid.");
+  exact(value.labels, ["add", "remove"], "intent.labels"); list(value.labels.add, "intent.labels.add"); list(value.labels.remove, "intent.labels.remove");
+  if (value.labels.add.some((label) => value.labels.remove.includes(label))) throw new ContractError("intent labels add/remove overlap.");
+  if (!Array.isArray(value.updateExisting) || value.updateExisting.some((field) => !["title", "body", "draft", "labels"].includes(field)) || new Set(value.updateExisting).size !== value.updateExisting.length) throw new ContractError("intent.updateExisting is invalid.");
   return value;
 }
