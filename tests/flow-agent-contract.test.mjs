@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import posix from "node:path/posix";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -79,6 +80,39 @@ test("flow-pr agent externally reads only its installed contracts before prepare
   ]);
   for (const broad of ["~/.config/opencode/**", "~/.config/opencode/skills/*", "~/.config/opencode/skills/**"]) assert.ok(!externalAllows.includes(broad));
   assert.match(agent, /Before any `--prepare` invocation, directly read[^\n]+output-contract\.md`; stop if either read fails\./);
+});
+test("flow-pr agent permits only relative intent edits and canonical external parents", () => {
+  const agent = read("agents/flow-pr-agent.md");
+  const edit = permissionRules(agent, "edit"); const external = permissionRules(agent, "external_directory"); const home = "C:/Users/opencode-test";
+  const cases = [
+    ["/home/victor/repo", "/tmp/flow-pr-request-a1/intent.json"],
+    ["/home/victor/Developer/Tools/deep/repo", "/tmp/flow-pr-request-b2/intent.json"],
+    ["/Users/victor/Developer/repo", "/var/folders/ab/cd/T/flow-pr-request-c3/intent.json"],
+    ["C:/Users/victor/Developer/Tools/repo", "C:/Users/victor/AppData/Local/Temp/flow-pr-request-d4/intent.json"],
+  ];
+  for (const [worktree, intentPath] of cases) {
+    assert.equal(permissionFor(edit, posix.relative(worktree, intentPath), home), "allow");
+    assert.equal(permissionFor(edit, intentPath, home), "deny");
+    assert.equal(permissionFor(external, externalResource(intentPath), home), "allow");
+  }
+  for (const resource of [
+    "../../../tmp/other-request-a1/intent.json",
+    "../../../tmp/flow-pr-request-a1/sibling.json",
+    "../../../repo/intent.json",
+  ]) assert.equal(permissionFor(edit, resource, home), "deny");
+  for (const resource of [
+    "/tmp/*", "/tmp/other-request-a1/*",
+    "/var/folders/ab/cd/T/*", "C:/Users/victor/AppData/Local/Temp/*",
+  ]) assert.equal(permissionFor(external, resource, home), "deny");
+});
+test("flow-pr agent requires exact apply_patch placeholder replacement", () => {
+  const agent = read("agents/flow-pr-agent.md");
+  assert.match(agent, /use OpenCode `apply_patch` directly/);
+  assert.match(agent, /exact returned absolute `intentPath`/);
+  assert.match(agent, /replace the exact existing `\{\}` placeholder line/);
+  assert.match(agent, /single strict one-line `flow-pr\/intent-v2` JSON document/);
+  assert.match(agent, /never use `write`, generic `edit`, Bash, shell redirection, interpolation, encoding, or any alternate path/);
+  assert.match(agent, /Never display[^\n]+or expose intent content/);
 });
 test("flow-pr surfaces omit retired publication authority and direct mutation semantics", () => {
   const contract = ["commands/flow-pr.md", "agents/flow-pr-agent.md", "skills/flow-pr/SKILL.md", "scripts/flow-pr.mjs"].map(read).join("\n");

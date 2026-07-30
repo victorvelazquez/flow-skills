@@ -119,7 +119,7 @@ function prepare(base, pushRemote, verbose) {
   const snapshot = inspectFacts(base, pushRemote); const createdAt = new Date().toISOString();
   const envelope = { schema: "flow-pr/context-v2", createdAt, base, pushRemote, snapshot };
   const handle = createStore("context.json", envelope);
-  const intentPath = path.join(storeDirectory(handle.split(".")[0]), "intent.json"); fs.writeFileSync(intentPath, "", { mode: 0o600, flag: "wx" });
+  const intentPath = path.join(storeDirectory(handle.split(".")[0]), "intent.json"); fs.writeFileSync(intentPath, "{}\n", { mode: 0o600, flag: "wx" });
   const output = { schema: "flow-pr/prepare-context-v2", status: "prepared", exit: 0, phase: "prepare", handle, intentPath, expiresAt: expiresAt(createdAt), context: compactContext(snapshot) };
   if (verbose) output.diagnostics = { snapshot };
   return output;

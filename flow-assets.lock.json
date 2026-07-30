@@ -1,16 +1,16 @@
 {
   "$schema": "flow-assets-lock/v1",
-  "capturedAt": "2026-07-30T13:20:10.226Z",
+  "capturedAt": "2026-07-30T15:01:01.000Z",
   "source": {
     "kind": "opencode-user-config",
     "opencodeVersion": "1.18.7",
-    "gentleAiVersion": "0.16.5"
+    "gentleAiVersion": "gentle-ai 2.1.6"
   },
   "manifest": {
     "sha256": "cb6a71bb0a9225af324cfc45183793c29dfe29cfb740e447c893de9856c58b8d"
   },
   "totals": {
-    "bytes": 606010,
+    "bytes": 606764,
     "count": 68
   },
   "files": [
@@ -23,8 +23,8 @@
     },
     {
       "path": "agents/flow-pr-agent.md",
-      "sha256": "da6dc8dc18cc1a717423d2f5129a5db7a9c7a43279c40acd8f2fff1be46343fa",
-      "bytes": 3029,
+      "sha256": "ce77a7570053d5389fe02b11dc81b0dd3464db8e9fe0e9b13d8fccddadc3c414",
+      "bytes": 3242,
       "mode": "100644",
       "executable": false
     },
@@ -177,8 +177,8 @@
     },
     {
       "path": "scripts/flow-pr.mjs",
-      "sha256": "d40db9884aad6879b5bd8a011a67d990deade88c50e9b580d803e04c3d1803a1",
-      "bytes": 16975,
+      "sha256": "123be05ab7e25d0a5969f37875d328b3151ed1f0917285632e2c8ecfa9217b84",
+      "bytes": 16979,
       "mode": "100644",
       "executable": false
     },
@@ -240,8 +240,8 @@
     },
     {
       "path": "scripts/lib/flow-pr-executor.mjs",
-      "sha256": "0d4afba9ac1b2dd1f70966cec6a16b03b33b9f7fc9b7e40d7fe3df8945e3cb33",
-      "bytes": 16263,
+      "sha256": "da8f29dd0a8b69315e20cef59ff0a7100fdca8e82ce3f9fcdb20f1cc12912bca",
+      "bytes": 16800,
       "mode": "100644",
       "executable": false
     },
