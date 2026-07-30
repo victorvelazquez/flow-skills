@@ -1,17 +1,17 @@
 {
   "$schema": "flow-assets-lock/v1",
-  "capturedAt": "2026-07-30T15:01:01.000Z",
+  "capturedAt": "2026-07-30T17:58:00.000Z",
   "source": {
     "kind": "opencode-user-config",
     "opencodeVersion": "1.18.7",
     "gentleAiVersion": "gentle-ai 2.1.6"
   },
   "manifest": {
-    "sha256": "cb6a71bb0a9225af324cfc45183793c29dfe29cfb740e447c893de9856c58b8d"
+    "sha256": "9b2d9d93a615f4d2175dfb344c37073c428faeda6958e4badd429c4f295b82dc"
   },
   "totals": {
-    "bytes": 606764,
-    "count": 68
+    "bytes": 617170,
+    "count": 69
   },
   "files": [
     {
@@ -23,8 +23,8 @@
     },
     {
       "path": "agents/flow-pr-agent.md",
-      "sha256": "ce77a7570053d5389fe02b11dc81b0dd3464db8e9fe0e9b13d8fccddadc3c414",
-      "bytes": 3242,
+      "sha256": "7c3bd5f3c3ba9116937369e31572802a655e3bafa493f4a453b37cf4bd6e1e7d",
+      "bytes": 4170,
       "mode": "100644",
       "executable": false
     },
@@ -100,8 +100,8 @@
     },
     {
       "path": "commands/flow-pr.md",
-      "sha256": "9c42b8e71db6bc90bdc75dfe7099bbad59ee410abcbcaa84a0c7bbc462320a13",
-      "bytes": 1421,
+      "sha256": "676503f881179fc9d5ef2d31eb515aa2184b61e3f4f4c30f517ac36f57faed88",
+      "bytes": 1544,
       "mode": "100644",
       "executable": false
     },
@@ -177,8 +177,8 @@
     },
     {
       "path": "scripts/flow-pr.mjs",
-      "sha256": "123be05ab7e25d0a5969f37875d328b3151ed1f0917285632e2c8ecfa9217b84",
-      "bytes": 16979,
+      "sha256": "76822426ad8350951b5147d49065da1cdf828882394dc3767307f1adf3807505",
+      "bytes": 18240,
       "mode": "100644",
       "executable": false
     },
@@ -235,6 +235,13 @@
       "path": "scripts/lib/flow-pr-contracts.mjs",
       "sha256": "ecebef6d5623185673400b078cba124ba054ad4c386a8202081f3ada352f7785",
       "bytes": 13147,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "path": "scripts/lib/flow-pr-drafting.mjs",
+      "sha256": "1c22b5c744d2c9f9f13a5a624cce2bcf1ec8d14e89e06bf39597c54a8c4a4bd9",
+      "bytes": 6905,
       "mode": "100644",
       "executable": false
     },
@@ -443,8 +450,8 @@
     },
     {
       "path": "skills/flow-pr/SKILL.md",
-      "sha256": "8384ad11617e895cea0db1c36074a6802171d90df83a26d6dcc9bdb26e2e5c2a",
-      "bytes": 3237,
+      "sha256": "698d1d345ca1cc0ca74eb03897f2b798f05734888b1c1faf0e3f5c6121c51db5",
+      "bytes": 4426,
       "mode": "100644",
       "executable": false
     },

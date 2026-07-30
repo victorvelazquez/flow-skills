@@ -67,10 +67,32 @@ async function waitForFile(file, timeout = 5000) { const started = Date.now(); w
 test("prepare keeps canonical snapshot and identity internal while exposing compact drafting facts", () => {
   const item = fixture(); const compact = begin(item); const encoded = JSON.stringify(compact);
   assert.equal(compact.schema, "flow-pr/prepare-context-v2"); assert.equal(compact.context.repository, "example/repo"); assert.deepEqual(compact.context.changes.commits, ["feat: contract"]); assert.deepEqual(compact.context.changes.files, ["feature.txt"]);
+  assert.equal(compact.context.changes.drafting.suggestedTitle, "feat: contract"); assert.equal(compact.context.changes.drafting.breaking, false); assert.equal(compact.context.changes.drafting.commitCount, 1); assert.equal(compact.context.template.status, "none");
+  assert.doesNotMatch(encoded, /chore: initial/);
   assert.doesNotMatch(encoded, /snapshot|identity|headOid|commonDir/); assert.equal(fs.existsSync(path.join(directoryFor(compact.handle), "context.json")), true);
   assert.deepEqual(fs.readFileSync(compact.intentPath), Buffer.from("{}\n"));
   if (process.platform !== "win32") assert.equal(fs.statSync(compact.intentPath).mode & 0o777, 0o600);
   const verbose = begin(item, {}, true); assert.equal(validateSnapshot(verbose.diagnostics.snapshot), verbose.diagnostics.snapshot); assert.match(verbose.diagnostics.snapshot.identity, /^[0-9a-f]{64}$/);
+});
+
+test("prepare bounds commit drafting to the exact base through HEAD range", () => {
+  const item = fixture();
+  for (let index = 0; index < 24; index += 1) { fs.writeFileSync(path.join(item.cwd, `change-${index}.txt`), `${index}\n`); git(item.cwd, ["add", "."]); git(item.cwd, ["commit", "-qm", `custom: change ${index}`]); }
+  const compact = begin(item); const drafting = compact.context.changes.drafting;
+  assert.equal(drafting.commitCount, 25); assert.equal(drafting.analyzedCommitCount, 20); assert.equal(drafting.truncated, true); assert.equal(compact.context.changes.commits.length, 20);
+  assert.doesNotMatch(JSON.stringify(compact.context.changes), /chore: initial/);
+});
+
+test("prepare exposes one repository template as drafting input only", () => {
+  const item = fixture(); const content = "## Summary\n\n## Validation\n- [ ] Not run\n"; fs.mkdirSync(path.join(item.cwd, ".github")); fs.writeFileSync(path.join(item.cwd, ".github", "PULL_REQUEST_TEMPLATE.md"), content);
+  git(item.cwd, ["add", "."]); git(item.cwd, ["commit", "-qm", "docs: add pull request template"]);
+  assert.deepEqual(begin(item).context.template, { status: "available", path: ".github/PULL_REQUEST_TEMPLATE.md", bytes: Buffer.byteLength(content), content });
+});
+
+test("prepare detects a breaking footer without exposing commit bodies", () => {
+  const item = fixture(); fs.writeFileSync(path.join(item.cwd, "breaking.txt"), "breaking\n"); git(item.cwd, ["add", "."]); git(item.cwd, ["commit", "-qm", "feat(api): change contract", "-m", "BREAKING CHANGE: private callers must migrate"]);
+  const changes = begin(item).context.changes;
+  assert.equal(changes.drafting.breaking, true); assert.doesNotMatch(JSON.stringify(changes), /private callers|BREAKING CHANGE/);
 });
 
 test("untouched intent placeholder is an invalid contract and a patched intent seals", () => {
