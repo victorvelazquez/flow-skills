@@ -100,6 +100,7 @@ test("manifest and lock define a deterministic, complete, safe mirror", () => {
   assert.ok(retiredPrAssets.every((name) => !lock.files.some((entry) => entry.path === `scripts/lib/${name}.mjs`)));
   assert.deepEqual(manifest.liveMirrored.libraries.filter((entry) => entry.startsWith("scripts/lib/flow-pr-")), [
     "scripts/lib/flow-pr-contracts.mjs",
+    "scripts/lib/flow-pr-drafting.mjs",
     "scripts/lib/flow-pr-executor.mjs",
     "scripts/lib/flow-pr-inspection.mjs",
   ]);

@@ -119,6 +119,17 @@ test("flow-pr surfaces omit retired publication authority and direct mutation se
   assert.match(contract, /Never use automatic modes|Do not.*automatic modes/i);
   assert.doesNotMatch(read("scripts/flow-pr.mjs"), /gentle-ai|planId|journal|--auto|create-tag|promotion|release|chain|tracker|materialize-request|request-base64/i);
 });
+test("flow-pr drafting preserves safe templates and never invents governance or evidence", () => {
+  const command = read("commands/flow-pr.md"); const agent = read("agents/flow-pr-agent.md"); const skill = read("skills/flow-pr/SKILL.md"); const contract = `${command}\n${agent}\n${skill}`;
+  assert.match(contract, /preserve its structure, headings, and checklists/i);
+  for (const section of ["Summary", "Changes", "Validation", "Risks/Breaking Change", "Out of scope"]) assert.match(contract, new RegExp(section.replace("/", "\\/"), "i"));
+  assert.match(contract, /Not run/); assert.match(contract, /Not provided/);
+  assert.match(contract, /Never invent tests, checks, issue links, migrations, evidence, impact, labels, or chains/i);
+  assert.match(contract, /Preserve closing references|Preserve issue closing references/i); assert.match(contract, /only when supplied/i);
+  assert.match(contract, /without validating issues|never create\/validate\/require issues/i); assert.match(contract, /without.*orchestrating chains|never orchestrate chains/i);
+  assert.match(contract, /Never derive labels, issue policy|never derive labels or issue policy/i);
+  assert.doesNotMatch(read("scripts/lib/flow-pr-drafting.mjs"), /gentle-ai|status:approved|type:feature|jira|review receipt|sdd/i);
+});
 test("flow-pr candidate docs contain only v2 callable contracts", () => {
   const paths = ["commands/flow-pr.md", "agents/flow-pr-agent.md", "skills/flow-pr/SKILL.md", "openspec/changes/simplify-flow-pr/design.md", "openspec/changes/simplify-flow-pr/exploration.md", "openspec/changes/simplify-flow-pr/specs/flow-pr/spec.md"];
   const contract = paths.map(read).join("\n");

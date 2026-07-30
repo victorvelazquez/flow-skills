@@ -8,6 +8,7 @@ import path from "node:path";
 import process from "node:process";
 import { execute, failureResult } from "./lib/flow-pr-executor.mjs";
 import { blankEffects, identity, repoIdentity, validateIntent, validateRequest } from "./lib/flow-pr-contracts.mjs";
+import { commitDraftingHints, discoverPrTemplate, MAX_COMMIT_BODY_BYTES, MAX_COMMIT_SUBJECT_BYTES, MAX_DRAFTING_COMMITS } from "./lib/flow-pr-drafting.mjs";
 import { inspect } from "./lib/flow-pr-inspection.mjs";
 
 const HANDLE_PREFIX = "flow-pr-request-";
@@ -45,7 +46,7 @@ function parse(argv) {
 }
 
 function write(value) { process.stdout.write(`${JSON.stringify(value)}\n`); process.exitCode = value.exit; }
-function runGit(args) { const value = spawnSync("git", args, { encoding: "utf8", shell: false }); return value.status === 0 && !value.error ? value.stdout.trim() : ""; }
+function runGit(args, options = {}) { const value = spawnSync("git", args, { encoding: "utf8", shell: false, ...options }); return value.status === 0 && !value.error ? value.stdout.trim() : ""; }
 function expiresAt(createdAt) { return new Date(Date.parse(createdAt) + HANDLE_TTL_MS).toISOString(); }
 function compactRepo(repo) { return `${repo.owner}/${repo.name}`; }
 function tempRoot() {
@@ -93,9 +94,18 @@ function readStore(handle, name) {
 
 function draftingFacts(snapshot) {
   const range = `${snapshot.base.oid}..${snapshot.headOid}`;
-  const commits = runGit(["log", "--format=%s", "--max-count=20", range]).split(/\r?\n/).filter(Boolean);
+  const maxBuffer = MAX_DRAFTING_COMMITS * (MAX_COMMIT_BODY_BYTES + MAX_COMMIT_SUBJECT_BYTES + 64);
+  const raw = runGit(["log", "--format=%H%x00%s%x00%b%x00", `--max-count=${MAX_DRAFTING_COMMITS}`, range], { maxBuffer });
+  const fields = raw.split("\0"); const records = [];
+  for (let index = 0; index + 2 < fields.length; index += 3) {
+    const subject = fields[index + 1]; const body = fields[index + 2];
+    if (subject) records.push({ subject: Buffer.byteLength(subject) <= MAX_COMMIT_SUBJECT_BYTES ? subject : "", body: Buffer.byteLength(body) <= MAX_COMMIT_BODY_BYTES ? body : "" });
+  }
+  if (!records.length) for (const subject of runGit(["log", "--format=%s", `--max-count=${MAX_DRAFTING_COMMITS}`, range]).split(/\r?\n/).filter(Boolean)) records.push({ subject: Buffer.byteLength(subject) <= MAX_COMMIT_SUBJECT_BYTES ? subject : "", body: "" });
+  const commitCount = Number.parseInt(runGit(["rev-list", "--count", range]), 10);
+  const commits = records.map(({ subject }) => subject).filter(Boolean);
   const files = runGit(["diff", "--name-only", range]).split(/\r?\n/).filter(Boolean).slice(0, 100);
-  return { commits, files };
+  return { commits, files, drafting: commitDraftingHints(records, { commitCount: Number.isSafeInteger(commitCount) ? commitCount : records.length }) };
 }
 function compactContext(snapshot) {
   const existing = snapshot.pr.exact;
@@ -105,7 +115,7 @@ function compactContext(snapshot) {
     delivery: { target: compactRepo(snapshot.target), pushRemote: snapshot.push.remote, pushRepository: compactRepo(snapshot.push.repository), inferredMode: repoIdentity(snapshot.target) === repoIdentity(snapshot.push.repository) ? "same-repo" : "fork" },
     remoteState: snapshot.relation.divergence, upstream: snapshot.upstream,
     existingPr: existing ? { number: existing.number, url: existing.url, state: existing.state, title: existing.title, bodySha256: identity(existing.body), draft: existing.draft, labels: existing.labels } : null,
-    changes: draftingFacts(snapshot),
+    changes: draftingFacts(snapshot), template: discoverPrTemplate(snapshot.root),
   };
 }
 
