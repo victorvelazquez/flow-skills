@@ -26,7 +26,7 @@ function fixture() {
   fs.writeFileSync(gh, `import fs from "node:fs";
 const a=process.argv.slice(2),s=process.env.FLOW_PR_STATE,c=process.env.FLOW_PR_CALLS,load=()=>fs.existsSync(s)?JSON.parse(fs.readFileSync(s,"utf8")):[],save=v=>fs.writeFileSync(s,JSON.stringify(v)),val=x=>a[a.indexOf(x)+1];
 fs.appendFileSync(c,JSON.stringify(a)+"\\n");let all=load();
-if(a[0]==="pr"&&a[1]==="list"){if(process.env.FLOW_PR_BLOCK_LIST_READY){if(!fs.existsSync(process.env.FLOW_PR_BLOCK_LIST_READY))fs.writeFileSync(process.env.FLOW_PR_BLOCK_LIST_READY,"ready",{flag:"wx"});const wait=new Int32Array(new SharedArrayBuffer(4));while(!fs.existsSync(process.env.FLOW_PR_BLOCK_LIST_RELEASE))Atomics.wait(wait,0,0,10);}if(process.env.FLOW_PR_FAIL_LIST){process.stderr.write("list unavailable");process.exit(1)}if(process.env.FLOW_PR_INVALID_JSON)process.stdout.write("{");else if(process.env.FLOW_PR_NON_ARRAY)process.stdout.write("{}");else process.stdout.write(JSON.stringify(process.env.FLOW_PR_AMBIGUOUS?[...all,...all.map(x=>({...x,number:x.number+1,url:"https://github.com/example/repo/pull/"+(x.number+1)}))]:all));}
+if(a[0]==="pr"&&a[1]==="list"){if(process.env.FLOW_PR_BLOCK_LIST_READY){if(!fs.existsSync(process.env.FLOW_PR_BLOCK_LIST_READY))fs.writeFileSync(process.env.FLOW_PR_BLOCK_LIST_READY,"ready",{flag:"wx"});const wait=new Int32Array(new SharedArrayBuffer(4));while(!fs.existsSync(process.env.FLOW_PR_BLOCK_LIST_RELEASE))Atomics.wait(wait,0,0,10);}if(process.env.FLOW_PR_FAIL_LIST){process.stderr.write(process.env.FLOW_PR_FAIL_LIST_MESSAGE||"list unavailable");process.exit(1)}if(process.env.FLOW_PR_INVALID_JSON)process.stdout.write("{");else if(process.env.FLOW_PR_NON_ARRAY)process.stdout.write("{}");else process.stdout.write(JSON.stringify(process.env.FLOW_PR_AMBIGUOUS?[...all,...all.map(x=>({...x,number:x.number+1,url:"https://github.com/example/repo/pull/"+(x.number+1)}))]:all));}
 else if(a[0]==="pr"&&a[1]==="create"){const [owner,ref]=val("--head").split(":"),pr={number:all.length+1,url:"https://github.com/example/repo/pull/"+(all.length+1),state:"OPEN",isDraft:a.includes("--draft"),headRefOid:process.env.FLOW_PR_HEAD,headRefName:ref,headRepositoryOwner:{login:owner},baseRefName:val("--base"),baseRefOid:process.env.FLOW_PR_BASE,title:val("--title"),body:fs.readFileSync(0,"utf8"),labels:a.flatMap((x,i)=>x==="--label"?[{name:a[i+1]}]:[])};all.push(pr);save(all);if(process.env.FLOW_PR_FAIL_CREATE_AFTER){process.stderr.write("unknown create");process.exit(1)}process.stdout.write(pr.url);}
 else if(a[0]==="pr"&&a[1]==="edit"){const p=all.find(x=>String(x.number)===a[2]);if(a.includes("--title"))p.title=val("--title");if(a.includes("--body-file"))p.body=fs.readFileSync(0,"utf8");for(let i=0;i<a.length;i++){if(a[i]==="--add-label"&&!p.labels.some(x=>x.name===a[i+1]))p.labels.push({name:a[i+1]});if(a[i]==="--remove-label")p.labels=p.labels.filter(x=>x.name!==a[i+1]);}save(all);if(process.env.FLOW_PR_FAIL_EDIT_AFTER){process.stderr.write("unknown edit");process.exit(1)}}
 else if(a[0]==="pr"&&a[1]==="ready"){const p=all.find(x=>String(x.number)===a[2]);p.isDraft=a.includes("--undo");save(all);if(process.env.FLOW_PR_FAIL_READY_AFTER){process.stderr.write("unknown ready");process.exit(1)}}
@@ -68,7 +68,15 @@ test("prepare keeps canonical snapshot and identity internal while exposing comp
   const item = fixture(); const compact = begin(item); const encoded = JSON.stringify(compact);
   assert.equal(compact.schema, "flow-pr/prepare-context-v2"); assert.equal(compact.context.repository, "example/repo"); assert.deepEqual(compact.context.changes.commits, ["feat: contract"]); assert.deepEqual(compact.context.changes.files, ["feature.txt"]);
   assert.doesNotMatch(encoded, /snapshot|identity|headOid|commonDir/); assert.equal(fs.existsSync(path.join(directoryFor(compact.handle), "context.json")), true);
+  assert.deepEqual(fs.readFileSync(compact.intentPath), Buffer.from("{}\n"));
+  if (process.platform !== "win32") assert.equal(fs.statSync(compact.intentPath).mode & 0o777, 0o600);
   const verbose = begin(item, {}, true); assert.equal(validateSnapshot(verbose.diagnostics.snapshot), verbose.diagnostics.snapshot); assert.match(verbose.diagnostics.snapshot.identity, /^[0-9a-f]{64}$/);
+});
+
+test("untouched intent placeholder is an invalid contract and a patched intent seals", () => {
+  const item = fixture(); const context = begin(item); const untouched = output(run(item, ["--prepare", "--handle", context.handle]));
+  assert.equal(untouched.status, "failure"); assert.equal(untouched.error.code, "invalid-contract"); assert.doesNotMatch(untouched.error.message, /zero|empty|file size/i);
+  const patchedItem = fixture(); const plan = finalize(patchedItem, begin(patchedItem)); assert.equal(plan.status, "prepared"); assert.equal(plan.schema, "flow-pr/preparation-v2");
 });
 
 test("runtime-owned semantic intent transport preserves Windows paths, quotes, Markdown backticks, Unicode, and multiline bytes", () => {
@@ -118,6 +126,22 @@ test("unsafe local states block preparation before effects", async (t) => {
 
 test("unavailable and invalid GitHub inspection responses fail without effects", async (t) => {
   for (const [name, env, code] of [["unavailable", { FLOW_PR_FAIL_LIST: "1" }, "gh-unavailable"], ["invalid-json", { FLOW_PR_INVALID_JSON: "1" }, "gh-invalid-json"], ["non-array", { FLOW_PR_NON_ARRAY: "1" }, "gh-invalid-json"]]) await t.test(name, () => { const item = fixture(); const result = begin(item, env); assert.equal(result.status, "failure"); assert.equal(result.error.code, code); assert.ok(Object.values(result.effects).every((entry) => entry === "not-attempted")); });
+});
+
+test("execute preflight preserves structured inspection causes without exposing authority", async (t) => {
+  const scenarios = [
+    ["GitHub unavailable", { FLOW_PR_FAIL_LIST: "1" }, null, "gh-unavailable"],
+    ["GitHub invalid JSON", { FLOW_PR_INVALID_JSON: "1" }, null, "gh-invalid-json"],
+    ["remote unavailable", {}, (item) => fs.rmSync(item.remote, { recursive: true, force: true }), "remote-unavailable"],
+  ];
+  for (const [name, env, mutate, code] of scenarios) await t.test(name, () => {
+    const item = fixture(); const plan = prepared(item); mutate?.(item); const result = execute(item, plan, env);
+    assert.equal(result.status, "failure"); assert.equal(result.phase, "preflight"); assert.equal(result.error.code, code); assert.ok(result.error.message.length <= 512);
+    assert.ok(Object.values(result.effects).every((entry) => entry === "not-attempted")); assert.equal(result.recovery.code, "prepare-again"); assert.equal(result.recovery.requiresFreshInspection, true);
+    assert.equal(result.publication, null); assert.equal("snapshot" in result, false); assert.equal("diagnostics" in result, false);
+  });
+  await t.test("message is bounded", () => { const item = fixture(); const plan = prepared(item); const result = execute(item, plan, { FLOW_PR_FAIL_LIST: "1", FLOW_PR_FAIL_LIST_MESSAGE: "x".repeat(2048) }); assert.equal(result.error.code, "gh-unavailable"); assert.equal(result.error.message.length, 512); });
+  await t.test("remote credentials are redacted", () => { const item = fixture(); const plan = prepared(item); git(item.cwd, ["remote", "set-url", "origin", "https://user:secret@github.com/example/repo.git"]); const result = execute(item, plan); assert.equal(result.error.code, "remote-invalid"); assert.doesNotMatch(result.error.message, /user|secret|github\.com/); assert.match(result.error.message, /redacted-url/); });
 });
 
 test("unknown remote ancestry blocks non-fast-forward publication", () => {
@@ -184,15 +208,16 @@ test("secret-like multiline bodies never appear in default create or update JSON
   await t.test("update", () => { const item = fixture(); publish(item); const baseline = snapshot(item); fs.writeFileSync(item.state, JSON.stringify([rawPr(baseline, { body: "old body\n" })])); const context = begin(item); assert.doesNotMatch(JSON.stringify(context), /FLOW_PR_SECRET_7f4c/); const plan = finalize(item, context, intent({ body: marker, push: "verify-existing" })); assert.doesNotMatch(JSON.stringify(plan), /FLOW_PR_SECRET_7f4c|must_not_expand/); const result = execute(item, plan); assert.doesNotMatch(JSON.stringify(result), /FLOW_PR_SECRET_7f4c|must_not_expand/); assert.equal(result.status, "success"); });
 });
 
-test("GitHub postcondition mismatches remain failure with unknown PR effects", () => {
+test("GitHub postcondition mismatches are partial with unknown PR effects", () => {
   const item = fixture(); const plan = prepared(item); const result = execute(item, plan, { FLOW_PR_BAD_VIEW: "1" });
   assert.equal(result.status, "partial"); assert.equal(result.phase, "verify"); assert.equal(result.effects.prCreate, "unknown"); assert.equal(result.recovery.code, "prepare-again");
 });
 
 test("post-mutation verification failures mark affected effects unknown", async (t) => {
   for (const [name, env] of [["view unavailable", { FLOW_PR_FAIL_VIEW: "1" }], ["base mismatch", { FLOW_PR_BAD_BASE_VIEW: "1" }], ["body mismatch", { FLOW_PR_BAD_BODY_VIEW: "1" }], ["foreign URL", { FLOW_PR_FOREIGN_URL_VIEW: "1" }]]) await t.test(name, () => { const item = fixture(); const result = execute(item, prepared(item), env); assert.equal(result.status, "partial"); assert.equal(result.effects.prCreate, "unknown"); assert.equal(result.recovery.code, "prepare-again"); });
-  await t.test("edit unknown", () => { const item = fixture(); publish(item); const baseline = snapshot(item); fs.writeFileSync(item.state, JSON.stringify([rawPr(baseline, { title: "old" })])); const result = execute(item, prepared(item, intent({ push: "verify-existing" })), { FLOW_PR_FAIL_EDIT_AFTER: "1" }); assert.equal(result.status, "failure"); assert.equal(result.effects.prUpdate, "unknown"); });
-  await t.test("draft unknown", () => { const item = fixture(); publish(item); const baseline = snapshot(item); fs.writeFileSync(item.state, JSON.stringify([rawPr(baseline, { isDraft: false })])); const result = execute(item, prepared(item, intent({ push: "verify-existing" })), { FLOW_PR_FAIL_READY_AFTER: "1" }); assert.equal(result.status, "failure"); assert.equal(result.effects.prUpdate, "unknown"); });
+  await t.test("create unknown without a new push", () => { const item = fixture(); publish(item); const result = execute(item, prepared(item, intent({ push: "verify-existing" })), { FLOW_PR_FAIL_CREATE_AFTER: "1" }); assert.equal(result.status, "partial"); assert.equal(result.effects.push, "not-attempted"); assert.equal(result.effects.prCreate, "unknown"); assert.equal(result.effects.labels, "unknown"); });
+  await t.test("edit and labels unknown", () => { const item = fixture(); publish(item); const baseline = snapshot(item); fs.writeFileSync(item.state, JSON.stringify([rawPr(baseline, { title: "old", labels: [] })])); const result = execute(item, prepared(item, intent({ push: "verify-existing" })), { FLOW_PR_FAIL_EDIT_AFTER: "1" }); assert.equal(result.status, "partial"); assert.equal(result.effects.prUpdate, "unknown"); assert.equal(result.effects.labels, "unknown"); });
+  await t.test("draft unknown", () => { const item = fixture(); publish(item); const baseline = snapshot(item); fs.writeFileSync(item.state, JSON.stringify([rawPr(baseline, { isDraft: false })])); const result = execute(item, prepared(item, intent({ push: "verify-existing" })), { FLOW_PR_FAIL_READY_AFTER: "1" }); assert.equal(result.status, "partial"); assert.equal(result.effects.prUpdate, "unknown"); });
 });
 
 test("ambiguous PR authority blocks preparation before mutation", () => {

@@ -35,14 +35,14 @@ permission:
   read: allow
   edit:
     "*": deny
-    "/tmp/flow-pr-request-*/intent.json": allow
-    "/var/folders/*/*/T/flow-pr-request-*/intent.json": allow
-    "C:/Users/*/AppData/Local/Temp/flow-pr-request-*/intent.json": allow
+    "../*tmp/flow-pr-request-*/intent.json": allow
+    "../*var/folders/*/*/T/flow-pr-request-*/intent.json": allow
+    "../*AppData/Local/Temp/flow-pr-request-*/intent.json": allow
   external_directory:
     "*": deny
-    "/tmp/flow-pr-request-*/intent.json": allow
-    "/var/folders/*/*/T/flow-pr-request-*/intent.json": allow
-    "C:/Users/*/AppData/Local/Temp/flow-pr-request-*/intent.json": allow
+    "/tmp/flow-pr-request-*/*": allow
+    "/var/folders/*/*/T/flow-pr-request-*/*": allow
+    "C:/Users/*/AppData/Local/Temp/flow-pr-request-*/*": allow
     "~/.config/opencode/skills/flow-pr/*": allow
     "~/.config/opencode/skills/flow-pr/references/*": allow
   task:
@@ -51,7 +51,7 @@ permission:
 
 Never delegate. Before any `--prepare` invocation, directly read `~/.config/opencode/skills/flow-pr/SKILL.md` and `~/.config/opencode/skills/flow-pr/references/output-contract.md`; stop if either read fails.
 
-Run the compact prepare workflow only. Draft title and body from returned drafting facts and write the strict `flow-pr/intent-v2` document only to the exact runtime-created OS-temp `intentPath`; the path-scoped permission grants no repository edits. Never interpolate intent into a shell command, redirect it, encode it, use another path, or display the internal snapshot/request/temp path. A custom temp root fails with `temp-root-unsupported`; report its actionable message and do not broaden permissions. Finalize with `--prepare --handle <context-handle>`. Present the returned approval summary, then invoke execute so its `ask` permission prompt is the one human mutation approval. Never ask for a separate conversational confirmation. Ask additional questions only for genuine base or fork ambiguity.
+Run the compact prepare workflow only. Draft title and body from returned drafting facts. Then use OpenCode `apply_patch` directly on the existing runtime-created file at the exact returned absolute `intentPath`: replace the exact existing `{}` placeholder line with the single strict one-line `flow-pr/intent-v2` JSON document; do not create a different file. For this materialization step, never use `write`, generic `edit`, Bash, shell redirection, interpolation, encoding, or any alternate path. The path-scoped permission grants no repository edits. Never display the internal snapshot/request/temp path or expose intent content. A custom temp root fails with `temp-root-unsupported`; report its actionable message and do not broaden permissions. Finalize with `--prepare --handle <context-handle>`. Present the returned approval summary, then invoke execute so its `ask` permission prompt is the one human mutation approval. Never ask for a separate conversational confirmation. Ask additional questions only for genuine base or fork ambiguity.
 
 The approved tool call may run only `--execute --handle <approved-handle>`. Never run direct Git or `gh` mutation, create commits, infer approval, or retry a consumed/stale handle. Drift, blocked, partial, failure, or unknown effects require fresh preparation and approval.
 
