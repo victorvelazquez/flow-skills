@@ -12,9 +12,13 @@ const permissionRules = (source, permission) => {
 };
 const expandHome = (value, home) => value.replace(/^~/, home);
 const externalResource = (file) => `${file.slice(0, file.lastIndexOf("/"))}/*`;
+const relativeResource = (pathApi, worktree, file) => pathApi.relative(worktree, file).split(pathApi.sep).join("/");
+const matchesPermissionPattern = (pattern, resource) => pattern === "*" || new RegExp(`^${pattern
+  .replace(/[.+?^${}()|[\]\\]/g, "\\$&")
+  .replaceAll("*", ".*")}$`).test(resource);
 const permissionFor = (rules, resource, home) => rules.reduce((action, rule) => {
   const pattern = expandHome(rule.pattern, home);
-  return pattern === "*" || pattern === resource ? rule.action : action;
+  return matchesPermissionPattern(pattern, resource) ? rule.action : action;
 }, undefined);
 const jiraTemplate = `### <FEATURE|FIX|REFACTOR|CHORE|DOCS>: <human-readable title>
 
@@ -139,4 +143,75 @@ test("flow-commit exposes compact prepare, semantic intent, seal, and one approv
   assert.match(skill, /prepared-envelope bytes.*opaque prepare handle digest/i);
   assert.match(contract, /Never run.*automatic retry|Never use.*automatic retries/i);
   assert.doesNotMatch(contract, /base64|planId|journal|full request.*approv|exact request.*approv/i);
+});
+
+test("flow-commit agent allows relative intent edits and canonical external parents only", () => {
+  const agent = read("agents/flow-git-agent.md");
+  const edit = permissionRules(agent, "edit");
+  const external = permissionRules(agent, "external_directory");
+  const cases = [
+    {
+      pathApi: path.posix,
+      worktrees: ["/home/opencode/repo", "/home/opencode/worktrees/team/product/repo"],
+      intentFile: "/tmp/flow-commit-a1b2/intent.json",
+    },
+    {
+      pathApi: path.posix,
+      worktrees: ["/Users/opencode/repo", "/Users/opencode/worktrees/team/product/repo"],
+      intentFile: "/var/folders/ab/cd/T/flow-commit-a1b2/intent.json",
+    },
+    {
+      pathApi: path.win32,
+      worktrees: ["C:\\Users\\opencode-test\\repo", "C:\\Users\\opencode-test\\worktrees\\team\\product\\repo"],
+      intentFile: "C:\\Users\\opencode-test\\AppData\\Local\\Temp\\flow-commit-a1b2\\intent.json",
+    },
+  ];
+
+  for (const { pathApi, worktrees, intentFile: nativeIntentFile } of cases) {
+    const intentFile = nativeIntentFile.split(pathApi.sep).join("/");
+    const parentResource = externalResource(intentFile);
+    assert.equal(permissionFor(external, parentResource), "allow");
+    assert.equal(permissionFor(edit, intentFile), "deny");
+
+    for (const worktree of worktrees) {
+      const editResource = relativeResource(pathApi, worktree, nativeIntentFile);
+      assert.equal(permissionFor(edit, editResource), "allow");
+      assert.equal(permissionFor(edit, editResource.replace(/intent\.json$/, "request.json")), "deny");
+      assert.equal(permissionFor(edit, editResource.replace("flow-commit-a1b2", "flow-pr-request-a1b2")), "deny");
+      assert.equal(permissionFor(edit, editResource.replace("flow-commit-a1b2", "unrelated-temp")), "deny");
+    }
+  }
+  for (const deniedResource of [
+    "/tmp/*",
+    "/tmp/flow-pr-request-a1b2/*",
+    "/var/folders/ab/cd/T/*",
+    "/var/folders/ab/cd/T/flow-pr-request-a1b2/*",
+    "C:/Users/opencode-test/AppData/Local/Temp/*",
+    "C:/Users/opencode-test/AppData/Local/Temp/flow-pr-request-a1b2/*",
+  ]) assert.equal(permissionFor(external, deniedResource), "deny");
+
+  assert.deepEqual(edit.filter(({ action }) => action === "allow").map(({ pattern }) => pattern), [
+    "../*tmp/flow-commit-*/intent.json",
+    "../*var/folders/*/*/T/flow-commit-*/intent.json",
+    "../*AppData/Local/Temp/flow-commit-*/intent.json",
+  ]);
+  assert.deepEqual(external.filter(({ action }) => action === "allow").map(({ pattern }) => pattern), [
+    "/tmp/flow-commit-*/*",
+    "/var/folders/*/*/T/flow-commit-*/*",
+    "C:/Users/*/AppData/Local/Temp/flow-commit-*/*",
+  ]);
+  assert.equal(permissionFor([{ pattern: "*", action: "allow" }, { pattern: "*", action: "deny" }], "resource"), "deny");
+});
+
+test("flow-commit agent materializes runtime intent only with OpenCode apply_patch", () => {
+  const agent = read("agents/flow-git-agent.md");
+  const materialization = agent.split("\n\n").find((paragraph) => paragraph.includes("OpenCode `apply_patch` directly")) || "";
+
+  assert.match(materialization, /use OpenCode `apply_patch` directly on the existing runtime-created file/);
+  assert.match(materialization, /exact returned absolute `intentPath`/);
+  assert.match(materialization, /replace the exact existing `\{\}` placeholder line with the single strict one-line `flow-commit\/intent-v2` JSON document/);
+  assert.match(materialization, /do not create a different file/);
+  assert.match(materialization, /never use `write`, generic `edit`, Bash, shell redirection, interpolation, encoding, or any alternate path/);
+  assert.match(materialization, /Never edit the repository or display intent content, the intent path/);
+  assert.doesNotMatch(materialization, /use (?:the )?OpenCode `write` tool (?:specifically|directly)|use generic `edit`|use Bash/i);
 });

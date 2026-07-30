@@ -11,7 +11,7 @@ const PROTECTED_BRANCHES = new Set(["main", "master", "dev", "develop", "develop
 const PREPARE_SCHEMA = "flow-commit/prepare-v2";
 const INTENT_SCHEMA = "flow-commit/intent-v2";
 const RESULT_SCHEMA = "flow-commit/result-v2";
-const TITLE = /^[a-z][a-z0-9-]*\([a-z0-9][a-z0-9._/-]*\): [^\r\n]+$/;
+const TITLE = /^[a-z][a-z0-9-]*\([a-z0-9][a-z0-9._/-]*\)!?: [^\r\n]+$/;
 const HANDLE = /^([a-f0-9]{64})\.([a-f0-9]{64})(?:\.([a-f0-9]{64}))?$/;
 const STORE_PREFIX = "flow-commit-";
 const LOCK_PREFIX = "flow-commit-lock-";
@@ -317,7 +317,7 @@ function validateIntent(document, state) {
     const paths = unit.paths.map(validatePath);
     pathCount += paths.length;
     if (pathCount > MAX_PATHS || new Set(paths).size !== paths.length) throw new FlowError(`Unit ${index + 1} has too many or repeated paths.`, "blocked", "invalid-intent");
-    if (typeof unit.title !== "string" || byteLength(unit.title) > MAX_TITLE_BYTES || !TITLE.test(unit.title)) throw new FlowError(`Unit ${index + 1} title must use type(scope): outcome.`, "blocked", "invalid-intent");
+    if (typeof unit.title !== "string" || byteLength(unit.title) > MAX_TITLE_BYTES || !TITLE.test(unit.title)) throw new FlowError(`Unit ${index + 1} title must use type(scope): outcome or type(scope)!: outcome.`, "blocked", "invalid-intent");
     if (unit.body !== undefined && (typeof unit.body !== "string" || !unit.body || unit.body.includes("\0") || byteLength(unit.body) > MAX_BODY_BYTES)) throw new FlowError(`Unit ${index + 1} body is invalid or exceeds ${MAX_BODY_BYTES} bytes.`, "blocked", "invalid-intent");
     return { paths: sorted(paths), title: unit.title, ...(unit.body === undefined ? {} : { body: unit.body }) };
   });
@@ -356,7 +356,7 @@ export function prepareRepository({ cwd = process.cwd(), now = Date.now(), ttlMs
   fs.mkdirSync(paths.store, { mode: 0o700 });
   try {
     exclusiveBytes(paths.prepared, preparedBytes);
-    fs.writeFileSync(paths.intent, "", { flag: "wx", mode: 0o600 });
+    exclusiveBytes(paths.intent, Buffer.from("{}\n"));
   } catch (error) {
     fs.rmSync(paths.store, { recursive: true, force: true });
     throw error;
@@ -497,17 +497,18 @@ function effects(branch = "not-attempted", worktree = { state: "unknown" }) {
   return { branch: { state: branch }, worktree };
 }
 
-function resultDocument({ status, branch = null, branchEffect = "not-attempted", completed = [], failed = null, remaining = [], leftovers = [], worktree = { state: "unknown" }, error = null, recovery = null }) {
+function resultDocument({ status, branch = null, branchEffect = "not-attempted", completed = [], stoppedAt = null, notAttempted = [], outstandingPaths = [], leftovers = [], worktree = { state: "unknown" }, error = null, recovery = null }) {
   return {
     schema: RESULT_SCHEMA,
     status,
     branch,
     completed,
-    counts: { completed: completed.length, remaining: remaining.length, leftovers: leftovers.length },
+    stoppedAt,
+    notAttempted,
+    outstandingPaths,
+    counts: { completed: completed.length, notAttempted: notAttempted.length, outstandingPaths: outstandingPaths.length, leftovers: leftovers.length },
     leftovers,
     effects: effects(branchEffect, worktree),
-    ...(failed ? { failed } : {}),
-    ...(remaining.length ? { remaining } : {}),
     ...(error ? { error } : {}),
     ...(recovery ? { recovery } : {}),
   };
@@ -520,10 +521,31 @@ function safeObserved(root, factPaths) {
   } catch { return { state: null, leftovers: [] }; }
 }
 
+function preUnitResult(request, error) {
+  const notAttempted = request.intent.units.map(compactUnit);
+  const outstandingPaths = sorted(request.intent.units.flatMap((unit) => unit.paths));
+  const outstandingPathSet = new Set(outstandingPaths);
+  const expectedFacts = request.preparedContentFacts.filter((fact) => outstandingPathSet.has(fact.path));
+  const observed = safeObserved(request.root, outstandingPathSet);
+  const expectedChanges = expectedFacts.map(changeFromFact);
+  const worktreeChanged = observed.state && canonical(observed.state.changes) === canonical(expectedChanges) && canonical(observed.state.contentFacts) === canonical(expectedFacts) ? "unchanged" : "changed";
+  return resultDocument({
+    status: error.status || "failure",
+    branch: observed.state?.branch || request.branch,
+    notAttempted,
+    outstandingPaths,
+    leftovers: observed.leftovers,
+    worktree: { state: worktreeChanged, ...(worktreeChanged === "changed" ? { paths: observed.leftovers } : {}) },
+    error: { code: error.code || "execution-failed", message: error.message },
+    recovery: "Prepare and approve a fresh handle for all outstanding paths.",
+  });
+}
+
 function executeUnits(request, initialState, { onContentRead } = {}) {
   const units = request.intent.units;
   const completed = [];
   let branchEffect = request.intent.branch.action === "keep" ? "kept" : "not-attempted";
+  let activeIndex = null;
   let state;
   try {
     state = initialState || currentState(repositoryContext(request.root));
@@ -537,6 +559,7 @@ function executeUnits(request, initialState, { onContentRead } = {}) {
     let activeHead = state.head;
     const activeBranch = state.branch;
     for (let index = 0; index < units.length; index += 1) {
+      activeIndex = index;
       const unit = units[index];
       const remainingPaths = sorted(units.slice(index).flatMap((candidate) => candidate.paths));
       if (index > 0 || state.contentFacts.length === 0) state = currentState({ root: request.root, commonDir: request.commonDir }, { factPaths: new Set(unit.paths), onContentRead });
@@ -571,6 +594,7 @@ function executeUnits(request, initialState, { onContentRead } = {}) {
           if (after.branch !== activeBranch) {
             completed.push({ oid: createdHead, title: unit.title });
             retained = true;
+            activeIndex = null;
             throw new FlowError("Symbolic branch changed after hooks; completed commit was preserved.", "drift", "branch-drift");
           }
           if (after.head !== createdHead) throw new FlowError("HEAD changed after hooks.", "drift", "head-drift");
@@ -585,6 +609,7 @@ function executeUnits(request, initialState, { onContentRead } = {}) {
         completed.push({ oid: createdHead, title: unit.title });
         retained = true;
         activeHead = createdHead;
+        activeIndex = null;
       } catch (error) {
         if (!retained && runtimeCreatedHead && createdHead && gitValue(["rev-parse", "HEAD^{commit}"], "current HEAD", request.root) === createdHead) rollbackHead(request.root, activeHead, createdHead);
         restoreIndex(request.root, beforeIndex, ownedIndexDigests);
@@ -593,12 +618,13 @@ function executeUnits(request, initialState, { onContentRead } = {}) {
     }
     return resultDocument({ status: "success", branch: state.branch, branchEffect, completed, leftovers: [], worktree: { state: "unchanged" } });
   } catch (error) {
-    const failedIndex = completed.length;
-    const remaining = units.slice(failedIndex).map(compactUnit);
+    const stoppedAt = activeIndex === null ? null : compactUnit(units[activeIndex]);
+    const notAttempted = units.slice(activeIndex === null ? completed.length : activeIndex + 1).map(compactUnit);
     const partial = completed.length > 0 || branchEffect === "created";
-    const remainingPaths = new Set(units.slice(failedIndex).flatMap((unit) => unit.paths));
-    const expectedFacts = request.preparedContentFacts.filter((fact) => remainingPaths.has(fact.path));
-    const observed = safeObserved(request.root, remainingPaths);
+    const outstandingPaths = sorted(units.slice(completed.length).flatMap((unit) => unit.paths));
+    const outstandingPathSet = new Set(outstandingPaths);
+    const expectedFacts = request.preparedContentFacts.filter((fact) => outstandingPathSet.has(fact.path));
+    const observed = safeObserved(request.root, outstandingPathSet);
     const expectedChanges = expectedFacts.map(changeFromFact);
     const worktreeChanged = observed.state && canonical(observed.state.changes) === canonical(expectedChanges) && canonical(observed.state.contentFacts) === canonical(expectedFacts) ? "unchanged" : "changed";
     return resultDocument({
@@ -606,12 +632,13 @@ function executeUnits(request, initialState, { onContentRead } = {}) {
       branch: observed.state?.branch || state?.branch || null,
       branchEffect,
       completed,
-      failed: remaining[0] || null,
-      remaining,
+      stoppedAt,
+      notAttempted,
+      outstandingPaths,
       leftovers: observed.leftovers,
       worktree: { state: worktreeChanged, ...(worktreeChanged === "changed" ? { paths: observed.leftovers } : {}) },
       error: { code: error.code || "execution-failed", message: error.message },
-      recovery: "Preserve completed commits and observed hook effects. Prepare and approve a fresh handle for any remaining paths.",
+      recovery: "Preserve completed commits and observed hook effects. Prepare and approve a fresh handle for outstanding paths.",
     });
   }
 }
@@ -638,8 +665,9 @@ export function executeHandle(handle, { now = Date.now(), onContentRead } = {}) 
     fs.writeFileSync(paths.claim, `${JSON.stringify({ handle, pid: process.pid, claimedAt: now })}\n`, { flag: "wx", mode: 0o600 });
     claimed = true;
   } catch (error) {
-    if (error.code === "EEXIST") throw new FlowError("Handle is already claimed or abandoned; prepare again.", "blocked", "handle-claimed");
-    throw error;
+    return preUnitResult(sealedDocument.request, error.code === "EEXIST"
+      ? new FlowError("Handle is already claimed or abandoned; prepare again.", "blocked", "handle-claimed")
+      : error);
   }
   try {
     lock = acquireRepositoryLock(prepared.commonDir, handle);
@@ -649,6 +677,8 @@ export function executeHandle(handle, { now = Date.now(), onContentRead } = {}) 
       throw new FlowError("Repository content drifted immediately before mutation; prepare again.", "drift", "content-drift");
     }
     return executeUnits(sealedDocument.request, state, { onContentRead });
+  } catch (error) {
+    return preUnitResult(sealedDocument.request, error);
   } finally {
     let releaseError = null;
     try { releaseRepositoryLock(lock, handle); } catch (error) { releaseError = error; }

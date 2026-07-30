@@ -17,7 +17,7 @@ Load for `/flow-commit` or a request to commit current local changes through Flo
 
 - Treat `scripts/flow-commit.mjs` as the Git execution source of truth.
 - Keep one specialized agent. It reads necessary diffs, chooses branch action and ordered semantic units, and never delegates or sends full diff/request context through another agent.
-- Each unit owns exact disjoint paths and uses `type(scope): outcome`. Add a body only when useful.
+- Each unit owns exact disjoint paths and uses `type(scope): outcome`, or `type(scope)!: outcome` for a breaking compatibility change. Add an optional exact-preserved body only when useful; it may include a `BREAKING CHANGE: ...` footer.
 - Never use direct Git mutation, push, PR, audit, build, install, sync, automatic retries, hook skipping, or global rollback.
 - Raw JSON, snapshots, fingerprints, sealed requests, handles, and temp paths are internal. User output is compact prose.
 - The OpenCode `ask` permission on `--execute --handle` is the one human mutation approval. Never ask for a separate conversational confirmation.
@@ -46,5 +46,6 @@ Commits retain hooks, exact staging, write-tree, parent/tree/path/message postco
 
 - Before execute: repository basename, current branch/HEAD abbreviation, current/create branch action, ordered titles, exact paths, body presence/bytes, and file/commit totals.
 - Success: status, branch effect, OID/title per commit, counts, empty leftovers.
-- Partial/failure: completed commits, failed/remaining titles and exact paths, leftovers, observed effects, and fresh-prepare recovery.
+- Every result distinguishes verified `completed` commits, active `stoppedAt` unit or null, later `notAttempted` units, exact intended `outstandingPaths`, and broader observed `leftovers`.
+- Partial/failure: report those concepts, observed effects, and fresh-prepare recovery without implying that an unattempted unit failed.
 - Never repeat bodies or expose request/snapshot/fingerprint internals.
