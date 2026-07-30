@@ -116,6 +116,25 @@ test("prepare is compact, NUL-safe, and covers hostile, untracked, and deleted p
   for (const forbidden of ["repositoryRoot", "commonDir", "fingerprint", "snapshot", "request"]) assert.equal(Object.hasOwn(prepared, forbidden), false);
 });
 
+test("prepare creates the exact non-empty JSON intent placeholder", () => {
+  const cwd = repo();
+  fs.writeFileSync(path.join(cwd, "change.txt"), "change\n");
+  const prepared = prepare(cwd);
+  assert.deepEqual(fs.readFileSync(prepared.intentPath), Buffer.from("{}\n"));
+  assert.equal(fs.statSync(prepared.intentPath).size, 3);
+  if (process.platform !== "win32") assert.equal(fs.statSync(prepared.intentPath).mode & 0o777, 0o600);
+  fs.rmSync(store(prepared), { recursive: true, force: true });
+});
+
+test("seal rejects an untouched placeholder as invalid intent", () => {
+  const cwd = repo();
+  fs.writeFileSync(path.join(cwd, "change.txt"), "change\n");
+  const response = seal(cwd, prepare(cwd));
+  assert.equal(response.result.status, 1);
+  assert.equal(response.output.error.code, "invalid-intent");
+  assert.notEqual(response.output.error.code, "handle-file-size");
+});
+
 test("prepare rejects a preexisting index and repository operation without mutation", () => {
   const stagedRepo = repo();
   fs.writeFileSync(path.join(stagedRepo, "base.txt"), "staged\n");
@@ -183,6 +202,9 @@ test("seal strictly validates intent, coverage, branch collision, and compact su
     [{ schema: "flow-commit/intent-v2", branch: { action: "keep" }, units: [{ paths: ["one.txt"], title: "fix(commit): miss coverage" }] }, "coverage-mismatch"],
     [{ schema: "flow-commit/intent-v2", branch: { action: "keep" }, units: [{ paths: ["one.txt", "../two.txt"], title: "fix(commit): reject traversal" }] }, "invalid-intent"],
     [{ schema: "flow-commit/intent-v2", branch: { action: "keep" }, units: [{ paths: ["one.txt", "two.txt"], title: "not conventional" }] }, "invalid-intent"],
+    [{ schema: "flow-commit/intent-v2", branch: { action: "keep" }, units: [{ paths: ["one.txt", "two.txt"], title: "feat!(commit): reject misplaced marker" }] }, "invalid-intent"],
+    [{ schema: "flow-commit/intent-v2", branch: { action: "keep" }, units: [{ paths: ["one.txt", "two.txt"], title: "feat(commit)!!: reject doubled marker" }] }, "invalid-intent"],
+    [{ schema: "flow-commit/intent-v2", branch: { action: "keep" }, units: [{ paths: ["one.txt", "two.txt"], title: "feat(commit)! : reject marker whitespace" }] }, "invalid-intent"],
     [{ schema: "flow-commit/intent-v2", branch: { action: "keep" }, units: [{ paths: ["one.txt", "two.txt"], title: "fix(commit): reject extras", extra: true }] }, "invalid-intent"],
     [{ schema: "flow-commit/intent-v2", branch: { action: "keep" }, units: [{ paths: ["one.txt", "two.txt"], title: "fix(commit): reject root extras" }], extra: true }, "invalid-intent"],
   ]) {
@@ -193,13 +215,14 @@ test("seal strictly validates intent, coverage, branch collision, and compact su
   const body = "Useful context.";
   const prepared = prepare(cwd);
   intent(prepared, [
-    { paths: ["one.txt"], title: "feat(commit): add first unit", body },
+    { paths: ["one.txt"], title: "feat(commit)!: add first unit", body },
     { paths: ["two.txt"], title: "fix(commit): add second unit" },
   ]);
   const summary = seal(cwd, prepared);
   assert.equal(summary.result.status, 0);
   assert.deepEqual(summary.output.repository, { name: path.basename(cwd), branch: "feat/current", head: git(cwd, ["rev-parse", "--short=12", "HEAD"]) });
   assert.deepEqual(summary.output.counts, { commits: 2, files: 2 });
+  assert.equal(summary.output.units[0].title, "feat(commit)!: add first unit");
   assert.deepEqual(summary.output.units[0].paths, ["one.txt"]);
   assert.deepEqual(summary.output.units[0].body, { present: true, bytes: Buffer.byteLength(body) });
   assert.doesNotMatch(summary.result.stdout, /Useful context|fingerprint|snapshot|request-v2/);
@@ -372,6 +395,9 @@ test("index restoration refuses to overwrite hook-created foreign staging", () =
   assert.equal(response.output.status, "drift");
   assert.equal(response.output.error.code, "foreign-index-change");
   assert.match(git(cwd, ["diff", "--cached", "--name-only"]), /foreign\.txt/);
+  assert.deepEqual(response.output.stoppedAt.paths, ["change.txt"]);
+  assert.deepEqual(response.output.outstandingPaths, ["change.txt"]);
+  assert.ok(response.output.leftovers.includes("foreign.txt"));
   assert.equal(response.output.effects.worktree.state, "changed");
   assert.ok(response.output.effects.worktree.paths.includes("foreign.txt"));
 });
@@ -386,7 +412,45 @@ test("first-unit failure after branch creation is partial with explicit branch e
   assert.equal(response.output.status, "partial");
   assert.deepEqual(response.output.effects.branch, { state: "created" });
   assert.equal(response.output.branch, "fix/created-effect");
-  assert.deepEqual(response.output.remaining[0].paths, ["change.txt"]);
+  assert.deepEqual(response.output.stoppedAt.paths, ["change.txt"]);
+  assert.deepEqual(response.output.notAttempted, []);
+  assert.deepEqual(response.output.outstandingPaths, ["change.txt"]);
+});
+
+test("branch-create blocker leaves every unit not attempted", () => {
+  const cwd = repo("main");
+  fs.writeFileSync(path.join(cwd, "one.txt"), "one\n");
+  fs.writeFileSync(path.join(cwd, "two.txt"), "two\n");
+  const prepared = ready(cwd, [
+    { paths: ["one.txt"], title: "feat(commit): create first unit" },
+    { paths: ["two.txt"], title: "fix(commit): create second unit" },
+  ], { action: "create", name: "feat/collided-after-seal" }).prepared;
+  git(cwd, ["branch", "feat/collided-after-seal"]);
+  const response = execute(cwd, prepared);
+  assert.equal(response.output.status, "blocked");
+  assert.equal(response.output.error.code, "branch-create-failed");
+  assert.equal(response.output.stoppedAt, null);
+  assert.deepEqual(response.output.notAttempted.map((unit) => unit.paths), [["one.txt"], ["two.txt"]]);
+  assert.deepEqual(response.output.outstandingPaths, ["one.txt", "two.txt"]);
+  assert.deepEqual(response.output.completed, []);
+});
+
+test("pre-unit content drift leaves every unit not attempted", () => {
+  const cwd = repo();
+  fs.writeFileSync(path.join(cwd, "one.txt"), "one\n");
+  fs.writeFileSync(path.join(cwd, "two.txt"), "two\n");
+  const prepared = ready(cwd, [
+    { paths: ["one.txt"], title: "feat(commit): create first unit" },
+    { paths: ["two.txt"], title: "fix(commit): create second unit" },
+  ]).prepared;
+  fs.writeFileSync(path.join(cwd, "one.txt"), "drifted\n");
+  const response = execute(cwd, prepared);
+  assert.equal(response.output.status, "drift");
+  assert.equal(response.output.error.code, "content-drift");
+  assert.equal(response.output.stoppedAt, null);
+  assert.deepEqual(response.output.notAttempted.map((unit) => unit.paths), [["one.txt"], ["two.txt"]]);
+  assert.deepEqual(response.output.outstandingPaths, ["one.txt", "two.txt"]);
+  assert.deepEqual(response.output.completed, []);
 });
 
 test("subdirectory invocation normalizes all Git work to the canonical root", () => {
@@ -425,40 +489,51 @@ test("ordered units retain commit verification and compact success omits sensiti
   const cwd = repo();
   fs.writeFileSync(path.join(cwd, "one.txt"), "one\n");
   fs.writeFileSync(path.join(cwd, "two.txt"), "two\n");
-  const body = "Why this unit exists.";
+  const body = "Why this unit exists.\n\nBREAKING CHANGE: consumers must use the new contract.";
   const prepared = ready(cwd, [
-    { paths: ["one.txt"], title: "feat(commit): create first unit", body },
+    { paths: ["one.txt"], title: "feat(commit)!: create first unit", body },
     { paths: ["two.txt"], title: "fix(commit): create second unit" },
   ]).prepared;
   const response = execute(cwd, prepared);
   assert.equal(response.result.status, 0, response.result.stdout);
   assert.equal(response.output.schema, "flow-commit/result-v2");
   assert.equal(response.output.status, "success");
-  assert.deepEqual(response.output.completed.map((unit) => unit.title), ["feat(commit): create first unit", "fix(commit): create second unit"]);
-  assert.deepEqual(response.output.counts, { completed: 2, remaining: 0, leftovers: 0 });
+  assert.deepEqual(response.output.completed.map((unit) => unit.title), ["feat(commit)!: create first unit", "fix(commit): create second unit"]);
+  assert.equal(response.output.stoppedAt, null);
+  assert.deepEqual(response.output.notAttempted, []);
+  assert.deepEqual(response.output.outstandingPaths, []);
+  assert.deepEqual(response.output.counts, { completed: 2, notAttempted: 0, outstandingPaths: 0, leftovers: 0 });
   assert.deepEqual(response.output.leftovers, []);
   assert.deepEqual(response.output.effects.branch, { state: "kept" });
   assert.doesNotMatch(response.result.stdout, /Why this unit exists|request-v2|snapshot|fingerprint|"paths"/);
   assert.equal(git(cwd, ["log", "-1", "--format=%s"]), "fix(commit): create second unit");
-  assert.match(git(cwd, ["log", "-2", "--format=%B"]), /Why this unit exists/);
+  const firstCommit = git(cwd, ["rev-parse", "HEAD~1"]);
+  const commitObject = execFileSync("git", ["cat-file", "commit", firstCommit], { cwd, encoding: "utf8" });
+  assert.equal(commitObject.slice(commitObject.indexOf("\n\n") + 2), `feat(commit)!: create first unit\n\n${body}\n`);
 });
 
 test("later hook failure preserves completed units and actionable remaining paths", () => {
   const cwd = repo();
   fs.writeFileSync(path.join(cwd, "one.txt"), "one\n");
   fs.writeFileSync(path.join(cwd, "two.txt"), "two\n");
+  fs.writeFileSync(path.join(cwd, "three.txt"), "three\n");
   hook(cwd, "pre-commit", "[ \"$(git diff --cached --name-only)\" = \"two.txt\" ] && exit 1\nexit 0");
   const prepared = ready(cwd, [
     { paths: ["one.txt"], title: "feat(commit): retain first unit" },
     { paths: ["two.txt"], title: "fix(commit): fail second unit", body: "Not repeated in output." },
+    { paths: ["three.txt"], title: "docs(commit): leave third unit unattempted" },
   ]).prepared;
   const response = execute(cwd, prepared);
   assert.equal(response.result.status, 2);
   assert.equal(response.output.status, "partial");
   assert.equal(response.output.completed.length, 1);
-  assert.deepEqual(response.output.failed.paths, ["two.txt"]);
-  assert.deepEqual(response.output.remaining[0].paths, ["two.txt"]);
-  assert.deepEqual(response.output.leftovers, ["two.txt"]);
+  assert.deepEqual(response.output.stoppedAt.paths, ["two.txt"]);
+  assert.deepEqual(response.output.notAttempted.map((unit) => unit.paths), [["three.txt"]]);
+  assert.deepEqual(response.output.outstandingPaths, ["three.txt", "two.txt"]);
+  assert.equal(Object.hasOwn(response.output, "failed"), false);
+  assert.equal(Object.hasOwn(response.output, "remaining"), false);
+  assert.equal(Object.hasOwn(response.output, "stopped"), false);
+  assert.deepEqual(response.output.leftovers, ["three.txt", "two.txt"]);
   assert.doesNotMatch(response.result.stdout, /Not repeated in output/);
   assert.equal(git(cwd, ["log", "-1", "--format=%s"]), "feat(commit): retain first unit");
 });

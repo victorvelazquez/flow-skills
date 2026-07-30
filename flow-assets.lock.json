@@ -1,23 +1,23 @@
 {
   "$schema": "flow-assets-lock/v1",
-  "capturedAt": "2026-07-29T18:13:16.000Z",
+  "capturedAt": "2026-07-30T13:20:10.226Z",
   "source": {
     "kind": "opencode-user-config",
     "opencodeVersion": "1.18.7",
-    "gentleAiVersion": "gentle-ai 2.1.6"
+    "gentleAiVersion": "0.16.5"
   },
   "manifest": {
     "sha256": "cb6a71bb0a9225af324cfc45183793c29dfe29cfb740e447c893de9856c58b8d"
   },
   "totals": {
-    "bytes": 603652,
+    "bytes": 606010,
     "count": 68
   },
   "files": [
     {
       "path": "agents/flow-git-agent.md",
-      "sha256": "4fcf85cb34cb241861178c5ff24385937c744914e1df5187eb6c3c8fbdb9004c",
-      "bytes": 2650,
+      "sha256": "36ce179be1bc71342ae922888f865dc04b5c4d52386166e428f138c990b7c251",
+      "bytes": 3054,
       "mode": "100644",
       "executable": false
     },
@@ -156,8 +156,8 @@
     },
     {
       "path": "scripts/flow-commit.mjs",
-      "sha256": "d77cb69149f9e0cbb743b577a2d84ee25d19f1060b753d764a84d5a9d2bf5bcd",
-      "bytes": 42448,
+      "sha256": "62cbfd31ea2b7bfd1e6db702a66bf85091df88e85e039417c4986349698e1ed8",
+      "bytes": 44074,
       "mode": "100644",
       "executable": false
     },
@@ -415,8 +415,8 @@
     },
     {
       "path": "skills/flow-commit/SKILL.md",
-      "sha256": "739b7f012323976714807c81d3f35b3673c04c9dd37b5e5cf724a13da6897b23",
-      "bytes": 4013,
+      "sha256": "06ab4f40781465e71b13367a0bd1c3e8122d90a90ba29bfc02730b3dd877e914",
+      "bytes": 4341,
       "mode": "100644",
       "executable": false
     },
