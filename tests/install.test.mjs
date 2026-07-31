@@ -37,8 +37,8 @@ function seedConfig(target, overrides = {}) {
     $schema: "https://opencode.ai/config.json",
     agent: { "gentle-orchestrator": {
       model: "openai/test-model",
-      tools: { task: true, read: true },
-      permission: { question: "allow", task: { "*": "deny", explore: "allow", "flow-pr-agent": "allow" } },
+      tools: { task: false, read: true },
+      permission: { question: "allow", task: { "*": "deny" } },
     } },
     permission: { bash: "ask" },
     provider: { custom: { token: "must-not-leak" } },
@@ -102,13 +102,13 @@ test("no-argument preview and --dry-run are read-only and do not recover transac
   assert.deepEqual(snapshot(target), blockedBefore);
 });
 
-test("ready empty destination previews and installs every committed HEAD asset", () => {
-  const target = destination(), configBytes = seedConfig(target);
+test("empty destination previews and installs every committed HEAD asset without OpenCode configuration", () => {
+  const target = destination();
   const plan = preview(target);
   assert.equal(plan.target.commit, committedHead);
   assert.deepEqual(plan.counts, { add: committedLock.totals.count, change: 0, delete: 0 });
   assert.deepEqual(plan.totals, committedLock.totals);
-  assert.equal(plan.configuration.ready, true);
+  assert.equal(plan.applySupported, true);
   assert.match(plan.applyCommand, new RegExp(plan.planId));
   assert.match(plan.applyCommand, new RegExp(plan.target.commit));
 
@@ -119,7 +119,7 @@ test("ready empty destination previews and installs every committed HEAD asset",
   assert.equal(result.configChanged, false);
   assert.equal(result.gitChanged, false);
   assert.equal(result.restartRequired, true);
-  assert.deepEqual(fs.readFileSync(path.join(target, "opencode.json"), "utf8"), configBytes);
+  assert.equal(fs.existsSync(path.join(target, "opencode.json")), false);
   for (const entry of committedLock.files) {
     const installed = path.join(target, ...entry.path.split("/"));
     assert.equal(fs.existsSync(installed), true, entry.path);
@@ -167,43 +167,16 @@ test("existing managed assets receive a persistent verified backup and unrelated
   assert.equal(fs.readFileSync(unrelated, "utf8"), "personal\n");
 });
 
-test("configuration blockers are minimal, secret-free, and fail apply before mutation", async (t) => {
-  const required = { agent: { "gentle-orchestrator": {
-    tools: { task: true }, permission: { task: { "*": "deny", "flow-pr-agent": "allow" } },
-  } } };
-  const cases = [
-    ["missing", null, /missing/i],
-    ["malformed", "{bad", /malformed/i],
-    ["null", "null", /must contain a JSON object/i],
-    ["false", "false", /must contain a JSON object/i],
-    ["zero", "0", /must contain a JSON object/i],
-    ["string", JSON.stringify("not an object"), /must contain a JSON object/i],
-    ["array", "[]", /must contain a JSON object/i],
-    ["task tool disabled", JSON.stringify({ agent: { "gentle-orchestrator": { tools: { task: false }, permission: { task: { "*": "deny", "flow-pr-agent": "allow" } } } } }), /tools\.task/i],
-    ["unsafe task default", JSON.stringify({ agent: { "gentle-orchestrator": { tools: { task: true }, permission: { task: { "*": "allow", "flow-pr-agent": "allow" } } } } }), /must be 'deny'/i],
-    ["missing executor", JSON.stringify({ agent: { "gentle-orchestrator": { tools: { task: true }, permission: { task: { "*": "deny" } } } } }), /flow-pr-agent/i],
-  ];
-  for (const [name, bytes, blocker] of cases) await t.test(name, () => {
-    const target = destination(); if (bytes != null) fs.writeFileSync(path.join(target, "opencode.json"), bytes);
-    const plan = preview(target);
-    assert.equal(plan.configuration.ready, false);
-    assert.equal(plan.applySupported, false);
-    assert.deepEqual(plan.configuration.required, required);
-    assert.match(plan.configuration.blockers.join(" "), blocker);
-    assert.doesNotMatch(JSON.stringify(plan), /must-not-leak|provider|test-model/);
-    const before = snapshot(target), result = apply(target, plan);
-    assert.equal(result.status, 1); assert.match(result.stderr, /configuration is not ready/i);
-    assert.deepEqual(snapshot(target), before);
-  });
-});
+test("Gentle AI configuration is neither required nor mutated", () => {
+  const target = destination(), configBytes = seedConfig(target), plan = preview(target);
+  assert.equal(plan.applySupported, true);
+  assert.equal("configuration" in plan, false);
+  assert.doesNotMatch(JSON.stringify(plan), /gentle-orchestrator|flow-pr-agent|must-not-leak|provider|test-model/);
 
-test("configuration readiness is revalidated after preview and opencode.json remains byte-identical", () => {
-  const target = destination(), bytes = seedConfig(target), plan = preview(target);
-  fs.writeFileSync(path.join(target, "opencode.json"), bytes.replace('"task":true', '"task":false'));
-  const before = snapshot(target), result = apply(target, plan);
-  assert.equal(result.status, 1); assert.match(result.stderr, /configuration is not ready/i);
-  assert.deepEqual(snapshot(target), before);
-  assert.equal(fs.existsSync(path.join(target, ".flow-skills", "backups")), false);
+  const result = json(apply(target, plan));
+  assert.equal(result.verified, true);
+  assert.equal(result.configChanged, false);
+  assert.equal(fs.readFileSync(path.join(target, "opencode.json"), "utf8"), configBytes);
 });
 
 test("legacy, unknown, duplicate, missing-value, and conflicting arguments fail closed", () => {

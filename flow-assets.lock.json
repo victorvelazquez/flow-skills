@@ -10,21 +10,21 @@
     "sha256": "9b2d9d93a615f4d2175dfb344c37073c428faeda6958e4badd429c4f295b82dc"
   },
   "totals": {
-    "bytes": 621352,
+    "bytes": 622643,
     "count": 70
   },
   "files": [
     {
       "path": "agents/flow-branch-agent.md",
-      "sha256": "af5d1edc6fe40f444568eac1ee5ad7e8dc5933bf91d6531b17c52c953f297f31",
-      "bytes": 1393,
+      "sha256": "8a6afb2426db13c61af74d884c0fc622aead8fd78363aa27291b3e32c3f09dde",
+      "bytes": 1532,
       "mode": "100644",
       "executable": false
     },
     {
       "path": "agents/flow-git-agent.md",
-      "sha256": "36ce179be1bc71342ae922888f865dc04b5c4d52386166e428f138c990b7c251",
-      "bytes": 3054,
+      "sha256": "280b02b83e09dc821c0667679b41c12461f0ff6f419412edd727ec3a99e02793",
+      "bytes": 3517,
       "mode": "100644",
       "executable": false
     },
@@ -429,8 +429,8 @@
     },
     {
       "path": "skills/flow-commit/SKILL.md",
-      "sha256": "06ab4f40781465e71b13367a0bd1c3e8122d90a90ba29bfc02730b3dd877e914",
-      "bytes": 4341,
+      "sha256": "add820bad9f1dfa0154fef03387cfe903fa9beb049fb3b2570a7dd1958698f56",
+      "bytes": 5030,
       "mode": "100644",
       "executable": false
     },
