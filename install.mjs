@@ -8,14 +8,6 @@ import { fileURLToPath } from "node:url";
 import { applyRestore, buildRestorePlan, inspectRestoreTransaction } from "./tools/flow-assets.mjs";
 
 const REPO_ROOT = path.dirname(fileURLToPath(import.meta.url));
-const REQUIRED_CONFIG = {
-  agent: {
-    "gentle-orchestrator": {
-      tools: { task: true },
-      permission: { task: { "*": "deny", "flow-pr-agent": "allow" } },
-    },
-  },
-};
 
 const HELP = `Usage:
   node install.mjs [--dry-run] [--destination <path>]
@@ -59,33 +51,6 @@ function parseArgs(args) {
   return parsed;
 }
 
-function inspectConfig(destinationRoot) {
-  const configPath = path.join(destinationRoot, "opencode.json");
-  const blockers = [];
-  let config;
-  if (!fs.existsSync(configPath)) blockers.push("opencode.json is missing.");
-  else {
-    try {
-      config = JSON.parse(fs.readFileSync(configPath, "utf8"));
-      if (config === null || Array.isArray(config) || typeof config !== "object") {
-        blockers.push("opencode.json must contain a JSON object.");
-      }
-    }
-    catch { blockers.push("opencode.json is malformed JSON."); }
-  }
-  if (config !== null && !Array.isArray(config) && typeof config === "object") {
-    const orchestrator = config?.agent?.["gentle-orchestrator"];
-    const tasks = orchestrator?.permission?.task;
-    if (orchestrator?.tools?.task !== true) blockers.push("gentle-orchestrator.tools.task must be true.");
-    if (!tasks || Array.isArray(tasks) || typeof tasks !== "object") blockers.push("gentle-orchestrator.permission.task must be an object.");
-    else {
-      if (tasks["*"] !== "deny") blockers.push("gentle-orchestrator.permission.task['*'] must be 'deny'.");
-      if (tasks["flow-pr-agent"] !== "allow") blockers.push("gentle-orchestrator.permission.task['flow-pr-agent'] must be 'allow'.");
-    }
-  }
-  return { ready: blockers.length === 0, blockers, required: REQUIRED_CONFIG };
-}
-
 function destinationFor(parsed) {
   return path.resolve(parsed.destination || process.env.FLOW_SKILLS_OPENCODE_DIR || path.join(os.homedir(), ".config", "opencode"));
 }
@@ -98,7 +63,6 @@ function preview(destinationRoot) {
     throw new Error("An incomplete Flow restore transaction blocks preview. Recover it with /flow-skills-sync restore before retrying.");
   }
   const plan = buildRestorePlan({ requestedRef: "HEAD", destinationRoot, repoRoot: REPO_ROOT, recover: false });
-  const configuration = inspectConfig(destinationRoot);
   const applyCommand = `node ${JSON.stringify(path.join(REPO_ROOT, "install.mjs"))} --apply --expected-target-commit ${plan.target.commit} --expected-plan-id ${plan.planId} --destination ${JSON.stringify(destinationRoot)}`;
   return {
     mode: "preview",
@@ -107,25 +71,19 @@ function preview(destinationRoot) {
     planId: plan.planId,
     counts: plan.counts,
     totals: plan.target.totals,
-    configuration,
-    applySupported: configuration.ready,
+    applySupported: plan.applySupported,
     applyCommand,
     stateChanged: false,
   };
 }
 
 function apply(parsed, destinationRoot) {
-  const validateReady = () => {
-    const configuration = inspectConfig(destinationRoot);
-    if (!configuration.ready) throw new Error(`OpenCode configuration is not ready: ${configuration.blockers.join(" ")}`);
-  };
   const result = applyRestore({
     requestedRef: "HEAD",
     destinationRoot,
     repoRoot: REPO_ROOT,
     expectedTargetCommit: parsed.expectedTargetCommit,
     expectedPlanId: parsed.expectedPlanId,
-    validateReady,
   });
   return {
     mode: "apply",
