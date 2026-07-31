@@ -167,6 +167,28 @@ test("flow-commit and flow-auto-deliver remain commit-only", () => {
   assert.match(`${commit}\n${auto}\n${runtime}`, /flow-commit/); assert.doesNotMatch(auto, /\/flow-pr/i); assert.match(auto, /Do not audit, edit, push, publish, create a PR/i);
 });
 
+test("flow-branch command delegates arguments as data to its dedicated runtime-only agent", () => {
+  const command = read("commands/flow-branch.md");
+  const agent = read("agents/flow-branch-agent.md");
+  const skill = read("skills/flow-branch/SKILL.md");
+  const contract = `${command}\n${agent}\n${skill}`;
+  assert.match(command, /^agent: flow-branch-agent$/m);
+  assert.match(command, /^subtask: true$/m);
+  assert.match(command, /^\$ARGUMENTS$/m);
+  assert.match(agent, /Load `~\/\.config\/opencode\/skills\/flow-branch\/SKILL\.md` before acting/);
+  assert.match(agent, /Use only `~\/\.config\/opencode\/scripts\/flow-branch\.mjs`/);
+  assert.match(agent, /task:\n    "\*": deny/);
+  assert.match(agent, /edit: deny/);
+  assert.match(agent, /write: deny/);
+  assert.match(agent, /never run Git .* directly/i);
+  assert.match(contract, /arguments.*data|arguments only as data/i);
+  assert.match(contract, /never interpolat.*shell syntax/i);
+  assert.match(contract, /--auto-list/);
+  assert.match(contract, /explicit confirmation/i);
+  assert.match(contract, /specific branch|specifico/i);
+  assert.match(contract, /ask-force-delete/);
+});
+
 test("flow-commit exposes compact prepare, semantic intent, seal, and one approval", () => {
   const command = read("commands/flow-commit.md"); const agent = read("agents/flow-git-agent.md"); const skill = read("skills/flow-commit/SKILL.md"); const contract = `${command}\n${agent}\n${skill}`;
   assert.match(command, /^agent: flow-git-agent$/m);

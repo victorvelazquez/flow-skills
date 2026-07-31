@@ -35,14 +35,14 @@ permission:
   read: allow
   edit:
     "*": deny
-    "../*tmp/flow-pr-request-*/intent.json": allow
-    "../*var/folders/*/*/T/flow-pr-request-*/intent.json": allow
-    "../*AppData/Local/Temp/flow-pr-request-*/intent.json": allow
+    "/tmp/flow-pr-request-*/intent.json": allow
+    "/var/folders/*/*/T/flow-pr-request-*/intent.json": allow
+    "C:/Users/*/AppData/Local/Temp/flow-pr-request-*/intent.json": allow
   external_directory:
     "*": deny
-    "/tmp/flow-pr-request-*/*": allow
-    "/var/folders/*/*/T/flow-pr-request-*/*": allow
-    "C:/Users/*/AppData/Local/Temp/flow-pr-request-*/*": allow
+    "/tmp/flow-pr-request-*/intent.json": allow
+    "/var/folders/*/*/T/flow-pr-request-*/intent.json": allow
+    "C:/Users/*/AppData/Local/Temp/flow-pr-request-*/intent.json": allow
     "~/.config/opencode/skills/flow-pr/*": allow
     "~/.config/opencode/skills/flow-pr/references/*": allow
   task:
