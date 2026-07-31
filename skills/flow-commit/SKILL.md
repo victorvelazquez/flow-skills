@@ -23,15 +23,26 @@ Load for `/flow-commit` or a request to commit current local changes through Flo
 - The OpenCode `ask` permission on `--execute --handle` is the one human mutation approval. Never ask for a separate conversational confirmation.
 - Stop once on noop, blocker, drift, partial, failure, or unknown effects. A retry requires fresh user action and preparation.
 
+## Decision Gates
+
+| Prepared branch state | Required intent branch action |
+| --- | --- |
+| `protected` is `true` | Use `{"action":"create","name":"<type>/<task>"}`. Derive a concise lowercase kebab-case task name from the dominant work unit; the complete name must pass `git check-ref-format --branch`. |
+| `protected` is `false` | Use `{"action":"keep"}`. |
+
+Never keep a protected branch. Branch creation belongs only to the sealed Flow Commit execution; do not run Git directly.
+
 ## Workflow
 
 1. Run `node ~/.config/opencode/scripts/flow-commit.mjs --prepare`. It returns only compact drafting facts plus a runtime-owned OS-temp `intentPath` and opaque handle. `noop` ends the workflow.
 2. Read only necessary `git diff`, `git log`, `git show`, and `git status` information in this same agent session.
-3. Write exactly this strict document to the returned `intentPath` using the path-scoped edit permission:
+3. Select the branch object from the decision table and write exactly one strict `flow-commit/intent-v2` JSON document to the returned `intentPath` using the path-scoped edit permission. Its shape is:
 
    ```json
-   {"schema":"flow-commit/intent-v2","branch":{"action":"keep"},"units":[{"paths":["literal/path"],"title":"type(scope): outcome","body":"Optional useful context."}]}
+   {"schema":"flow-commit/intent-v2","branch":{"action":"create","name":"fix/task-name"},"units":[{"paths":["literal/path"],"title":"type(scope): outcome","body":"Optional useful context."}]}
    ```
+
+   On a non-protected branch, replace that branch object with `{"action":"keep"}`.
 
 4. Run `--prepare --handle <prepare-handle>` to seal it. Present repository basename, current branch/HEAD abbreviation, branch action, ordered titles, exact paths, body presence/byte counts, and totals. Keep both opaque handles internal. The returned sealed execute handle binds the approved request digest in addition to the original prepared digest. Do not display the raw runtime document and do not ask for approval separately.
 5. Invoke `--execute --handle <sealed-execute-handle>`. Its permission prompt is the approval. Report compact verified results; success lists commit OID/title and counts without bodies or repeated path arrays. Partial/failure includes actionable remaining paths and recovery.

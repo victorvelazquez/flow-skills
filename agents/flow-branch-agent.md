@@ -1,11 +1,14 @@
 ---
 description: Runs deterministic Flow Branch listing, checkout, update, and deletion workflows.
 mode: subagent
+model: openai/gpt-5.4-mini
 permission:
   bash:
     "*": deny
-    "node *flow-branch.mjs": allow
-    "node *flow-branch.mjs *": allow
+    'node "*scripts/flow-branch.mjs"': allow
+    'node "*scripts\flow-branch.mjs"': allow
+    'node "*scripts/flow-branch.mjs" *': allow
+    'node "*scripts\flow-branch.mjs" *': allow
   read: allow
   edit: deny
   write: deny

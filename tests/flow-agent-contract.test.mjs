@@ -192,6 +192,7 @@ test("flow-branch command delegates arguments as data to its dedicated runtime-o
   const contract = `${command}\n${agent}\n${skill}`;
   assert.match(command, /^agent: flow-branch-agent$/m);
   assert.match(command, /^subtask: true$/m);
+  assert.match(agent, /^model: openai\/gpt-5\.4-mini$/m);
   assert.match(command, /^\$ARGUMENTS$/m);
   assert.match(agent, /Load `~\/\.config\/opencode\/skills\/flow-branch\/SKILL\.md` before acting/);
   assert.match(agent, /Use only `~\/\.config\/opencode\/scripts\/flow-branch\.mjs`/);
@@ -205,6 +206,31 @@ test("flow-branch command delegates arguments as data to its dedicated runtime-o
   assert.match(contract, /explicit confirmation/i);
   assert.match(contract, /specific branch|specifico/i);
   assert.match(contract, /ask-force-delete/);
+});
+
+test("flow-branch agent permits its installed runtime with POSIX and Windows separators", () => {
+  const agent = read("agents/flow-branch-agent.md");
+  const bash = permissionRules(agent, "bash");
+
+  assert.deepEqual(bash, [
+    { pattern: "*", action: "deny" },
+    { pattern: 'node "*scripts/flow-branch.mjs"', action: "allow" },
+    { pattern: 'node "*scripts\\flow-branch.mjs"', action: "allow" },
+    { pattern: 'node "*scripts/flow-branch.mjs" *', action: "allow" },
+    { pattern: 'node "*scripts\\flow-branch.mjs" *', action: "allow" },
+  ]);
+
+  for (const command of [
+    'node "C:/Users/opencode-test/.config/opencode/scripts/flow-branch.mjs"',
+    'node "C:/Users/opencode-test/.config/opencode/scripts/flow-branch.mjs" "dev"',
+    'node "C:\\Users\\opencode-test\\.config\\opencode\\scripts\\flow-branch.mjs"',
+    'node "C:\\Users\\opencode-test\\.config\\opencode\\scripts\\flow-branch.mjs" "dev"',
+  ]) assert.equal(permissionFor(bash, command), "allow");
+
+  for (const command of [
+    'node "C:/Users/opencode-test/.config/opencode/scripts/flow-pr.mjs" "dev"',
+    'node "C:\\Users\\opencode-test\\.config\\opencode\\scripts\\flow-pr.mjs" "dev"',
+  ]) assert.equal(permissionFor(bash, command), "deny");
 });
 
 test("flow-commit exposes compact prepare, semantic intent, seal, and one approval", () => {
@@ -228,6 +254,20 @@ test("flow-commit exposes compact prepare, semantic intent, seal, and one approv
   assert.match(skill, /prepared-envelope bytes.*opaque prepare handle digest/i);
   assert.match(contract, /Never run.*automatic retry|Never use.*automatic retries/i);
   assert.doesNotMatch(contract, /base64|planId|journal|full request.*approv|exact request.*approv/i);
+});
+
+test("flow-commit planning creates a task branch when prepare reports a protected branch", () => {
+  const agent = read("agents/flow-git-agent.md");
+  const skill = read("skills/flow-commit/SKILL.md");
+
+  for (const surface of [agent, skill]) {
+    assert.match(surface, /`protected` is `true`[^\n]+`\{"action":"create","name":"<type>\/<task>"\}`/i);
+    assert.match(surface, /lowercase kebab-case task name/i);
+    assert.match(surface, /`protected` is `false`[^\n]+`\{"action":"keep"\}`/i);
+    assert.match(surface, /Never keep a protected branch/i);
+  }
+  assert.doesNotMatch(skill, /write exactly this strict document[\s\S]{0,300}"branch":\{"action":"keep"\}/i);
+  assert.match(`${agent}\n${skill}`, /sealed Flow Commit execution[^\n]+branch creation|Branch creation belongs only to the sealed Flow Commit execution/i);
 });
 
 test("flow-commit agent allows relative intent edits and canonical external parents only", () => {
