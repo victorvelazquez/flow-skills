@@ -11,12 +11,13 @@
  *   --delete --branch <name> --force              Force delete local branch → JSON
  */
 
-import { runSafe, parseArgs, PROTECTED_BRANCHES as PROTECTED_BRANCH_NAMES } from "./lib/helpers.mjs";
 import { execFileSync } from "child_process";
 import process from "process";
 
+import { parseArgs, PROTECTED_BRANCHES as PROTECTED_BRANCH_NAMES } from "./lib/helpers.mjs";
+
 const PROTECTED_BRANCHES = new Set(PROTECTED_BRANCH_NAMES);
-const DEV_BRANCH_ALIASES = ["dev", "develop", "development"];
+const DEVELOPMENT_FALLBACK = ["development", "develop", "dev"];
 
 function output(obj) {
   process.stdout.write(JSON.stringify(obj, null, 2) + "\n");
@@ -40,8 +41,9 @@ function runGitSafe(args) {
       ok: true,
       output: execFileSync("git", args, {
         encoding: "utf8",
-        stdio: ["pipe", "pipe", "pipe"],
-        cwd: process.cwd(),
+      stdio: ["pipe", "pipe", "pipe"],
+      cwd: process.cwd(),
+      env: { ...process.env, LANG: "C", LC_ALL: "C" },
       }).trimEnd(),
     };
   } catch (err) {
@@ -73,12 +75,18 @@ function parseBranchLines(rawOutput) {
     );
 }
 
-function buildBranchInventory() {
-  const fetchResult = runSafe("git fetch origin");
-  const listResult = runSafe(
-    'git branch -a --sort=-committerdate --format="%(refname:short)|%(committerdate:relative)"',
-  );
-  const currentResult = runSafe("git branch --show-current");
+function buildBranchInventory({ requireFetch = false } = {}) {
+  const fetchResult = runGitSafe(["fetch", "origin"]);
+  if (requireFetch && !fetchResult.ok) {
+    throw new Error(`Fetch from origin failed: ${fetchResult.output}`);
+  }
+  const listResult = runGitSafe([
+    "branch",
+    "-a",
+    "--sort=-committerdate",
+    "--format=%(refname:short)|%(committerdate:relative)",
+  ]);
+  const currentResult = runGitSafe(["branch", "--show-current"]);
 
   if (!listResult.ok) {
     throw new Error(`Could not list branches: ${listResult.output}`);
@@ -190,10 +198,15 @@ function resolveDirectBranch(branchOrAlias, branches) {
     return { status: "none", matches: [] };
   }
 
-  if (DEV_BRANCH_ALIASES.includes(branchOrAlias)) {
-    const match = DEV_BRANCH_ALIASES
+  if (branchOrAlias === "dev" || branchOrAlias === "develop") {
+    const match = DEVELOPMENT_FALLBACK
       .map((name) => branches.find((branch) => branch.name === name))
       .find(Boolean);
+    return match ? { status: "resolved", branch: match, matches: [match] } : { status: "none", matches: [] };
+  }
+
+  if (["development", "main", "master"].includes(branchOrAlias)) {
+    const match = branches.find((branch) => branch.name === branchOrAlias);
     return match ? { status: "resolved", branch: match, matches: [match] } : { status: "none", matches: [] };
   }
 
@@ -221,6 +234,7 @@ function autoList() {
     dryRun: false,
     currentBranch: inventory.currentBranch,
     branches: inventory.branches,
+    allBranches: inventory.allBranches,
     display: buildDisplayTable(inventory.branches),
     instructions: buildInteractionInstructions(),
     nextAction: "select-branch",
@@ -236,7 +250,7 @@ function checkoutBranch(flags, options = {}) {
     failJson(mode, "Error: --checkout requires --branch <name>");
   }
 
-  const inventory = buildBranchInventory();
+  const inventory = options.inventory || buildBranchInventory();
   const entry = inventory.allBranches.find((item) => item.name === branch);
   if (!entry) {
     failJson(mode, `Branch '${branch}' not found in inventory`, { branch });
@@ -301,20 +315,20 @@ function deleteBranch(flags) {
   }
 
   const inventory = buildBranchInventory();
-  const entry = inventory.branches.find((item) => item.name === branch);
+  const entry = inventory.allBranches.find((item) => item.name === branch);
   if (!entry) {
     failJson("delete", `Branch '${branch}' not found in inventory`, { branch });
   }
 
-  if (entry.type === "remote only") {
-    failJson("delete", "Only local branches can be deleted", {
+  if (entry.protected) {
+    failJson("delete", `Branch '${branch}' is protected and cannot be deleted`, {
       branch,
       type: entry.type,
     });
   }
 
-  if (entry.protected) {
-    failJson("delete", `Branch '${branch}' is protected and cannot be deleted`, {
+  if (entry.type === "remote only") {
+    failJson("delete", "Only local branches can be deleted", {
       branch,
       type: entry.type,
     });
@@ -328,6 +342,7 @@ function deleteBranch(flags) {
   }
 
   const result = runGitSafe(["branch", force ? "-D" : "-d", "--", branch]);
+  const unmerged = !force && /not fully merged|not yet merged/i.test(result.output);
 
   output({
     success: result.ok,
@@ -336,7 +351,7 @@ function deleteBranch(flags) {
     branch,
     force,
     error: result.ok ? null : result.output,
-    nextAction: result.ok ? "done" : force ? "error" : "ask-force-delete",
+    nextAction: result.ok ? "done" : unmerged ? "ask-force-delete" : "error",
   });
 
   if (!result.ok) {
@@ -350,7 +365,7 @@ function showDirectOptions(branchOrAlias, resolution, inventory) {
     : inventory.branches;
 
   output({
-    success: true,
+    success: false,
     mode: "direct",
     dryRun: false,
     requestedBranch: branchOrAlias,
@@ -358,12 +373,42 @@ function showDirectOptions(branchOrAlias, resolution, inventory) {
     branches: optionBranches,
     display: buildDisplayTable(optionBranches),
     instructions: buildInteractionInstructions(),
-    nextAction: resolution.status === "ambiguous" ? "select-branch" : "select-branch-or-cancel",
+    error: resolution.status === "ambiguous"
+      ? `Branch '${branchOrAlias}' is ambiguous: ${resolution.matches.map((match) => match.name).join(", ")}`
+      : `Branch '${branchOrAlias}' was not found`,
+    nextAction: resolution.status === "ambiguous" ? "select-branch" : "error",
   });
+  process.exitCode = 1;
+}
+
+function directRelation(branch) {
+  const result = runGitSafe(["rev-list", "--left-right", "--count", `${branch}...origin/${branch}`]);
+  if (!result.ok) throw new Error(`Could not compare '${branch}' with origin: ${result.output}`);
+  const [ahead, behind] = result.output.trim().split(/\s+/).map((value) => Number.parseInt(value, 10));
+  if (!Number.isSafeInteger(ahead) || !Number.isSafeInteger(behind)) {
+    throw new Error(`Could not parse branch relation for '${branch}'`);
+  }
+  return { ahead, behind };
+}
+
+function directCheckoutError(branch, outputText) {
+  if (/already checked out at|used by worktree|is checked out at/i.test(outputText)) {
+    return `Branch '${branch}' is checked out in another worktree: ${outputText}`;
+  }
+  return `Checkout failed: ${outputText}`;
 }
 
 function checkoutDirectBranch(branchOrAlias) {
-  const inventory = buildBranchInventory();
+  const status = runGitSafe(["status", "--porcelain=v1", "--untracked-files=normal"]);
+  if (!status.ok) failJson("direct", `Could not inspect worktree: ${status.output}`, { requestedBranch: branchOrAlias });
+  if (status.output) {
+    failJson("direct", "Direct branch switching requires a clean worktree; no changes were discarded", {
+      requestedBranch: branchOrAlias,
+      dirty: true,
+    });
+  }
+
+  const inventory = buildBranchInventory({ requireFetch: true });
   const resolution = resolveDirectBranch(branchOrAlias, inventory.allBranches);
 
   if (resolution.status !== "resolved") {
@@ -371,10 +416,55 @@ function checkoutDirectBranch(branchOrAlias) {
     return;
   }
 
-  checkoutBranch(
-    { branch: resolution.branch.name, pull: true },
-    { mode: "direct", requestedBranch: branchOrAlias },
-  );
+  const entry = resolution.branch;
+  const branch = entry.name;
+  const relation = entry.type === "local+remote" ? directRelation(branch) : { ahead: null, behind: null };
+  if (relation.ahead > 0 && relation.behind > 0) {
+    failJson("direct", `Branch '${branch}' has diverged from origin/${branch}; refusing a non-fast-forward update`, {
+      requestedBranch: branchOrAlias,
+      branch,
+      ...relation,
+    });
+  }
+
+  const checkoutResult = entry.type === "remote only"
+    ? runGitSafe(["checkout", "--track", `origin/${branch}`])
+    : runGitSafe(["checkout", branch]);
+  if (!checkoutResult.ok) {
+    failJson("direct", directCheckoutError(branch, checkoutResult.output), {
+      requestedBranch: branchOrAlias,
+      branch,
+      type: entry.type,
+    });
+  }
+
+  let updated = false;
+  if (entry.type === "local+remote" && relation.behind > 0) {
+    const updateResult = runGitSafe(["merge", "--ff-only", `origin/${branch}`]);
+    if (!updateResult.ok) {
+      failJson("direct", `Fast-forward update from origin/${branch} failed: ${updateResult.output}`, {
+        requestedBranch: branchOrAlias,
+        branch,
+        ...relation,
+      }, "update-error");
+    }
+    updated = true;
+  }
+
+  output({
+    success: true,
+    mode: "direct",
+    dryRun: false,
+    requestedBranch: branchOrAlias,
+    branch,
+    type: entry.type,
+    fetched: true,
+    ahead: relation.ahead,
+    behind: relation.behind,
+    updated,
+    updateStrategy: entry.type === "local+remote" ? "ff-only" : entry.type === "remote only" ? "tracking-checkout" : "none",
+    nextAction: "done",
+  });
 }
 
 function printHelp() {

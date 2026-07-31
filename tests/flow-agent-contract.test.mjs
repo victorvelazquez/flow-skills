@@ -85,25 +85,43 @@ test("flow-pr agent permits only relative intent edits and canonical external pa
   const agent = read("agents/flow-pr-agent.md");
   const edit = permissionRules(agent, "edit"); const external = permissionRules(agent, "external_directory"); const home = "C:/Users/opencode-test";
   const cases = [
-    ["/home/victor/repo", "/tmp/flow-pr-request-a1/intent.json"],
-    ["/home/victor/Developer/Tools/deep/repo", "/tmp/flow-pr-request-b2/intent.json"],
-    ["/Users/victor/Developer/repo", "/var/folders/ab/cd/T/flow-pr-request-c3/intent.json"],
-    ["C:/Users/victor/Developer/Tools/repo", "C:/Users/victor/AppData/Local/Temp/flow-pr-request-d4/intent.json"],
+    {
+      pathApi: posix, worktree: "/home/victor/repo", intentPath: "/tmp/flow-pr-request-a1/intent.json",
+      siblingPath: "/tmp/flow-pr-request-a1/sibling.json", siblingExternal: "/tmp/other-request-a1/*", globalExternal: "/tmp/*",
+    },
+    {
+      pathApi: posix, worktree: "/Users/victor/Developer/repo", intentPath: "/var/folders/ab/cd/T/flow-pr-request-b2/intent.json",
+      siblingPath: "/var/folders/ab/cd/T/flow-pr-request-b2/sibling.json", siblingExternal: "/var/folders/ab/cd/T/other-request-b2/*", globalExternal: "/var/folders/ab/cd/T/*",
+    },
+    {
+      pathApi: path.win32, worktree: "C:\\Users\\victor\\Developer\\Tools\\repo", intentPath: "C:/Users/victor/AppData/Local/Temp/flow-pr-request-c3/intent.json",
+      siblingPath: "C:/Users/victor/AppData/Local/Temp/flow-pr-request-c3/sibling.json", siblingExternal: "C:/Users/victor/AppData/Local/Temp/other-request-c3/*", globalExternal: "C:/Users/victor/AppData/Local/Temp/*",
+    },
   ];
-  for (const [worktree, intentPath] of cases) {
-    assert.equal(permissionFor(edit, posix.relative(worktree, intentPath), home), "allow");
+  assert.deepEqual(edit, [
+    { pattern: "*", action: "deny" },
+    { pattern: "../*tmp/flow-pr-request-*/intent.json", action: "allow" },
+    { pattern: "../*var/folders/*/*/T/flow-pr-request-*/intent.json", action: "allow" },
+    { pattern: "../*AppData/Local/Temp/flow-pr-request-*/intent.json", action: "allow" },
+  ]);
+  assert.deepEqual(external.slice(0, 4), [
+    { pattern: "*", action: "deny" },
+    { pattern: "/tmp/flow-pr-request-*/*", action: "allow" },
+    { pattern: "/var/folders/*/*/T/flow-pr-request-*/*", action: "allow" },
+    { pattern: "C:/Users/*/AppData/Local/Temp/flow-pr-request-*/*", action: "allow" },
+  ]);
+  for (const { pathApi, worktree, intentPath, siblingPath, siblingExternal, globalExternal } of cases) {
+    assert.equal(permissionFor(edit, relativeResource(pathApi, worktree, intentPath), home), "allow");
     assert.equal(permissionFor(edit, intentPath, home), "deny");
     assert.equal(permissionFor(external, externalResource(intentPath), home), "allow");
+    assert.equal(permissionFor(edit, relativeResource(pathApi, worktree, siblingPath), home), "deny");
+    assert.equal(permissionFor(external, siblingExternal, home), "deny");
+    assert.equal(permissionFor(external, globalExternal, home), "deny");
   }
   for (const resource of [
     "../../../tmp/other-request-a1/intent.json",
-    "../../../tmp/flow-pr-request-a1/sibling.json",
     "../../../repo/intent.json",
   ]) assert.equal(permissionFor(edit, resource, home), "deny");
-  for (const resource of [
-    "/tmp/*", "/tmp/other-request-a1/*",
-    "/var/folders/ab/cd/T/*", "C:/Users/victor/AppData/Local/Temp/*",
-  ]) assert.equal(permissionFor(external, resource, home), "deny");
 });
 test("flow-pr agent requires exact apply_patch placeholder replacement", () => {
   const agent = read("agents/flow-pr-agent.md");
@@ -165,6 +183,28 @@ test("flow-pr keeps Jira inert and preserves the fenced block through every hand
 test("flow-commit and flow-auto-deliver remain commit-only", () => {
   const commit = read("commands/flow-commit.md"); const auto = read("commands/flow-auto-deliver.md"); const runtime = read("scripts/flow-commit.mjs");
   assert.match(`${commit}\n${auto}\n${runtime}`, /flow-commit/); assert.doesNotMatch(auto, /\/flow-pr/i); assert.match(auto, /Do not audit, edit, push, publish, create a PR/i);
+});
+
+test("flow-branch command delegates arguments as data to its dedicated runtime-only agent", () => {
+  const command = read("commands/flow-branch.md");
+  const agent = read("agents/flow-branch-agent.md");
+  const skill = read("skills/flow-branch/SKILL.md");
+  const contract = `${command}\n${agent}\n${skill}`;
+  assert.match(command, /^agent: flow-branch-agent$/m);
+  assert.match(command, /^subtask: true$/m);
+  assert.match(command, /^\$ARGUMENTS$/m);
+  assert.match(agent, /Load `~\/\.config\/opencode\/skills\/flow-branch\/SKILL\.md` before acting/);
+  assert.match(agent, /Use only `~\/\.config\/opencode\/scripts\/flow-branch\.mjs`/);
+  assert.match(agent, /task:\n    "\*": deny/);
+  assert.match(agent, /edit: deny/);
+  assert.match(agent, /write: deny/);
+  assert.match(agent, /never run Git .* directly/i);
+  assert.match(contract, /arguments.*data|arguments only as data/i);
+  assert.match(contract, /never interpolat.*shell syntax/i);
+  assert.match(contract, /--auto-list/);
+  assert.match(contract, /explicit confirmation/i);
+  assert.match(contract, /specific branch|specifico/i);
+  assert.match(contract, /ask-force-delete/);
 });
 
 test("flow-commit exposes compact prepare, semantic intent, seal, and one approval", () => {

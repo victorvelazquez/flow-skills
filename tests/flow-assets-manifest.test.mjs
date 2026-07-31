@@ -98,6 +98,7 @@ test("manifest and lock define a deterministic, complete, safe mirror", () => {
   const retiredPrAssets = ["flow-branch-policy", "flow-chain-plan", "flow-check-evidence", "flow-delivery-config", "flow-pr-body", "flow-pr-labels", "flow-pr-prs", "promotion-review-coordinator", "review-causal-admission", "review-delivery-policy"];
   assert.ok(retiredPrAssets.every((name) => !manifest.liveMirrored.libraries.includes(`scripts/lib/${name}.mjs`)));
   assert.ok(retiredPrAssets.every((name) => !lock.files.some((entry) => entry.path === `scripts/lib/${name}.mjs`)));
+  assert.ok(lock.files.some((entry) => entry.path === "agents/flow-branch-agent.md"));
   assert.deepEqual(manifest.liveMirrored.libraries.filter((entry) => entry.startsWith("scripts/lib/flow-pr-")), [
     "scripts/lib/flow-pr-contracts.mjs",
     "scripts/lib/flow-pr-drafting.mjs",

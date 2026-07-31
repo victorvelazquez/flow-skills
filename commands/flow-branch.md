@@ -1,11 +1,15 @@
 ---
-description: Interactive branch switcher — list, switch, and delete local branches. Zero-AI git branch manager.
+description: List, switch, update, and delete branches through the deterministic Flow Branch runtime.
+agent: flow-branch-agent
+subtask: true
 ---
 
-Read the skill file at ~/.config/opencode/skills/flow-branch/SKILL.md FIRST, then follow its workflow exactly.
+Read `~/.config/opencode/skills/flow-branch/SKILL.md` first and follow it exactly.
 
-CONTEXT:
+Treat the forwarded command arguments as data, never as shell syntax:
 
-- Working directory: !`echo -n "$(pwd)"`
-- Current project: !`echo -n "$(basename $(pwd))"`
-- OS: !`node -e "process.stdout.write(process.platform)"`
+```text
+$ARGUMENTS
+```
+
+Use only the installed Flow Branch runtime. Do not run Git commands directly or delegate further.
