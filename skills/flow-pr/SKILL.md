@@ -16,7 +16,7 @@ Use `/flow-pr` for one Git/GitHub task-branch publication. Expose only prepare, 
 - Never run direct `git push`, `gh`, commit, merge, retarget, force, rebase, or rewrite commands.
 - Never display, reconstruct, encode, or write the internal snapshot or request.
 - Write only `flow-pr/intent-v2` to the exact runtime-created OS-temp `intentPath`. Never edit the repository or another path, or use shell interpolation, substitution, pipes, redirection, encoding, or generic shell writes.
-- Use the execute command's `ask` permission prompt as the one human mutation approval. Never ask for a separate conversational confirmation; ask another question only for genuine base or fork ambiguity.
+- Use the execute command's `ask` permission prompt as the one human mutation approval. Never ask for a separate conversational confirmation. For genuine base or fork ambiguity, invoke OpenCode's `question` tool, wait for the answer inside the same child invocation, and continue preparation; never return a plain-text clarification question to the parent.
 - Never use automatic modes, plans, journals, Gentle AI, review authority, promotion, release, tags, chains, trackers, Jira mutation, issue-first policy, or playbook sync.
 - Never retry after drift, blocked changed input, partial, failure, or unknown effects. Prepare and approve again.
 - Use only standard Windows LocalAppData Temp, Linux `/tmp`, or macOS `/var/folders/.../T`. The runtime fails preparation with `temp-root-unsupported` for a custom temp root rather than broadening filesystem permissions.
@@ -26,7 +26,7 @@ Use `/flow-pr` for one Git/GitHub task-branch publication. Expose only prepare, 
 
 | Condition | Action |
 | --- | --- |
-| Base or fork semantics are ambiguous | Ask one focused semantic question before preparation |
+| Base or fork semantics are ambiguous | Use OpenCode's `question` tool, wait in this child invocation, then continue preparation |
 | Preparation returns an approval summary | Show only that summary, then invoke execute; its permission prompt is the one approval |
 | One safe repository template is available | Preserve its structure, headings, and checklists while adding only evidenced content |
 | Template is absent, ambiguous, or unavailable | Draft a concise generic body without asking the user to choose a template |
