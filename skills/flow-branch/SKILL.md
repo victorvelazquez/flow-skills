@@ -19,6 +19,7 @@ Load this skill for `/flow-branch` with or without one branch argument. Use `~/.
 - Never delete `main`, `master`, `develop`, `development`, `dev`, `staging`, `production`, the current branch, a remote-only branch, or any entry with `protected: true`.
 - Never force-delete without explicit approval for that specific branch. Do not bulk-approve force deletion.
 - Never discard changes, stash, reset, force checkout, merge non-fast-forward, or report success after a runtime failure.
+- This runtime selects existing local or remote branch identities. Remote-only checkout may materialize a local tracking ref, but it never creates a new branch identity from the current source, so it records no base provenance; Flow Commit owns that boundary.
 
 ## Decision Gates
 

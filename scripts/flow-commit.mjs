@@ -477,6 +477,28 @@ function rollbackHead(root, oldHead, createdHead) {
   if (!result.ok) throw new FlowError(`HEAD CAS rollback was rejected: ${result.stderr}`, "drift", "head-cas-rejected");
 }
 
+function removeBranchProvenance(root, branch) {
+  git(["config", "--local", "--unset-all", `branch.${branch}.gh-merge-base`], { cwd: root });
+}
+
+function rollbackCreatedBranch(root, sourceBranch, createdBranch) {
+  removeBranchProvenance(root, createdBranch);
+  const switched = git(["switch", sourceBranch], { cwd: root });
+  if (!switched.ok) throw new FlowError(`Created branch rollback could not restore '${sourceBranch}': ${switched.stderr}`, "drift", "branch-rollback-failed");
+  const removed = git(["branch", "-D", createdBranch], { cwd: root });
+  if (!removed.ok) throw new FlowError(`Created branch rollback could not remove '${createdBranch}': ${removed.stderr}`, "drift", "branch-rollback-failed");
+  const stale = git(["config", "--local", "--get-all", `branch.${createdBranch}.gh-merge-base`], { cwd: root });
+  if (stale.ok && stale.stdout.trim()) throw new FlowError("Created branch rollback left stale base provenance.", "drift", "branch-rollback-failed");
+}
+
+function recordBranchProvenance(root, branch, sourceBranch) {
+  const key = `branch.${branch}.gh-merge-base`;
+  const recorded = git(["config", "--local", "--replace-all", key, sourceBranch], { cwd: root });
+  if (!recorded.ok) throw new FlowError(`Could not record branch base provenance: ${recorded.stderr}`, "blocked", "branch-provenance-failed");
+  const observed = git(["config", "--local", "--get-all", key], { cwd: root });
+  if (!observed.ok || observed.stdout.trim() !== sourceBranch) throw new FlowError("Branch base provenance postcondition failed.", "drift", "branch-provenance-postcondition-failed");
+}
+
 function verifyCommit(root, oldHead, createdHead, stagedTree, unit) {
   const parent = gitValue(["rev-parse", `${createdHead}^`], "commit parent", root);
   const tree = gitValue(["rev-parse", `${createdHead}^{tree}`], "commit tree", root);
@@ -541,7 +563,7 @@ function preUnitResult(request, error) {
   });
 }
 
-function executeUnits(request, initialState, { onContentRead } = {}) {
+function executeUnits(request, initialState, { onContentRead, onProvenanceRecorded } = {}) {
   const units = request.intent.units;
   const completed = [];
   let branchEffect = request.intent.branch.action === "keep" ? "kept" : "not-attempted";
@@ -552,9 +574,16 @@ function executeUnits(request, initialState, { onContentRead } = {}) {
     if (request.intent.branch.action === "create") {
       const created = git(["switch", "-c", request.intent.branch.name], { cwd: request.root });
       if (!created.ok) throw new FlowError(`Requested branch '${request.intent.branch.name}' could not be created: ${created.stderr}`, "blocked", "branch-create-failed");
+      try {
+        recordBranchProvenance(request.root, request.intent.branch.name, request.branch);
+        onProvenanceRecorded?.();
+        state = currentState({ root: request.root, commonDir: request.commonDir }, { factPaths: new Set(), onContentRead });
+        if (state.head !== request.head || state.branch !== request.intent.branch.name) throw new FlowError("Branch creation postconditions failed.", "drift", "branch-postcondition-failed");
+      } catch (error) {
+        rollbackCreatedBranch(request.root, request.branch, request.intent.branch.name);
+        throw error;
+      }
       branchEffect = "created";
-      state = currentState({ root: request.root, commonDir: request.commonDir }, { factPaths: new Set(), onContentRead });
-      if (state.head !== request.head || state.branch !== request.intent.branch.name) throw new FlowError("Branch creation postconditions failed.", "drift", "branch-postcondition-failed");
     }
     let activeHead = state.head;
     const activeBranch = state.branch;
@@ -643,7 +672,7 @@ function executeUnits(request, initialState, { onContentRead } = {}) {
   }
 }
 
-export function executeHandle(handle, { now = Date.now(), onContentRead } = {}) {
+export function executeHandle(handle, { now = Date.now(), onContentRead, onProvenanceRecorded } = {}) {
   const paths = storePaths(handle);
   let prepared; let sealedDocument;
   try {
@@ -676,7 +705,7 @@ export function executeHandle(handle, { now = Date.now(), onContentRead } = {}) 
     if (!samePath(state.root, prepared.root) || !samePath(state.commonDir, prepared.commonDir) || state.fingerprint !== prepared.fingerprint) {
       throw new FlowError("Repository content drifted immediately before mutation; prepare again.", "drift", "content-drift");
     }
-    return executeUnits(sealedDocument.request, state, { onContentRead });
+    return executeUnits(sealedDocument.request, state, { onContentRead, onProvenanceRecorded });
   } catch (error) {
     return preUnitResult(sealedDocument.request, error);
   } finally {

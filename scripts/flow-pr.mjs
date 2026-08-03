@@ -17,7 +17,7 @@ const HANDLE_TTL_MS = 30 * 60 * 1000;
 const PROTECTED = new Set(["main", "master", "dev", "develop", "development"]);
 
 function usage(message) {
-  throw new Error(`${message}\nUsage: flow-pr --prepare --base <ref> [--push-remote <remote>] [--verbose] | flow-pr --prepare --handle <handle> [--verbose] | flow-pr --execute --handle <handle> [--verbose]`);
+  throw new Error(`${message}\nUsage: flow-pr --prepare [--base <ref>] [--push-remote <remote>] [--verbose] | flow-pr --prepare --handle <handle> [--verbose] | flow-pr --execute --handle <handle> [--verbose]`);
 }
 
 function parse(argv) {
@@ -41,7 +41,6 @@ function parse(argv) {
     if (values.size !== 1) usage("Intent preparation requires only --handle, with optional --verbose.");
     return { mode: "finalize", handle: values.get("--handle"), verbose };
   }
-  if (!values.has("--base")) usage("Initial preparation requires --base.");
   return { mode: "prepare", base: values.get("--base"), pushRemote: values.get("--push-remote") || "origin", verbose };
 }
 
@@ -111,7 +110,7 @@ function compactContext(snapshot) {
   const existing = snapshot.pr.exact;
   return {
     repository: compactRepo(snapshot.target), root: snapshot.root, branch: snapshot.branch,
-    base: snapshot.base.ref,
+    base: snapshot.base.ref, baseAuthority: { source: snapshot.base.source, evidence: snapshot.base.evidence },
     delivery: { target: compactRepo(snapshot.target), pushRemote: snapshot.push.remote, pushRepository: compactRepo(snapshot.push.repository), inferredMode: repoIdentity(snapshot.target) === repoIdentity(snapshot.push.repository) ? "same-repo" : "fork" },
     remoteState: snapshot.relation.divergence, upstream: snapshot.upstream,
     existingPr: existing ? { number: existing.number, url: existing.url, state: existing.state, title: existing.title, bodySha256: identity(existing.body), draft: existing.draft, labels: existing.labels } : null,
@@ -150,6 +149,7 @@ function approvalSummary(request) {
   const gitAction = request.expected.intent.push === "verify-existing" ? "verify" : snapshot.relation.divergence === "equal" && upstreamExact ? "verify" : "push";
   return {
     repository: compactRepo(request.delivery.target), branchToBase: `${request.delivery.head.owner}:${request.delivery.head.ref} -> ${request.expected.snapshot.base.ref}`,
+    baseAuthority: { source: request.expected.snapshot.base.source, evidence: request.expected.snapshot.base.evidence },
     action: { git: gitAction, pullRequest: prAction, expectation: `${gitAction} and ${prAction}` },
     title: request.pr.title,
     body: { bytes: Buffer.byteLength(request.pr.body), sha256: identity(request.pr.body) },

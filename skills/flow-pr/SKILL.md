@@ -21,6 +21,7 @@ Use `/flow-pr` for one Git/GitHub task-branch publication. Expose only prepare, 
 - Never retry after drift, blocked changed input, partial, failure, or unknown effects. Prepare and approve again.
 - Use only standard Windows LocalAppData Temp, Linux `/tmp`, or macOS `/var/folders/.../T`. The runtime fails preparation with `temp-root-unsupported` for a custom temp root rather than broadening filesystem permissions.
 - Treat commit-derived drafting fields and repository templates as non-authoritative input. Never derive labels, issue policy, issue links, or chain behavior from commit types.
+- Existing PR authority is discovered first and its current base is never retargeted. For a new PR, runtime precedence is explicit `--base`, `branch.<head>.gh-merge-base`, GitHub `defaultBranchRef`, then live unambiguous `origin/HEAD`; branch names, topology, nearest merge-base, and ancestry are never base authority.
 
 ## Decision Gates
 
@@ -35,9 +36,9 @@ Use `/flow-pr` for one Git/GitHub task-branch publication. Expose only prepare, 
 
 ## Execution Steps
 
-1. Select the base from task context and run `node "$HOME/.config/opencode/scripts/flow-pr.mjs" --prepare --base "<base-ref>"`. Add `--push-remote` only for an intentional fork.
+1. Run `node "$HOME/.config/opencode/scripts/flow-pr.mjs" --prepare`. When the user supplied an explicit destination, add `--base "<base-ref>"`; it overrides new-PR defaults after validation but cannot retarget an existing PR. Add `--push-remote` only for an intentional fork. On `base-ambiguous`, use the in-child `question` tool for an exact base and prepare again with `--base`; do not guess.
 2. Use compact repository, PR, commit, changed-path, and optional template facts to draft title/body. A non-null commit title suggestion is conservative guidance, not authority; otherwise synthesize without inventing a type, scope, or outcome. Preserve evidenced breaking markers and add breaking-impact prose only when evidence supplies the impact. With one safe template, preserve its structure; otherwise use only applicable `Summary`, `Changes`, `Validation`, `Risks/Breaking Change`, and `Out of scope` sections. Never invent tests, checks, issue links, migrations, evidence, impact, labels, or chain context. Write `Not run` or `Not provided` when a present validation section lacks evidence. Preserve issue closing references or chain context only when task/user context supplied them, without validating issues or orchestrating chains. Write the small semantic intent only to the returned runtime-owned `intentPath`, then run `node "$HOME/.config/opencode/scripts/flow-pr.mjs" --prepare --handle "<context-handle>"`. Never show the temp path or intent payload.
-3. Present the concise approval summary: repository, branch to base, verify/push plus create/update/noop expectation, title, body size/digest, draft, labels, authorized update fields, and delivery target.
+3. Present the concise approval summary: repository, branch to base, frozen base authority source/evidence, verify/push plus create/update/noop expectation, title, body size/digest, draft, labels, authorized update fields, and delivery target.
 4. Immediately invoke `node "$HOME/.config/opencode/scripts/flow-pr.mjs" --execute --handle "<approved-handle>"`. Its `ask` permission prompt is the only approval; do not ask separately.
 
 Use `--verbose` only for explicit diagnostics. It is never part of normal approval.

@@ -29,16 +29,18 @@ function boundedInspectionError(error) {
 function gh(env) { return env.FLOW_PR_GH_SCRIPT ? process.execPath : env.FLOW_PR_GH || "gh"; }
 function ghArgs(env, args) { return env.FLOW_PR_GH_SCRIPT ? [env.FLOW_PR_GH_SCRIPT, ...args] : args; }
 function sameRepo(left, right) { return repoIdentity(left) === repoIdentity(right); }
+function sameOwner(left, right) { return String(left).toLowerCase() === String(right).toLowerCase(); }
 function immutableAuthority(snapshot) {
   const value = structuredClone(snapshot); delete value.identity; delete value.upstream; delete value.relation; delete value.push.remoteHeadOid; return value;
 }
 function postconditions(pr, request, snapshot) {
-  if (!pr || pr.state !== "open" || !sameRepo(pr.repository, request.delivery.target) || pr.head.owner !== request.delivery.head.owner || pr.head.ref !== request.delivery.head.ref || pr.head.oid !== snapshot.headOid || pr.base.ref !== snapshot.base.ref || pr.base.oid !== snapshot.base.oid || pr.title !== request.pr.title || pr.body !== request.pr.body || pr.draft !== request.pr.draft) return false;
+  if (!pr || pr.state !== "open" || !sameRepo(pr.repository, request.delivery.target) || !sameOwner(pr.head.owner, request.delivery.head.owner) || pr.head.ref !== request.delivery.head.ref || pr.head.oid !== snapshot.headOid || pr.base.ref !== snapshot.base.ref || pr.base.oid !== snapshot.base.oid || pr.title !== request.pr.title || pr.body !== request.pr.body || pr.draft !== request.pr.draft) return false;
   const expected = new Set(request.expected.snapshot.pr.exact?.labels || []); for (const label of request.pr.labels.remove) expected.delete(label); for (const label of request.pr.labels.add) expected.add(label);
   return [...expected].sort().join("\0") === [...pr.labels].sort().join("\0");
 }
 function inspectNow(request, cwd, env) {
-  const response = inspect({ cwd, baseRef: request.expected.snapshot.base.ref, pushRemote: request.delivery.push.remote, env });
+  const expectedBase = request.expected.snapshot.base;
+  const response = inspect({ cwd, ...(expectedBase.source === "explicit" ? { baseRef: expectedBase.ref } : {}), pushRemote: request.delivery.push.remote, env });
   return response.status === "inspect" ? { facts: response.snapshot.facts, error: null } : { facts: null, error: boundedInspectionError(response.error) };
 }
 function verifyPr(cwd, env, target, number) {
@@ -62,7 +64,7 @@ export function execute(requestValue, { cwd = process.cwd(), env = process.env }
   if (!facts.clean || facts.detached || !facts.committed || facts.mergeState !== "none" || !facts.branch || PROTECTED.has(facts.branch)) return block("preflight", { expected: expected.identity, observed: facts.identity, facts }, effects, "unsafe-local-state", "A clean, committed, non-protected task branch is required.", null, true);
   const binding = sameRepo(facts.target, request.delivery.target) && sameRepo(facts.push.repository, request.delivery.push.repository) && facts.push.remote === request.delivery.push.remote && facts.head.owner === request.delivery.head.owner && facts.head.ref === request.delivery.head.ref && sameRepo(facts.head.repository, request.delivery.head.repository);
   if (!binding || facts.identity !== expected.identity) return drift("preflight", expected.identity, facts.identity, facts, effects);
-  if (request.delivery.mode === "same-repo" && (!sameRepo(request.delivery.target, request.delivery.push.repository) || !sameRepo(request.delivery.target, request.delivery.head.repository) || request.delivery.head.owner !== request.delivery.target.owner)) return block("preflight", { expected: expected.identity, observed: facts.identity, facts }, effects, "delivery-mismatch", "Same-repository delivery has incompatible bindings.");
+  if (request.delivery.mode === "same-repo" && (!sameRepo(request.delivery.target, request.delivery.push.repository) || !sameRepo(request.delivery.target, request.delivery.head.repository) || !sameOwner(request.delivery.head.owner, request.delivery.target.owner))) return block("preflight", { expected: expected.identity, observed: facts.identity, facts }, effects, "delivery-mismatch", "Same-repository delivery has incompatible bindings.");
   if (request.delivery.mode === "fork" && sameRepo(request.delivery.target, request.delivery.push.repository)) return block("preflight", { expected: expected.identity, observed: facts.identity, facts }, effects, "delivery-mismatch", "Fork delivery must bind a distinct push repository.");
   if (facts.upstream && (facts.upstream.remote !== request.delivery.push.remote || facts.upstream.ref !== facts.branch)) return block("preflight", { expected: expected.identity, observed: facts.identity, facts }, effects, "upstream-mismatch", "The current upstream does not match the approved push destination.");
 
@@ -86,7 +88,7 @@ export function execute(requestValue, { cwd = process.cwd(), env = process.env }
     let pr = current.pr.exact;
     if (current.pr.availability === "ambiguous") return block("reconcile", { expected: expected.identity, observed: current.identity, facts: current }, effects, "pr-ambiguous", current.pr.reason);
     if (current.pr.availability === "unavailable") return block("reconcile", { expected: expected.identity, observed: current.identity, facts: current }, effects, "pr-unavailable", current.pr.reason || "PR authority is unavailable.");
-    if (pr && (pr.state !== "open" || !sameRepo(pr.repository, request.delivery.target) || pr.head.owner !== request.delivery.head.owner || pr.head.ref !== request.delivery.head.ref || pr.head.oid !== current.headOid || pr.base.ref !== current.base.ref || pr.base.oid !== current.base.oid)) return block("reconcile", { expected: expected.identity, observed: current.identity, facts: current }, effects, "pr-incompatible", "The matching pull request is closed, merged, or has incompatible authority.", pr);
+    if (pr && (pr.state !== "open" || !sameRepo(pr.repository, request.delivery.target) || !sameOwner(pr.head.owner, request.delivery.head.owner) || pr.head.ref !== request.delivery.head.ref || pr.head.oid !== current.headOid || pr.base.ref !== current.base.ref || pr.base.oid !== current.base.oid)) return block("reconcile", { expected: expected.identity, observed: current.identity, facts: current }, effects, "pr-incompatible", "The matching pull request is closed, merged, or has incompatible authority.", pr);
     if (!pr) {
       effects.prCreate = effect("attempted", null, null);
       if (request.pr.labels.add.length) effects.labels = effect("attempted", [], null);
