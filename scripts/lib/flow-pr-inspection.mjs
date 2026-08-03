@@ -69,7 +69,7 @@ function remoteBranchOid(cwd, remoteName, ref, env, label) {
 function ghPr(cwd, repo, owner, ref, env) {
   const command = env.FLOW_PR_GH_SCRIPT ? process.execPath : env.FLOW_PR_GH || "gh";
   const prefix = env.FLOW_PR_GH_SCRIPT ? [env.FLOW_PR_GH_SCRIPT] : [];
-  const result = run(command, [...prefix, "pr", "list", "--repo", `${repo.owner}/${repo.name}`, "--head", ref, "--state", "all", "--limit", "100", "--json", "number,url,state,isDraft,headRefOid,headRefName,headRepositoryOwner,baseRefName,baseRefOid,title,body,labels"], { cwd, env });
+  const result = run(command, [...prefix, "pr", "list", "--repo", `${repo.owner}/${repo.name}`, "--head", ref, "--state", "open", "--limit", "100", "--json", "number,url,state,isDraft,headRefOid,headRefName,headRepositoryOwner,baseRefName,baseRefOid,title,body,labels"], { cwd, env });
   if (!result.ok) throw new ContractError(`GitHub PR inspection is unavailable: ${result.stderr || result.stdout}`, "gh-unavailable");
   let entries; try { entries = JSON.parse(result.stdout); } catch { throw new ContractError("GitHub PR inspection returned invalid JSON.", "gh-invalid-json"); }
   if (!Array.isArray(entries)) throw new ContractError("GitHub PR inspection returned a non-array.", "gh-invalid-json");

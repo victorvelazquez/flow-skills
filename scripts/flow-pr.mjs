@@ -128,7 +128,7 @@ function intentTemplate(snapshot) {
     schema: "flow-pr/intent-v2",
     title: "",
     body: "",
-    draft: snapshot.pr.exact?.draft ?? true,
+    draft: snapshot.pr.exact?.draft ?? false,
     labels: { add: [], remove: [] },
     updateExisting: ["title", "body", "draft", "labels"],
     deliveryMode: repoIdentity(snapshot.target) === repoIdentity(snapshot.push.repository) ? "same-repo" : "fork",

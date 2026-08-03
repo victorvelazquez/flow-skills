@@ -27,7 +27,7 @@ function fixture() {
   fs.writeFileSync(gh, `import fs from "node:fs";
 const a=process.argv.slice(2),s=process.env.FLOW_PR_STATE,c=process.env.FLOW_PR_CALLS,load=()=>fs.existsSync(s)?JSON.parse(fs.readFileSync(s,"utf8")):[],save=v=>fs.writeFileSync(s,JSON.stringify(v)),val=x=>a[a.indexOf(x)+1];
 fs.appendFileSync(c,JSON.stringify(a)+"\\n");let all=load();
-if(a[0]==="pr"&&a[1]==="list"){if(process.env.FLOW_PR_BLOCK_LIST_READY){if(!fs.existsSync(process.env.FLOW_PR_BLOCK_LIST_READY))fs.writeFileSync(process.env.FLOW_PR_BLOCK_LIST_READY,"ready",{flag:"wx"});const wait=new Int32Array(new SharedArrayBuffer(4));while(!fs.existsSync(process.env.FLOW_PR_BLOCK_LIST_RELEASE))Atomics.wait(wait,0,0,10);}if(process.env.FLOW_PR_FAIL_LIST){process.stderr.write(process.env.FLOW_PR_FAIL_LIST_MESSAGE||"list unavailable");process.exit(1)}if(process.env.FLOW_PR_INVALID_JSON)process.stdout.write("{");else if(process.env.FLOW_PR_NON_ARRAY)process.stdout.write("{}");else process.stdout.write(JSON.stringify(process.env.FLOW_PR_AMBIGUOUS?[...all,...all.map(x=>({...x,number:x.number+1,url:"https://github.com/example/repo/pull/"+(x.number+1)}))]:all));}
+if(a[0]==="pr"&&a[1]==="list"){if(process.env.FLOW_PR_BLOCK_LIST_READY){if(!fs.existsSync(process.env.FLOW_PR_BLOCK_LIST_READY))fs.writeFileSync(process.env.FLOW_PR_BLOCK_LIST_READY,"ready",{flag:"wx"});const wait=new Int32Array(new SharedArrayBuffer(4));while(!fs.existsSync(process.env.FLOW_PR_BLOCK_LIST_RELEASE))Atomics.wait(wait,0,0,10);}if(process.env.FLOW_PR_FAIL_LIST){process.stderr.write(process.env.FLOW_PR_FAIL_LIST_MESSAGE||"list unavailable");process.exit(1)}const selected=val("--state")==="open"?all.filter(x=>x.state==="OPEN"):all;if(process.env.FLOW_PR_INVALID_JSON)process.stdout.write("{");else if(process.env.FLOW_PR_NON_ARRAY)process.stdout.write("{}");else process.stdout.write(JSON.stringify(process.env.FLOW_PR_AMBIGUOUS?[...selected,...selected.map(x=>({...x,number:x.number+1,url:"https://github.com/example/repo/pull/"+(x.number+1)}))]:selected));}
 else if(a[0]==="repo"&&a[1]==="view"){if(process.env.FLOW_PR_FAIL_REPO_VIEW){process.stderr.write("default unavailable");process.exit(1)}if(process.env.FLOW_PR_INVALID_DEFAULT)process.stdout.write("{");else process.stdout.write(JSON.stringify({defaultBranchRef:{name:process.env.FLOW_PR_DEFAULT_BRANCH||"main"}}));}
 else if(a[0]==="pr"&&a[1]==="create"){const [owner,ref]=val("--head").split(":"),pr={number:all.length+1,url:"https://github.com/example/repo/pull/"+(all.length+1),state:"OPEN",isDraft:a.includes("--draft"),headRefOid:process.env.FLOW_PR_HEAD,headRefName:ref,headRepositoryOwner:{login:owner},baseRefName:val("--base"),baseRefOid:process.env.FLOW_PR_BASE,title:val("--title"),body:fs.readFileSync(0,"utf8"),labels:a.flatMap((x,i)=>x==="--label"?[{name:a[i+1]}]:[])};all.push(pr);save(all);if(process.env.FLOW_PR_FAIL_CREATE_AFTER){process.stderr.write("unknown create");process.exit(1)}process.stdout.write(pr.url);}
 else if(a[0]==="pr"&&a[1]==="edit"){const p=all.find(x=>String(x.number)===a[2]);if(a.includes("--title"))p.title=val("--title");if(a.includes("--body-file"))p.body=fs.readFileSync(0,"utf8");for(let i=0;i<a.length;i++){if(a[i]==="--add-label"&&!p.labels.some(x=>x.name===a[i+1]))p.labels.push({name:a[i+1]});if(a[i]==="--remove-label")p.labels=p.labels.filter(x=>x.name!==a[i+1]);}save(all);if(process.env.FLOW_PR_FAIL_EDIT_AFTER){process.stderr.write("unknown edit");process.exit(1)}}
@@ -74,7 +74,7 @@ test("prepare keeps canonical snapshot and identity internal while exposing comp
   assert.doesNotMatch(encoded, /chore: initial/);
   assert.doesNotMatch(encoded, /snapshot|identity|headOid|commonDir/); assert.equal(fs.existsSync(path.join(directoryFor(compact.handle), "context.json")), true);
   assert.deepEqual(JSON.parse(fs.readFileSync(compact.intentPath, "utf8")), {
-    schema: "flow-pr/intent-v2", title: "", body: "", draft: true,
+    schema: "flow-pr/intent-v2", title: "", body: "", draft: false,
     labels: { add: [], remove: [] }, updateExisting: ["title", "body", "draft", "labels"], deliveryMode: "same-repo", push: "publish",
   });
   if (process.platform !== "win32") assert.equal(fs.statSync(compact.intentPath).mode & 0o777, 0o600);
@@ -143,11 +143,13 @@ test("runtime intent template preserves operational policy while malformed exter
     assert.equal(rejected.status, "failure"); assert.equal(rejected.error.code, "invalid-contract"); assert.equal(calls(item).length, before);
   });
   await t.test("existing PR and fork authority select deterministic operational defaults", () => {
-    const existing = fixture(); publish(existing); const baseline = snapshot(existing);
-    fs.writeFileSync(existing.state, JSON.stringify([rawPr(baseline, { isDraft: false })]));
-    const existingContext = begin(existing); const existingTemplate = JSON.parse(fs.readFileSync(existingContext.intentPath, "utf8"));
-    assert.equal(existingTemplate.draft, false); assert.equal(existingTemplate.push, "verify-existing"); assert.equal(existingTemplate.deliveryMode, "same-repo");
-    assert.deepEqual(existingTemplate.labels, { add: [], remove: [] }); assert.deepEqual(existingTemplate.updateExisting, ["title", "body", "draft", "labels"]);
+    for (const draft of [false, true]) {
+      const existing = fixture(); publish(existing); const baseline = snapshot(existing);
+      fs.writeFileSync(existing.state, JSON.stringify([rawPr(baseline, { isDraft: draft })]));
+      const existingContext = begin(existing); const existingTemplate = JSON.parse(fs.readFileSync(existingContext.intentPath, "utf8"));
+      assert.equal(existingTemplate.draft, draft); assert.equal(existingTemplate.push, "verify-existing"); assert.equal(existingTemplate.deliveryMode, "same-repo");
+      assert.deepEqual(existingTemplate.labels, { add: [], remove: [] }); assert.deepEqual(existingTemplate.updateExisting, ["title", "body", "draft", "labels"]);
+    }
 
     const fork = fixture(); const forkBare = path.join(fork.directory, "fork.git"); git(fork.directory, ["init", "--bare", "-q", forkBare]);
     const forkUrl = "https://github.com/contributor/repo.git"; git(fork.cwd, ["config", `url.file://${forkBare.replaceAll("\\", "/")}.insteadOf`, forkUrl]); git(fork.cwd, ["remote", "add", "fork", forkUrl]);
@@ -163,10 +165,20 @@ test("runtime-owned semantic intent transport preserves Windows paths, quotes, M
   assert.doesNotMatch(JSON.stringify(result), /flow-pr\/request-v2|expected|snapshot|`inline`|Víctor/); assert.equal(result.approval.body.bytes, Buffer.byteLength(body)); assert.equal("preview" in result.approval.body, false);
 });
 
-test("one prepared approval executes an ordinary non-force push and verified PR create", () => {
-  const item = fixture(); const plan = prepared(item); assert.deepEqual(plan.approval.action, { git: "push", pullRequest: "create", expectation: "push and create" });
-  const result = execute(item, plan); assert.equal(result.status, "success"); assert.equal(result.phase, "verify"); assert.equal(result.effects.push, "confirmed"); assert.equal(result.effects.prCreate, "confirmed"); assert.equal(result.pr.url, "https://github.com/example/repo/pull/1");
-  assert.equal(git(item.cwd, ["ls-remote", "origin", "refs/heads/feat/contract"]).split(/\s+/)[0], git(item.cwd, ["rev-parse", "HEAD"])); assert.doesNotMatch(fs.readFileSync(path.join(root, "scripts", "lib", "flow-pr-executor.mjs"), "utf8"), /--force|--force-with-lease/);
+test("new PRs are ready by default while explicit intent can request draft", async (t) => {
+  await t.test("ready by default", () => {
+    const item = fixture(); const context = begin(item); const value = JSON.parse(fs.readFileSync(context.intentPath, "utf8"));
+    Object.assign(value, { title: "feat: contract", body: "Deterministic body\n" });
+    const plan = finalize(item, context, value); assert.deepEqual(plan.approval.action, { git: "push", pullRequest: "create", expectation: "push and create" }); assert.equal(plan.approval.draft, false);
+    const result = execute(item, plan); assert.equal(result.status, "success"); assert.equal(result.phase, "verify"); assert.equal(result.effects.push, "confirmed"); assert.equal(result.effects.prCreate, "confirmed"); assert.equal(result.pr.url, "https://github.com/example/repo/pull/1"); assert.equal(result.pr.draft, false);
+    const create = calls(item).find((entry) => entry[0] === "pr" && entry[1] === "create"); assert.equal(create.includes("--draft"), false);
+    assert.equal(git(item.cwd, ["ls-remote", "origin", "refs/heads/feat/contract"]).split(/\s+/)[0], git(item.cwd, ["rev-parse", "HEAD"])); assert.doesNotMatch(fs.readFileSync(path.join(root, "scripts", "lib", "flow-pr-executor.mjs"), "utf8"), /--force|--force-with-lease/);
+  });
+  await t.test("explicit draft", () => {
+    const item = fixture(); const plan = prepared(item, intent({ draft: true })); assert.equal(plan.approval.draft, true);
+    const result = execute(item, plan); assert.equal(result.status, "success"); assert.equal(result.pr.draft, true);
+    const create = calls(item).find((entry) => entry[0] === "pr" && entry[1] === "create"); assert.equal(create.includes("--draft"), true);
+  });
 });
 
 test("publish sets and verifies a missing upstream even when the remote OID already equals HEAD", () => {
@@ -181,14 +193,14 @@ test("verified existing PR behavior supports authorized update and noop", () => 
   const noopPlan = prepared(updating, intent({ push: "verify-existing" })); assert.equal(noopPlan.approval.action.pullRequest, "noop"); const noop = execute(updating, noopPlan); assert.equal(noop.status, "noop"); assert.ok(Object.values(noop.effects).every((entry) => entry === "not-attempted"));
 });
 
-test("existing PR base is authoritative and owner-qualified filtering prevents retarget or duplicates", () => {
+test("an open PR remains exact authority and owner-qualified filtering prevents retarget or duplicates", () => {
   const item = fixture(); git(item.cwd, ["branch", "development", "main"]); git(item.cwd, ["push", "-q", "origin", "development"]); publish(item);
   const baseline = snapshot(item); const developmentOid = git(item.cwd, ["ls-remote", "origin", "refs/heads/development"]).split(/\s+/)[0];
   const matching = rawPr(baseline, { baseRefName: "development", baseRefOid: developmentOid, headRepositoryOwner: { login: "EXAMPLE" } });
   const foreign = { ...rawPr(baseline, { number: 2, url: "https://github.com/example/repo/pull/2" }), headRepositoryOwner: { login: "someone-else" } };
   fs.writeFileSync(item.state, JSON.stringify([foreign, matching])); fs.writeFileSync(item.calls, "");
   const context = begin(item); assert.equal(context.context.base, "development"); assert.deepEqual(context.context.baseAuthority, { source: "existing-pr", evidence: "pr:1" });
-  const listCall = calls(item).find((entry) => entry[0] === "pr" && entry[1] === "list"); assert.equal(listCall[listCall.indexOf("--head") + 1], "feat/contract"); assert.equal(listCall[listCall.indexOf("--limit") + 1], "100");
+  const listCall = calls(item).find((entry) => entry[0] === "pr" && entry[1] === "list"); assert.equal(listCall[listCall.indexOf("--head") + 1], "feat/contract"); assert.equal(listCall[listCall.indexOf("--state") + 1], "open"); assert.equal(listCall[listCall.indexOf("--limit") + 1], "100");
   const plan = finalize(item, context, intent({ push: "verify-existing" })); const result = execute(item, plan); assert.equal(result.status, "noop");
   assert.ok(!calls(item).some((entry) => ["create", "edit", "ready"].includes(entry[1]))); assert.ok(!calls(item).some((entry) => entry.includes("--base") && entry[1] === "edit"));
 });
@@ -243,8 +255,17 @@ test("unknown remote ancestry blocks non-fast-forward publication", () => {
   const item = fixture(); const remoteOid = publishUnknownRemoteHead(item); const context = begin(item, {}, true); assert.equal(context.diagnostics.snapshot.push.remoteHeadOid, remoteOid); assert.equal(context.diagnostics.snapshot.relation.divergence, "unknown"); const plan = finalize(item, context); const result = execute(item, plan); assert.equal(result.status, "blocked"); assert.equal(result.blocker.code, "non-fast-forward"); assert.equal(result.effects.push, "not-attempted");
 });
 
-test("closed and merged PRs block reconciliation while invalid existing base authority fails preparation", async (t) => {
-  for (const [name, overrides] of [["closed", { state: "CLOSED" }], ["merged", { state: "MERGED" }]]) await t.test(name, () => { const item = fixture(); publish(item); const baseline = snapshot(item); fs.writeFileSync(item.state, JSON.stringify([rawPr(baseline, overrides)])); const plan = prepared(item, intent({ push: "verify-existing" })); const result = execute(item, plan); assert.equal(result.status, "blocked"); assert.equal(result.blocker.code, "pr-incompatible"); assert.ok(!calls(item).some((entry) => ["create", "edit", "ready"].includes(entry[1]))); });
+test("historical closed and merged PRs do not block a new PR for the same branch", async (t) => {
+  for (const [name, state] of [["closed", "CLOSED"], ["merged", "MERGED"]]) await t.test(name, () => {
+    const item = fixture(); publish(item); const baseline = snapshot(item); fs.writeFileSync(item.state, JSON.stringify([rawPr(baseline, { state })])); moveBase(item); fs.writeFileSync(item.calls, "");
+    const context = begin(item); assert.deepEqual(context.context.baseAuthority, { source: "explicit", evidence: "--base" });
+    const plan = finalize(item, context); assert.deepEqual(plan.approval.action, { git: "verify", pullRequest: "create", expectation: "verify and create" });
+    const result = execute(item, plan); assert.equal(result.status, "success"); assert.equal(result.effects.prCreate, "confirmed"); assert.equal(result.pr.number, 2); assert.equal(result.pr.state, "open");
+    assert.ok(!calls(item).some((entry) => ["edit", "ready"].includes(entry[1])));
+  });
+});
+
+test("invalid open PR base authority still fails preparation", async (t) => {
   await t.test("base authority mismatch", () => { const item = fixture(); publish(item); const baseline = snapshot(item); fs.writeFileSync(item.state, JSON.stringify([rawPr(baseline, { baseRefOid: "0".repeat(40) })])); const result = begin(item); assert.equal(result.status, "failure"); assert.equal(result.error.code, "pr-base-invalid"); assert.ok(!calls(item).some((entry) => ["create", "edit", "ready"].includes(entry[1]))); });
 });
 
@@ -316,7 +337,7 @@ test("post-mutation verification failures mark affected effects unknown", async 
   await t.test("draft unknown", () => { const item = fixture(); publish(item); const baseline = snapshot(item); fs.writeFileSync(item.state, JSON.stringify([rawPr(baseline, { isDraft: false })])); const result = execute(item, prepared(item, intent({ push: "verify-existing" })), { FLOW_PR_FAIL_READY_AFTER: "1" }); assert.equal(result.status, "partial"); assert.equal(result.effects.prUpdate, "unknown"); });
 });
 
-test("ambiguous PR authority blocks preparation before mutation", () => {
+test("ambiguous open PR authority blocks preparation before mutation", () => {
   const item = fixture(); publish(item); const baseline = snapshot(item); fs.writeFileSync(item.state, JSON.stringify([rawPr(baseline)])); fs.writeFileSync(item.calls, "");
   const result = begin(item, { FLOW_PR_AMBIGUOUS: "1" }); assert.equal(result.status, "failure"); assert.equal(result.error.code, "pr-ambiguous"); assert.ok(!calls(item).some((entry) => ["create", "edit", "ready"].includes(entry[1])));
 });
