@@ -10,7 +10,7 @@
     "sha256": "9b2d9d93a615f4d2175dfb344c37073c428faeda6958e4badd429c4f295b82dc"
   },
   "totals": {
-    "bytes": 638816,
+    "bytes": 638827,
     "count": 70
   },
   "files": [
@@ -23,8 +23,8 @@
     },
     {
       "path": "agents/flow-git-agent.md",
-      "sha256": "cd0b5ad2d01a0fef14087a2bca7b99b3f7711ced5dedc71c3dcdf3b7ac5a38ae",
-      "bytes": 4642,
+      "sha256": "a84efd3cb2560277dcf2d5e7e635a04fc1eacbfd71f43aba353f7d3dfbe8a38e",
+      "bytes": 4653,
       "mode": "100644",
       "executable": false
     },
