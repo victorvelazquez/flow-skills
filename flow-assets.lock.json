@@ -10,7 +10,7 @@
     "sha256": "9b2d9d93a615f4d2175dfb344c37073c428faeda6958e4badd429c4f295b82dc"
   },
   "totals": {
-    "bytes": 631916,
+    "bytes": 638816,
     "count": 70
   },
   "files": [
@@ -23,8 +23,8 @@
     },
     {
       "path": "agents/flow-git-agent.md",
-      "sha256": "88ff2febaf3a92bcca15cbf74c8a7859a53f8610a5fd49695412a08570a65f56",
-      "bytes": 3598,
+      "sha256": "cd0b5ad2d01a0fef14087a2bca7b99b3f7711ced5dedc71c3dcdf3b7ac5a38ae",
+      "bytes": 4642,
       "mode": "100644",
       "executable": false
     },
@@ -51,8 +51,8 @@
     },
     {
       "path": "commands/flow-auto-deliver.md",
-      "sha256": "08c8650c1d28f117104315bae0bed59b410c97b2f13df0333fa8953a0bd52e7f",
-      "bytes": 729,
+      "sha256": "bd4b309f67a5ceee515a4215b4978358bfdcff19e76a6415e197addbfddd6626",
+      "bytes": 1123,
       "mode": "100644",
       "executable": false
     },
@@ -72,8 +72,8 @@
     },
     {
       "path": "commands/flow-commit.md",
-      "sha256": "69048fee934af4d9640093ffe3359d80a63a5953135405c4648bb72ad9a58695",
-      "bytes": 667,
+      "sha256": "7a044bded60bbada2f3b31868d69198e3a7aed609d1e30223c44441ccbc33c09",
+      "bytes": 1043,
       "mode": "100644",
       "executable": false
     },
@@ -163,8 +163,8 @@
     },
     {
       "path": "scripts/flow-commit.mjs",
-      "sha256": "dd407586406cd4e4e70aacfe2cc9a9d0a095ed70e31edb5619228a55dd005923",
-      "bytes": 46017,
+      "sha256": "2c22ef837a7bbe6587d5ae21d86f9684ded044a28bf34beb7fc8be8e250fd871",
+      "bytes": 49874,
       "mode": "100644",
       "executable": false
     },
@@ -429,8 +429,8 @@
     },
     {
       "path": "skills/flow-commit/SKILL.md",
-      "sha256": "1b458c480c102edb85c8fda3a75322c21d69b7db0c558e9b8720a4bb96b83e33",
-      "bytes": 5211,
+      "sha256": "ac002a4f480ceda84b7ae2a33b8b4b0178e192f980a51d8f84af92de19c02c4b",
+      "bytes": 6440,
       "mode": "100644",
       "executable": false
     },

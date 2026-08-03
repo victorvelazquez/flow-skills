@@ -7,7 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { contentFactsFingerprint, executeHandle, prepareRepository, repositoryLockPath, sealHandle } from "../scripts/flow-commit.mjs";
+import { contentFactsFingerprint, executeHandle, prepareRepository, repositoryLockPath, sealHandle, validateIntentHandle } from "../scripts/flow-commit.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const runtime = path.join(root, "scripts", "flow-commit.mjs");
@@ -54,6 +54,11 @@ function intent(prepared, units, branch = { action: "keep" }, extra = {}) {
 
 function seal(cwd, prepared) {
   const result = run(cwd, ["--prepare", "--handle", prepared.handle]);
+  return { result, output: output(result) };
+}
+
+function validate(cwd, prepared) {
+  const result = run(cwd, ["--validate-intent", "--handle", prepared.handle]);
   return { result, output: output(result) };
 }
 
@@ -137,6 +142,124 @@ test("seal rejects an untouched placeholder as invalid intent", () => {
   assert.equal(response.result.status, 1);
   assert.equal(response.output.error.code, "invalid-intent");
   assert.notEqual(response.output.error.code, "handle-file-size");
+});
+
+test("valid intent validation is compact, repeatable, and non-consuming", () => {
+  const cwd = repo();
+  fs.writeFileSync(path.join(cwd, "change.txt"), "change\n");
+  const prepared = prepare(cwd);
+  intent(prepared, [{ paths: ["change.txt"], title: "fix(commit): validate without consuming" }]);
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const response = validate(cwd, prepared);
+    assert.equal(response.result.status, 0, response.result.stdout);
+    assert.deepEqual(response.output, { status: "intent-valid" });
+    assert.equal(fs.existsSync(store(prepared)), true);
+    assert.equal(fs.existsSync(path.join(store(prepared), "sealed.json")), false);
+  }
+});
+
+test("invalid intent retains the same store and one correction can validate, seal, and execute", () => {
+  const cwd = repo();
+  fs.writeFileSync(path.join(cwd, "change.txt"), "change\n");
+  const prepared = prepare(cwd);
+  const originalStore = store(prepared);
+  intent(prepared, [{ paths: ["missing.txt"], title: "fix(commit): fail authoring validation" }]);
+
+  const invalid = validate(cwd, prepared);
+  assert.equal(invalid.result.status, 1);
+  assert.equal(invalid.output.error.code, "coverage-mismatch");
+  assert.equal(fs.existsSync(originalStore), true);
+
+  intent(prepared, [{ paths: ["change.txt"], title: "fix(commit): correct same intent" }]);
+  assert.deepEqual(validate(cwd, prepared).output, { status: "intent-valid" });
+  assert.equal(store(prepared), originalStore);
+  const sealed = seal(cwd, prepared);
+  assert.equal(sealed.result.status, 0, sealed.result.stdout);
+  const executed = execute(cwd, { ...prepared, handle: sealed.output.executeHandle });
+  assert.equal(executed.result.status, 0, executed.result.stdout);
+  assert.equal(git(cwd, ["log", "-1", "--format=%s"]), "fix(commit): correct same intent");
+});
+
+test("intent validation grants no execute authority", () => {
+  const cwd = repo();
+  fs.writeFileSync(path.join(cwd, "change.txt"), "change\n");
+  const prepared = prepare(cwd);
+  intent(prepared, [{ paths: ["change.txt"], title: "fix(commit): require sealed authority" }]);
+  assert.deepEqual(validateIntentHandle(prepared.handle), { status: "intent-valid" });
+  assert.equal(fs.existsSync(path.join(store(prepared), "sealed.json")), false);
+  assert.throws(() => executeHandle(prepared.handle), (error) => error.code === "handle-not-sealed");
+  assert.equal(git(cwd, ["rev-list", "--count", "HEAD"]), "1");
+});
+
+test("prepared intent validation tolerates content drift while seal remains authoritative", () => {
+  const cwd = repo();
+  fs.writeFileSync(path.join(cwd, "change.txt"), "one\n");
+  const prepared = prepare(cwd);
+  intent(prepared, [{ paths: ["change.txt"], title: "fix(commit): defer drift to seal" }]);
+  fs.writeFileSync(path.join(cwd, "change.txt"), "two\n");
+  assert.deepEqual(validate(cwd, prepared).output, { status: "intent-valid" });
+  const response = seal(cwd, prepared);
+  assert.equal(response.result.status, 1);
+  assert.equal(response.output.error.code, "content-drift");
+});
+
+test("validation fails closed for prepared tamper, expiry, and invalid handles", () => {
+  const tamperRepo = repo();
+  fs.writeFileSync(path.join(tamperRepo, "change.txt"), "change\n");
+  let prepared = prepare(tamperRepo);
+  intent(prepared, [{ paths: ["change.txt"], title: "fix(commit): reject prepared tamper" }]);
+  fs.appendFileSync(path.join(store(prepared), "prepared.json"), " ");
+  assert.equal(validate(tamperRepo, prepared).output.error.code, "prepared-tamper");
+  assert.equal(fs.existsSync(store(prepared)), false);
+
+  const expiryRepo = repo();
+  fs.writeFileSync(path.join(expiryRepo, "change.txt"), "change\n");
+  prepared = prepareRepository({ cwd: expiryRepo, now: 1000, ttlMs: 10 });
+  intent(prepared, [{ paths: ["change.txt"], title: "fix(commit): reject expired validation" }]);
+  assert.throws(() => validateIntentHandle(prepared.handle, { now: 1011 }), (error) => error.code === "handle-expired");
+  assert.equal(fs.existsSync(store(prepared)), false);
+
+  assert.equal(validate(expiryRepo, { handle: "not-a-handle" }).output.error.code, "invalid-handle");
+});
+
+test("validation rejects unsafe symbolic-link stores", { skip: process.platform === "win32" && "Windows symlink creation requires elevated fixture privileges." }, () => {
+  const unsafeRepo = repo();
+  fs.writeFileSync(path.join(unsafeRepo, "change.txt"), "change\n");
+  const prepared = prepare(unsafeRepo);
+  const unsafe = store(prepared); const moved = `${unsafe}-real`;
+  fs.renameSync(unsafe, moved); fs.symlinkSync(moved, unsafe, "dir");
+  assert.equal(validate(unsafeRepo, prepared).output.error.code, "unsafe-handle-store");
+  fs.unlinkSync(unsafe); fs.rmSync(moved, { recursive: true, force: true });
+});
+
+test("prepared authority intent-like errors are not recoverable", () => {
+  const cwd = repo();
+  fs.writeFileSync(path.join(cwd, "change.txt"), "change\n");
+  const prepared = prepare(cwd);
+  intent(prepared, [{ paths: ["change.txt"], title: "fix(commit): reject overloaded error" }]);
+  const preparedPath = path.join(store(prepared), "prepared.json");
+  const envelope = JSON.parse(fs.readFileSync(preparedPath, "utf8"));
+  envelope.changes[0].path = "../unsafe.txt";
+  envelope.contentFacts[0].path = "../unsafe.txt";
+  const bytes = Buffer.from(`${JSON.stringify(envelope)}\n`);
+  fs.writeFileSync(preparedPath, bytes);
+  const forged = { ...prepared, handle: `${prepared.handle.split(".")[0]}.${crypto.createHash("sha256").update(bytes).digest("hex")}` };
+  assert.equal(validate(cwd, forged).output.error.code, "invalid-intent");
+  assert.equal(fs.existsSync(store(prepared)), false);
+});
+
+test("validation output does not expose intent or authority internals", () => {
+  const cwd = repo();
+  fs.writeFileSync(path.join(cwd, "private-name.txt"), "change\n");
+  const prepared = prepare(cwd);
+  const secretBody = "private body marker";
+  intent(prepared, [{ paths: ["wrong-private-name.txt"], title: "fix(commit): redact validation output", body: secretBody }]);
+  const response = validate(cwd, prepared);
+  assert.equal(response.output.error.code, "coverage-mismatch");
+  for (const forbidden of ["private-name.txt", "wrong-private-name.txt", secretBody, prepared.handle, prepared.intentPath, "prepared.json", "intent.json", "sha256", "digest"]) {
+    assert.equal(response.result.stdout.includes(forbidden), false, forbidden);
+  }
 });
 
 test("prepare rejects a preexisting index and repository operation without mutation", () => {
@@ -488,7 +611,12 @@ test("CLI rejects unknown, duplicate, missing, and incompatible options", () => 
   for (const [args, pattern] of [
     [["--unknown"], /Unsupported option/],
     [["--prepare", "--prepare"], /Duplicate option/],
-    [["--prepare", "--execute", "--handle", "a".repeat(64)], /incompatible/],
+    [["--prepare", "--execute", "--handle", "a".repeat(64)], /exactly one operation/],
+    [["--prepare", "--validate-intent", "--handle", "a".repeat(64)], /one operation/],
+    [["--validate-intent", "--execute", "--handle", "a".repeat(64)], /one operation/],
+    [["--validate-intent", "--validate-intent", "--handle", "a".repeat(64)], /duplicated/],
+    [["--validate-intent"], /requires a handle/],
+    [["--validate-intent", "--handle"], /missing its value/],
     [["--execute"], /requires --handle/],
     [["--prepare", "--handle"], /Missing value/],
     [["--execute", "--handle", "a".repeat(64), "--handle", "b".repeat(64)], /Duplicate option/],

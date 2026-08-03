@@ -248,10 +248,10 @@ test("flow-branch agent permits its installed runtime with POSIX and Windows sep
   ]) assert.equal(permissionFor(bash, command), "deny");
 });
 
-test("flow-commit exposes compact prepare, semantic intent, seal, and one approval", () => {
+test("flow-commit exposes compact prepare, semantic intent validation, seal, and one approval", () => {
   const command = read("commands/flow-commit.md"); const agent = read("agents/flow-git-agent.md"); const skill = read("skills/flow-commit/SKILL.md"); const contract = `${command}\n${agent}\n${skill}`;
   assert.match(command, /^agent: flow-git-agent$/m);
-  assert.match(contract, /--prepare/); assert.match(contract, /flow-commit\/intent-v2/); assert.match(contract, /--prepare --handle/); assert.match(contract, /--execute --handle/);
+  assert.match(contract, /--prepare/); assert.match(contract, /flow-commit\/intent-v2/); assert.match(contract, /--validate-intent --handle/); assert.match(contract, /--prepare --handle/); assert.match(contract, /--execute --handle/);
   for (const surface of [command, agent, skill]) {
     assert.match(surface, /one human mutation approval|one human mutation approval|one approval/i);
     assert.match(surface, /Never ask for (?:a )?separate|Do not ask for separate/i);
@@ -261,6 +261,7 @@ test("flow-commit exposes compact prepare, semantic intent, seal, and one approv
   assert.match(agent, /task:\n    "\*": deny/);
   assert.match(agent, /--prepare": allow/);
   assert.match(agent, /--prepare --handle \*": allow/);
+  assert.match(agent, /--validate-intent --handle \*": allow/);
   assert.match(agent, /--execute --handle \*": ask/);
   assert.match(agent, /git add\*": deny/); assert.match(agent, /git commit\*": deny/); assert.match(agent, /git push\*": deny/); assert.match(agent, /git switch\*": deny/); assert.match(agent, /git update-ref\*": deny/);
   assert.match(agent, /edit:\n    "\*": deny/); assert.match(agent, /flow-commit-\*\/intent\.json": allow/);
@@ -269,6 +270,28 @@ test("flow-commit exposes compact prepare, semantic intent, seal, and one approv
   assert.match(skill, /prepared-envelope bytes.*opaque prepare handle digest/i);
   assert.match(contract, /Never run.*automatic retry|Never use.*automatic retries/i);
   assert.doesNotMatch(contract, /base64|planId|journal|full request.*approv|exact request.*approv/i);
+});
+
+test("flow-commit agent permits one bounded same-path intent correction without rereading Git facts", () => {
+  const agent = read("agents/flow-git-agent.md");
+  const command = read("commands/flow-commit.md");
+  const auto = read("commands/flow-auto-deliver.md");
+  const skill = read("skills/flow-commit/SKILL.md");
+  const contract = `${agent}\n${command}\n${auto}\n${skill}`;
+  const bash = permissionRules(agent, "bash");
+
+  for (const executable of ["scripts/flow-commit.mjs", "scripts\\flow-commit.mjs"]) {
+    const commandLine = `node "C:/Users/opencode/.config/opencode/${executable}" --validate-intent --handle opaque`;
+    assert.equal(permissionFor(bash, commandLine), "allow");
+  }
+  assert.equal(bash.filter(({ pattern, action }) => pattern.includes("--execute --handle") && action === "ask").length, 2);
+  assert.equal(bash.some(({ pattern, action }) => pattern.includes("--validate-intent") && action === "ask"), false);
+  assert.match(agent, /SAME Windows or POSIX temp `intentPath` at most once/);
+  assert.match(contract, /`invalid-json`[\s\S]+`invalid-intent`[\s\S]+`coverage-mismatch`[\s\S]+`invalid-branch`[\s\S]+`protected-branch`/);
+  assert.match(agent, /run validation exactly once more/);
+  assert.match(agent, /second validation failure or any nonrecoverable or unknown failure stops/i);
+  assert.match(agent, /never reread diff\/status\/log\/show facts, start a new agent, run a fresh prepare, retry seal or execute/i);
+  assert.match(contract, /Seal or execute failure requires fresh user action|seal failure, or execute failure/i);
 });
 
 test("flow-commit planning creates a task branch when prepare reports a protected branch", () => {

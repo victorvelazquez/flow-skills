@@ -22,6 +22,7 @@ const MAX_UNITS = 100;
 const MAX_PATHS = 10_000;
 const MAX_TITLE_BYTES = 256;
 const MAX_BODY_BYTES = 16 * 1024;
+const RECOVERABLE_INTENT_ERRORS = new Set(["invalid-json", "invalid-intent", "coverage-mismatch", "invalid-branch", "protected-branch"]);
 
 class FlowError extends Error {
   constructor(message, status = "blocked", code = "blocked") {
@@ -373,6 +374,28 @@ export function prepareRepository({ cwd = process.cwd(), now = Date.now(), ttlMs
   };
 }
 
+export function validateIntentHandle(handle, { now = Date.now() } = {}) {
+  const paths = storePaths(handle);
+  let preparedAccepted = false;
+  try {
+    if (paths.sealedDigest) throw new FlowError("A sealed execute handle cannot validate prepared intent.", "blocked", "invalid-handle");
+    const prepared = loadPrepared(paths, now);
+    preparedAccepted = true;
+    if (fs.existsSync(paths.sealed)) throw new FlowError("Handle is already sealed; prepare again.", "blocked", "handle-sealed");
+    const intentDocument = readJson(paths.intent, MAX_INTENT_BYTES);
+    validateIntent(intentDocument.value, {
+      root: prepared.root,
+      branch: prepared.branch,
+      protected: prepared.protected,
+      changes: prepared.changes,
+    });
+    return { status: "intent-valid" };
+  } catch (error) {
+    if (!preparedAccepted || !RECOVERABLE_INTENT_ERRORS.has(error.code)) fs.rmSync(paths.store, { recursive: true, force: true });
+    throw error;
+  }
+}
+
 export function sealHandle(handle, { now = Date.now() } = {}) {
   const paths = storePaths(handle);
   try {
@@ -719,7 +742,7 @@ export function executeHandle(handle, { now = Date.now(), onContentRead, onProve
 function parseArgs(argv) {
   const flags = {};
   const valued = new Set(["handle"]);
-  const boolean = new Set(["prepare", "execute"]);
+  const boolean = new Set(["prepare", "validate-intent", "execute"]);
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index];
     if (!value.startsWith("--")) throw new FlowError(`Unsupported argument: ${value}.`, "blocked", "invalid-cli");
@@ -733,15 +756,50 @@ function parseArgs(argv) {
       flags[key] = next;
     }
   }
-  if (flags.prepare && flags.execute) throw new FlowError("--prepare and --execute are incompatible.", "blocked", "invalid-cli");
+  const operations = [flags.prepare, flags["validate-intent"], flags.execute].filter(Boolean).length;
+  if (operations > 1) throw new FlowError("Choose exactly one operation: --prepare, --validate-intent, or --execute.", "blocked", "invalid-cli");
+  if (flags["validate-intent"] && !flags.handle) throw new FlowError("--validate-intent requires --handle.", "blocked", "invalid-cli");
   if (flags.execute && !flags.handle) throw new FlowError("--execute requires --handle.", "blocked", "invalid-cli");
-  if (!flags.prepare && !flags.execute) throw new FlowError("Usage: node flow-commit.mjs --prepare [--handle <handle>] | --execute --handle <handle>.", "blocked", "invalid-cli");
+  if (operations === 0) throw new FlowError("Usage: node flow-commit.mjs --prepare [--handle <handle>] | --validate-intent --handle <handle> | --execute --handle <handle>.", "blocked", "invalid-cli");
   return flags;
+}
+
+function safeValidationMessage(error) {
+  if (error.code === "invalid-cli") {
+    if (/exactly one operation/i.test(error.message)) return "CLI must choose exactly one operation.";
+    if (/duplicate/i.test(error.message)) return "CLI option is duplicated.";
+    if (/missing value/i.test(error.message)) return "CLI option is missing its value.";
+    if (/requires --handle/i.test(error.message)) return "CLI operation requires a handle value.";
+    return "CLI options are invalid.";
+  }
+  if (error.code === "invalid-json") return "Intent document is invalid JSON.";
+  if (error.code === "coverage-mismatch") return "Intent path coverage does not match the prepared changes.";
+  if (error.code === "invalid-branch") return "Intent branch name violates Git branch naming rules.";
+  if (error.code === "protected-branch") return "Prepared protected branch requires a create branch action.";
+  if (error.code === "invalid-intent") {
+    const unit = /unit (\d+)/i.exec(error.message)?.[1];
+    return unit ? `Intent unit ${unit} violates strict authoring rules.` : "Intent document violates strict authoring rules.";
+  }
+  const rules = {
+    "prepared-tamper": "Prepared authority failed integrity validation.",
+    "handle-expired": "Prepared authority expired.",
+    "invalid-handle": "Prepared authority handle is invalid.",
+    "handle-unavailable": "Prepared authority is unavailable.",
+    "unsafe-handle-store": "Prepared authority store is unsafe.",
+    "unsafe-handle-file": "Prepared authority file is unsafe.",
+    "unsafe-temp-owner": "Prepared authority ownership is unsafe.",
+    "handle-file-unavailable": "Prepared authority file is unavailable.",
+    "handle-file-size": "Prepared authority file size is invalid.",
+    "handle-sealed": "Prepared authority is already sealed.",
+    "branch-collision": "Intent branch is unavailable.",
+  };
+  return rules[error.code] || "Intent validation stopped on an unknown safety failure.";
 }
 
 function main() {
   const flags = parseArgs(process.argv.slice(2));
   if (flags.prepare) return { document: flags.handle ? sealHandle(flags.handle) : prepareRepository(), exitCode: 0 };
+  if (flags["validate-intent"]) return { document: validateIntentHandle(flags.handle), exitCode: 0 };
   const document = executeHandle(flags.handle);
   return { document, exitCode: document.status === "success" ? 0 : document.status === "partial" ? 2 : 1 };
 }
@@ -752,7 +810,11 @@ if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToP
     process.stdout.write(`${JSON.stringify(document)}\n`);
     process.exitCode = exitCode;
   } catch (error) {
-    process.stdout.write(`${JSON.stringify(resultDocument({ status: error.status || "failure", error: { code: error.code || "runtime-failure", message: error.message }, recovery: "Prepare a fresh handle after resolving the blocker." }))}\n`);
+    const validatingIntent = process.argv.slice(2).includes("--validate-intent");
+    const document = validatingIntent
+      ? { status: "intent-invalid", error: { code: error.code || "runtime-failure", message: safeValidationMessage(error) }, recovery: RECOVERABLE_INTENT_ERRORS.has(error.code) ? "Correct the same intent document once and validate again." : "Start a fresh Flow Commit action." }
+      : resultDocument({ status: error.status || "failure", error: { code: error.code || "runtime-failure", message: error.message }, recovery: "Prepare a fresh handle after resolving the blocker." });
+    process.stdout.write(`${JSON.stringify(document)}\n`);
     process.exitCode = 1;
   }
 }
