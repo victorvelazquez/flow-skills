@@ -10,7 +10,7 @@
     "sha256": "9b2d9d93a615f4d2175dfb344c37073c428faeda6958e4badd429c4f295b82dc"
   },
   "totals": {
-    "bytes": 630740,
+    "bytes": 631914,
     "count": 70
   },
   "files": [
@@ -30,8 +30,8 @@
     },
     {
       "path": "agents/flow-pr-agent.md",
-      "sha256": "a9d80119ac0c0b6414cce7fca35aaa7de6d484a08f35a277c5bcba6a30d228cf",
-      "bytes": 4775,
+      "sha256": "531d97a194277a897641607e5e326eeb18943bdbebc2138447ccc7900bed878e",
+      "bytes": 4990,
       "mode": "100644",
       "executable": false
     },
@@ -107,8 +107,8 @@
     },
     {
       "path": "commands/flow-pr.md",
-      "sha256": "253bce1bc6c03c0d4e7ea6b2f415e4f808944578983ba444527c213a0460d5fc",
-      "bytes": 1895,
+      "sha256": "1212c8bbd56f32d926674841c1958ca8256a0d2fc5a74fdeac6f10e0922e4838",
+      "bytes": 2058,
       "mode": "100644",
       "executable": false
     },
@@ -184,8 +184,8 @@
     },
     {
       "path": "scripts/flow-pr.mjs",
-      "sha256": "725b50fc29fb946e751d2492eaa2eec710583e969f1216d3319cf245ed90eed4",
-      "bytes": 18370,
+      "sha256": "73ccb2cfbb162c93572b360a862b510800f8510084f0f37d3c1842b1397c3a4b",
+      "bytes": 18852,
       "mode": "100644",
       "executable": false
     },
@@ -457,8 +457,8 @@
     },
     {
       "path": "skills/flow-pr/SKILL.md",
-      "sha256": "6fc821be2088932f363391da0fe568624f60093c88f8e1592c057a7da981dda5",
-      "bytes": 5191,
+      "sha256": "ac4bb74d479a50dfb1a12d92f556df6526082d4120090e5b9b9e570d14adddfb",
+      "bytes": 5505,
       "mode": "100644",
       "executable": false
     },

@@ -73,7 +73,10 @@ test("prepare keeps canonical snapshot and identity internal while exposing comp
   assert.equal(compact.context.changes.drafting.suggestedTitle, "feat: contract"); assert.equal(compact.context.changes.drafting.breaking, false); assert.equal(compact.context.changes.drafting.commitCount, 1); assert.equal(compact.context.template.status, "none");
   assert.doesNotMatch(encoded, /chore: initial/);
   assert.doesNotMatch(encoded, /snapshot|identity|headOid|commonDir/); assert.equal(fs.existsSync(path.join(directoryFor(compact.handle), "context.json")), true);
-  assert.deepEqual(fs.readFileSync(compact.intentPath), Buffer.from("{}\n"));
+  assert.deepEqual(JSON.parse(fs.readFileSync(compact.intentPath, "utf8")), {
+    schema: "flow-pr/intent-v2", title: "", body: "", draft: true,
+    labels: { add: [], remove: [] }, updateExisting: ["title", "body", "draft", "labels"], deliveryMode: "same-repo", push: "publish",
+  });
   if (process.platform !== "win32") assert.equal(fs.statSync(compact.intentPath).mode & 0o777, 0o600);
   const verbose = begin(item, {}, true); assert.equal(validateSnapshot(verbose.diagnostics.snapshot), verbose.diagnostics.snapshot); assert.match(verbose.diagnostics.snapshot.identity, /^[0-9a-f]{64}$/);
 });
@@ -115,10 +118,42 @@ test("prepare detects a breaking footer without exposing commit bodies", () => {
   assert.equal(changes.drafting.breaking, true); assert.doesNotMatch(JSON.stringify(changes), /private callers|BREAKING CHANGE/);
 });
 
-test("untouched intent placeholder is an invalid contract and a patched intent seals", () => {
-  const item = fixture(); const context = begin(item); const untouched = output(run(item, ["--prepare", "--handle", context.handle]));
-  assert.equal(untouched.status, "failure"); assert.equal(untouched.error.code, "invalid-contract"); assert.doesNotMatch(untouched.error.message, /zero|empty|file size/i);
-  const patchedItem = fixture(); const plan = finalize(patchedItem, begin(patchedItem)); assert.equal(plan.status, "prepared"); assert.equal(plan.schema, "flow-pr/preparation-v2");
+test("runtime intent template preserves operational policy while malformed external intents fail closed", async (t) => {
+  await t.test("fresh semantic-only authoring finalizes the complete runtime template", () => {
+    const item = fixture(); const context = begin(item); const value = JSON.parse(fs.readFileSync(context.intentPath, "utf8"));
+    Object.assign(value, { title: "feat: contract", body: "Deterministic body\n", draft: true });
+    const plan = finalize(item, context, value, {}, true);
+    assert.equal(plan.status, "prepared"); assert.equal(plan.schema, "flow-pr/preparation-v2");
+    assert.deepEqual(plan.diagnostics.request.pr.labels, { add: [], remove: [] });
+    assert.deepEqual(plan.diagnostics.request.pr.updateExisting, ["title", "body", "draft", "labels"]);
+    assert.equal(plan.diagnostics.request.delivery.mode, "same-repo"); assert.equal(plan.diagnostics.request.expected.intent.push, "publish");
+  });
+  await t.test("actual incomplete model overwrite is rejected before reinspection", () => {
+    const item = fixture(); const context = begin(item); const before = calls(item).length;
+    const incomplete = { schema: "flow-pr/intent-v2", title: "feat: contract", body: "Deterministic body\n", draft: true };
+    fs.writeFileSync(context.intentPath, JSON.stringify(incomplete));
+    const rejected = output(run(item, ["--prepare", "--handle", context.handle]));
+    assert.equal(rejected.status, "failure"); assert.equal(rejected.error.code, "invalid-contract"); assert.equal(calls(item).length, before);
+    assert.equal(fs.existsSync(directoryFor(context.handle)), false);
+  });
+  await t.test("unsupported external property is rejected before reinspection", () => {
+    const item = fixture(); const context = begin(item); const before = calls(item).length;
+    fs.writeFileSync(context.intentPath, JSON.stringify({ ...intent(), unsupported: true }));
+    const rejected = output(run(item, ["--prepare", "--handle", context.handle]));
+    assert.equal(rejected.status, "failure"); assert.equal(rejected.error.code, "invalid-contract"); assert.equal(calls(item).length, before);
+  });
+  await t.test("existing PR and fork authority select deterministic operational defaults", () => {
+    const existing = fixture(); publish(existing); const baseline = snapshot(existing);
+    fs.writeFileSync(existing.state, JSON.stringify([rawPr(baseline, { isDraft: false })]));
+    const existingContext = begin(existing); const existingTemplate = JSON.parse(fs.readFileSync(existingContext.intentPath, "utf8"));
+    assert.equal(existingTemplate.draft, false); assert.equal(existingTemplate.push, "verify-existing"); assert.equal(existingTemplate.deliveryMode, "same-repo");
+    assert.deepEqual(existingTemplate.labels, { add: [], remove: [] }); assert.deepEqual(existingTemplate.updateExisting, ["title", "body", "draft", "labels"]);
+
+    const fork = fixture(); const forkBare = path.join(fork.directory, "fork.git"); git(fork.directory, ["init", "--bare", "-q", forkBare]);
+    const forkUrl = "https://github.com/contributor/repo.git"; git(fork.cwd, ["config", `url.file://${forkBare.replaceAll("\\", "/")}.insteadOf`, forkUrl]); git(fork.cwd, ["remote", "add", "fork", forkUrl]);
+    const forkContext = output(run(fork, ["--prepare", "--base", "main", "--push-remote", "fork"])); const forkTemplate = JSON.parse(fs.readFileSync(forkContext.intentPath, "utf8"));
+    assert.equal(forkTemplate.deliveryMode, "fork"); assert.equal(forkTemplate.push, "publish");
+  });
 });
 
 test("runtime-owned semantic intent transport preserves Windows paths, quotes, Markdown backticks, Unicode, and multiline bytes", () => {

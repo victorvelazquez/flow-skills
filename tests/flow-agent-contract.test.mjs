@@ -135,12 +135,15 @@ test("flow-pr agent permits only relative intent edits and canonical external pa
     "../../../repo/intent.json",
   ]) assert.equal(permissionFor(edit, resource, home), "deny");
 });
-test("flow-pr agent requires exact apply_patch placeholder replacement", () => {
+test("flow-pr agent preserves runtime operational fields during semantic apply_patch authoring", () => {
   const agent = read("agents/flow-pr-agent.md");
-  assert.match(agent, /use OpenCode `apply_patch` directly/);
+  assert.match(agent, /directly read the complete runtime-created `flow-pr\/intent-v2` template/);
+  assert.match(agent, /Use OpenCode `apply_patch` directly/);
   assert.match(agent, /exact returned absolute `intentPath`/);
-  assert.match(agent, /replace the exact existing `\{\}` placeholder line/);
-  assert.match(agent, /single strict one-line `flow-pr\/intent-v2` JSON document/);
+  assert.match(agent, /change only the `title`, `body`, and `draft` value lines/);
+  for (const field of ["labels", "updateExisting", "deliveryMode", "push", "schema"]) assert.match(agent, new RegExp(`\\b${field}\\b`));
+  assert.match(agent, /preserve them byte-for-byte/);
+  assert.match(agent, /never reconstruct, remove, reorder, or replace the whole document/);
   assert.match(agent, /never use `write`, generic `edit`, Bash, shell redirection, interpolation, encoding, or any alternate path/);
   assert.match(agent, /Never display[^\n]+or expose intent content/);
 });

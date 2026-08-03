@@ -123,12 +123,24 @@ function inspectFacts(base, pushRemote) {
   if (response.status !== "inspect") throw Object.assign(new Error(response.error?.message || "Preparation inspection failed."), { code: response.error?.code || "inspection-failure" });
   safeSnapshot(response.snapshot.facts); return response.snapshot.facts;
 }
+function intentTemplate(snapshot) {
+  return {
+    schema: "flow-pr/intent-v2",
+    title: "",
+    body: "",
+    draft: snapshot.pr.exact?.draft ?? true,
+    labels: { add: [], remove: [] },
+    updateExisting: ["title", "body", "draft", "labels"],
+    deliveryMode: repoIdentity(snapshot.target) === repoIdentity(snapshot.push.repository) ? "same-repo" : "fork",
+    push: snapshot.pr.exact ? "verify-existing" : "publish",
+  };
+}
 function prepare(base, pushRemote, verbose) {
   tempRoot();
   const snapshot = inspectFacts(base, pushRemote); const createdAt = new Date().toISOString();
   const envelope = { schema: "flow-pr/context-v2", createdAt, base, pushRemote, snapshot };
   const handle = createStore("context.json", envelope);
-  const intentPath = path.join(storeDirectory(handle.split(".")[0]), "intent.json"); fs.writeFileSync(intentPath, "{}\n", { mode: 0o600, flag: "wx" });
+  const intentPath = path.join(storeDirectory(handle.split(".")[0]), "intent.json"); fs.writeFileSync(intentPath, `${JSON.stringify(intentTemplate(snapshot), null, 2)}\n`, { mode: 0o600, flag: "wx" });
   const output = { schema: "flow-pr/prepare-context-v2", status: "prepared", exit: 0, phase: "prepare", handle, intentPath, expiresAt: expiresAt(createdAt), context: compactContext(snapshot) };
   if (verbose) output.diagnostics = { snapshot };
   return output;
