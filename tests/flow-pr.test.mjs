@@ -74,7 +74,7 @@ test("prepare keeps canonical snapshot and identity internal while exposing comp
   assert.doesNotMatch(encoded, /chore: initial/);
   assert.doesNotMatch(encoded, /snapshot|identity|headOid|commonDir/); assert.equal(fs.existsSync(path.join(directoryFor(compact.handle), "context.json")), true);
   assert.deepEqual(JSON.parse(fs.readFileSync(compact.intentPath, "utf8")), {
-    schema: "flow-pr/intent-v2", title: "", body: "", draft: true,
+    schema: "flow-pr/intent-v2", title: "", body: "", draft: false,
     labels: { add: [], remove: [] }, updateExisting: ["title", "body", "draft", "labels"], deliveryMode: "same-repo", push: "publish",
   });
   if (process.platform !== "win32") assert.equal(fs.statSync(compact.intentPath).mode & 0o777, 0o600);
@@ -143,11 +143,13 @@ test("runtime intent template preserves operational policy while malformed exter
     assert.equal(rejected.status, "failure"); assert.equal(rejected.error.code, "invalid-contract"); assert.equal(calls(item).length, before);
   });
   await t.test("existing PR and fork authority select deterministic operational defaults", () => {
-    const existing = fixture(); publish(existing); const baseline = snapshot(existing);
-    fs.writeFileSync(existing.state, JSON.stringify([rawPr(baseline, { isDraft: false })]));
-    const existingContext = begin(existing); const existingTemplate = JSON.parse(fs.readFileSync(existingContext.intentPath, "utf8"));
-    assert.equal(existingTemplate.draft, false); assert.equal(existingTemplate.push, "verify-existing"); assert.equal(existingTemplate.deliveryMode, "same-repo");
-    assert.deepEqual(existingTemplate.labels, { add: [], remove: [] }); assert.deepEqual(existingTemplate.updateExisting, ["title", "body", "draft", "labels"]);
+    for (const draft of [false, true]) {
+      const existing = fixture(); publish(existing); const baseline = snapshot(existing);
+      fs.writeFileSync(existing.state, JSON.stringify([rawPr(baseline, { isDraft: draft })]));
+      const existingContext = begin(existing); const existingTemplate = JSON.parse(fs.readFileSync(existingContext.intentPath, "utf8"));
+      assert.equal(existingTemplate.draft, draft); assert.equal(existingTemplate.push, "verify-existing"); assert.equal(existingTemplate.deliveryMode, "same-repo");
+      assert.deepEqual(existingTemplate.labels, { add: [], remove: [] }); assert.deepEqual(existingTemplate.updateExisting, ["title", "body", "draft", "labels"]);
+    }
 
     const fork = fixture(); const forkBare = path.join(fork.directory, "fork.git"); git(fork.directory, ["init", "--bare", "-q", forkBare]);
     const forkUrl = "https://github.com/contributor/repo.git"; git(fork.cwd, ["config", `url.file://${forkBare.replaceAll("\\", "/")}.insteadOf`, forkUrl]); git(fork.cwd, ["remote", "add", "fork", forkUrl]);
@@ -163,10 +165,20 @@ test("runtime-owned semantic intent transport preserves Windows paths, quotes, M
   assert.doesNotMatch(JSON.stringify(result), /flow-pr\/request-v2|expected|snapshot|`inline`|Víctor/); assert.equal(result.approval.body.bytes, Buffer.byteLength(body)); assert.equal("preview" in result.approval.body, false);
 });
 
-test("one prepared approval executes an ordinary non-force push and verified PR create", () => {
-  const item = fixture(); const plan = prepared(item); assert.deepEqual(plan.approval.action, { git: "push", pullRequest: "create", expectation: "push and create" });
-  const result = execute(item, plan); assert.equal(result.status, "success"); assert.equal(result.phase, "verify"); assert.equal(result.effects.push, "confirmed"); assert.equal(result.effects.prCreate, "confirmed"); assert.equal(result.pr.url, "https://github.com/example/repo/pull/1");
-  assert.equal(git(item.cwd, ["ls-remote", "origin", "refs/heads/feat/contract"]).split(/\s+/)[0], git(item.cwd, ["rev-parse", "HEAD"])); assert.doesNotMatch(fs.readFileSync(path.join(root, "scripts", "lib", "flow-pr-executor.mjs"), "utf8"), /--force|--force-with-lease/);
+test("new PRs are ready by default while explicit intent can request draft", async (t) => {
+  await t.test("ready by default", () => {
+    const item = fixture(); const context = begin(item); const value = JSON.parse(fs.readFileSync(context.intentPath, "utf8"));
+    Object.assign(value, { title: "feat: contract", body: "Deterministic body\n" });
+    const plan = finalize(item, context, value); assert.deepEqual(plan.approval.action, { git: "push", pullRequest: "create", expectation: "push and create" }); assert.equal(plan.approval.draft, false);
+    const result = execute(item, plan); assert.equal(result.status, "success"); assert.equal(result.phase, "verify"); assert.equal(result.effects.push, "confirmed"); assert.equal(result.effects.prCreate, "confirmed"); assert.equal(result.pr.url, "https://github.com/example/repo/pull/1"); assert.equal(result.pr.draft, false);
+    const create = calls(item).find((entry) => entry[0] === "pr" && entry[1] === "create"); assert.equal(create.includes("--draft"), false);
+    assert.equal(git(item.cwd, ["ls-remote", "origin", "refs/heads/feat/contract"]).split(/\s+/)[0], git(item.cwd, ["rev-parse", "HEAD"])); assert.doesNotMatch(fs.readFileSync(path.join(root, "scripts", "lib", "flow-pr-executor.mjs"), "utf8"), /--force|--force-with-lease/);
+  });
+  await t.test("explicit draft", () => {
+    const item = fixture(); const plan = prepared(item, intent({ draft: true })); assert.equal(plan.approval.draft, true);
+    const result = execute(item, plan); assert.equal(result.status, "success"); assert.equal(result.pr.draft, true);
+    const create = calls(item).find((entry) => entry[0] === "pr" && entry[1] === "create"); assert.equal(create.includes("--draft"), true);
+  });
 });
 
 test("publish sets and verifies a missing upstream even when the remote OID already equals HEAD", () => {
