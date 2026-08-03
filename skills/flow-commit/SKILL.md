@@ -21,7 +21,7 @@ Load for `/flow-commit` or a request to commit current local changes through Flo
 - Never use direct Git mutation, push, PR, audit, build, install, sync, automatic retries, hook skipping, or global rollback.
 - Raw JSON, snapshots, fingerprints, sealed requests, handles, and temp paths are internal. User output is compact prose.
 - The OpenCode `ask` permission on `--execute --handle` is the one human mutation approval. Never ask for a separate conversational confirmation.
-- Stop once on noop, blocker, drift, partial, failure, or unknown effects. A retry requires fresh user action and preparation.
+- Permit only one bounded correction of the same intent file after non-consuming validation reports `invalid-json`, `invalid-intent`, `coverage-mismatch`, `invalid-branch`, or `protected-branch`. Otherwise stop once on noop, blocker, drift, partial, failure, or unknown effects; a retry requires fresh user action and preparation.
 
 ## Decision Gates
 
@@ -44,12 +44,15 @@ Never keep a protected branch. Branch creation belongs only to the sealed Flow C
 
    On a non-protected branch, replace that branch object with `{"action":"keep"}`.
 
-4. Run `--prepare --handle <prepare-handle>` to seal it. Present repository basename, current branch/HEAD abbreviation, branch action, ordered titles, exact paths, body presence/byte counts, and totals. Keep both opaque handles internal. The returned sealed execute handle binds the approved request digest in addition to the original prepared digest. Do not display the raw runtime document and do not ask for approval separately.
-5. Invoke `--execute --handle <sealed-execute-handle>`. Its permission prompt is the approval. Report compact verified results; success lists commit OID/title and counts without bodies or repeated path arrays. Partial/failure includes actionable remaining paths and recovery.
+4. Run `--validate-intent --handle <prepare-handle>`. It authenticates prepared authority and validates intent without sealing, claiming, locking, mutating Git, or consuming a valid store. On one approved authoring failure only, correct the same `intentPath` once and validate once more without rereading Git facts, starting another agent, or preparing again. A second or nonrecoverable failure stops.
+5. Run `--prepare --handle <prepare-handle>` once to seal it. Present repository basename, current branch/HEAD abbreviation, branch action, ordered titles, exact paths, body presence/byte counts, and totals. Keep both opaque handles internal. The returned sealed execute handle binds the approved request digest in addition to the original prepared digest. Do not display the raw runtime document and do not ask for approval separately. Seal remains authoritative for repository/content drift, branch conditions, expiry, and intent.
+6. Invoke `--execute --handle <sealed-execute-handle>` once. Its permission prompt is the one human mutation approval. Report compact verified results; success lists commit OID/title and counts without bodies or repeated path arrays. Partial/failure includes actionable remaining paths and recovery. Seal and execute failures require fresh user action, not retries.
 
 ## Safety Contract
 
 Preparation binds the exact strict prepared-envelope bytes into the opaque prepare handle digest, then internally binds canonical repository/common-dir identity, branch, HEAD, empty index, operation state, path statuses, bytes, executable mode, deletions, untracked content, and symlink targets. Seal returns an internal execute handle carrying both the prepared digest and sealed request digest. Execute validates both caller-carried digests before trusting authority, then reinspects repository authority and atomically claims the handle and repository-scoped lock before mutation.
+
+Intent validation is deterministic, read-only, repeatable, and non-consuming after prepared authority is accepted. It returns only compact safe diagnostics and never grants execute authority. Prepared tamper, expiry, unsafe files or ownership, invalid handles, branch collisions, and unknown failures remain fail-closed; overloaded intent-like codes raised while authenticating prepared authority are never treated as recoverable.
 
 Commits retain hooks, exact staging, write-tree, parent/tree/path/message postconditions, CAS rollback for a rejected runtime commit, partial completed commits, and leftovers. Hook identity is never claimed; only observable hook effects and postconditions are reported. Abandoned claims/locks and consumed handles fail closed and require fresh preparation.
 
