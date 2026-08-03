@@ -46,7 +46,7 @@ const jiraTemplate = `### <FEATURE|FIX|REFACTOR|CHORE|DOCS>: <human-readable tit
 
 test("flow-pr command, agent, and skill expose prepare, one approval, and execute", () => {
   const command = read("commands/flow-pr.md"); const agent = read("agents/flow-pr-agent.md"); const skill = read("skills/flow-pr/SKILL.md"); const contract = `${command}\n${agent}\n${skill}`;
-  assert.match(command, /^agent: flow-pr-agent$/m); assert.match(contract, /--prepare --base/); assert.match(contract, /--prepare --handle/); assert.match(contract, /intentPath/); assert.match(contract, /--execute --handle/);
+  assert.match(command, /^agent: flow-pr-agent$/m); assert.match(contract, /bare `--prepare`/); assert.match(contract, /explicit.*`--base`/i); assert.match(contract, /--prepare --handle/); assert.match(contract, /intentPath/); assert.match(contract, /--execute --handle/);
   for (const surface of [command, agent, skill]) { assert.match(surface, /one human mutation approval|one approval/i); assert.match(surface, /Never ask for a separate|do not ask separately/i); }
   assert.match(agent, /task:\n    "\*": deny/); assert.match(agent, /git push\*": deny/); assert.match(agent, /"gh \*": deny/); assert.match(agent, /edit:\n    "\*": deny/); assert.match(agent, /flow-pr-request-\*\/intent\.json": allow/); assert.match(agent, /--prepare\*": allow/); assert.match(agent, /--execute --handle \*": ask/);
   assert.match(contract, /runtime-created OS-temp|runtime-owned `intentPath`/i); assert.match(contract, /no repository edits|Never edit the repository/i); assert.match(contract, /never.*(?:interpolat|shell|redirect|generic shell writes)/i);
@@ -280,6 +280,13 @@ test("flow-commit planning creates a task branch when prepare reports a protecte
   }
   assert.doesNotMatch(skill, /write exactly this strict document[\s\S]{0,300}"branch":\{"action":"keep"\}/i);
   assert.match(`${agent}\n${skill}`, /sealed Flow Commit execution[^\n]+branch creation|Branch creation belongs only to the sealed Flow Commit execution/i);
+});
+
+test("Flow records branch provenance only at its supported creation boundary", () => {
+  const commit = `${read("agents/flow-git-agent.md")}\n${read("skills/flow-commit/SKILL.md")}`;
+  const branch = `${read("agents/flow-branch-agent.md")}\n${read("skills/flow-branch/SKILL.md")}`;
+  assert.match(commit, /branch\.<new>\.gh-merge-base=<source>/); assert.match(commit, /transactional|transactionally/); assert.match(commit, /rollback/i);
+  assert.match(branch, /existing local or remote branch identities/); assert.match(branch, /never creates a new branch identity from the current source/); assert.match(branch, /Flow Commit owns/);
 });
 
 test("flow-commit agent allows relative intent edits and canonical external parents only", () => {

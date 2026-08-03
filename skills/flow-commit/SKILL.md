@@ -30,7 +30,7 @@ Load for `/flow-commit` or a request to commit current local changes through Flo
 | `protected` is `true` | Use `{"action":"create","name":"<type>/<task>"}`. Derive a concise lowercase kebab-case task name from the dominant work unit; the complete name must pass `git check-ref-format --branch`. |
 | `protected` is `false` | Use `{"action":"keep"}`. |
 
-Never keep a protected branch. Branch creation belongs only to the sealed Flow Commit execution; do not run Git directly.
+Never keep a protected branch. Branch creation belongs only to the sealed Flow Commit execution; do not run Git directly. Successful creation transactionally records `branch.<new>.gh-merge-base=<source>` and verifies it before committing; creation rollback removes both the branch and stale provenance.
 
 ## Workflow
 

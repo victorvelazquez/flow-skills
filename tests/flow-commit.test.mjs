@@ -15,6 +15,10 @@ const runtime = path.join(root, "scripts", "flow-commit.mjs");
 function git(cwd, args, options = {}) {
   return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], ...options }).trim();
 }
+function maybeGit(cwd, args) {
+  const result = spawnSync("git", args, { cwd, encoding: "utf8", shell: false });
+  return result.status === 0 ? result.stdout.trim() : "";
+}
 
 function repo(branch = "feat/current") {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "flow-commit-v2-test-"));
@@ -412,9 +416,19 @@ test("first-unit failure after branch creation is partial with explicit branch e
   assert.equal(response.output.status, "partial");
   assert.deepEqual(response.output.effects.branch, { state: "created" });
   assert.equal(response.output.branch, "fix/created-effect");
+  assert.equal(git(cwd, ["config", "--local", "--get", "branch.fix/created-effect.gh-merge-base"]), "main");
   assert.deepEqual(response.output.stoppedAt.paths, ["change.txt"]);
   assert.deepEqual(response.output.notAttempted, []);
   assert.deepEqual(response.output.outstandingPaths, ["change.txt"]);
+});
+
+test("branch provenance failure rolls back the branch and stale config", () => {
+  const cwd = repo("main"); fs.writeFileSync(path.join(cwd, "change.txt"), "change\n");
+  const plan = ready(cwd, [{ paths: ["change.txt"], title: "fix(commit): rollback provenance" }], { action: "create", name: "fix/provenance-rollback" }).prepared;
+  const result = executeHandle(plan.handle, { onProvenanceRecorded: () => { throw new Error("injected provenance failure"); } });
+  assert.equal(result.status, "failure"); assert.equal(git(cwd, ["branch", "--show-current"]), "main");
+  assert.equal(maybeGit(cwd, ["show-ref", "--verify", "refs/heads/fix/provenance-rollback"]), "");
+  assert.equal(maybeGit(cwd, ["config", "--local", "--get", "branch.fix/provenance-rollback.gh-merge-base"]), "");
 });
 
 test("branch-create blocker leaves every unit not attempted", () => {
