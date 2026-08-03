@@ -1,16 +1,16 @@
 {
   "$schema": "flow-assets-lock/v1",
-  "capturedAt": "2026-07-31T14:00:23.830Z",
+  "capturedAt": "2026-08-03T14:24:25.000Z",
   "source": {
     "kind": "opencode-user-config",
-    "opencodeVersion": "1.18.7",
-    "gentleAiVersion": "gentle-ai 2.1.6"
+    "opencodeVersion": "1.18.11",
+    "gentleAiVersion": "gentle-ai 2.2.4"
   },
   "manifest": {
     "sha256": "9b2d9d93a615f4d2175dfb344c37073c428faeda6958e4badd429c4f295b82dc"
   },
   "totals": {
-    "bytes": 622643,
+    "bytes": 623173,
     "count": 70
   },
   "files": [
@@ -30,8 +30,8 @@
     },
     {
       "path": "agents/flow-pr-agent.md",
-      "sha256": "7c3bd5f3c3ba9116937369e31572802a655e3bafa493f4a453b37cf4bd6e1e7d",
-      "bytes": 4170,
+      "sha256": "c5d98fcdc42ffbf1b8feda320ec1eb3e3f9ce602cface8dbff082b286f3153dc",
+      "bytes": 4374,
       "mode": "100644",
       "executable": false
     },
@@ -107,8 +107,8 @@
     },
     {
       "path": "commands/flow-pr.md",
-      "sha256": "676503f881179fc9d5ef2d31eb515aa2184b61e3f4f4c30f517ac36f57faed88",
-      "bytes": 1544,
+      "sha256": "c644388e9fa7b01d715c48813edf93ec01d70033e116060186ce8c8f29490fe6",
+      "bytes": 1681,
       "mode": "100644",
       "executable": false
     },
@@ -457,8 +457,8 @@
     },
     {
       "path": "skills/flow-pr/SKILL.md",
-      "sha256": "698d1d345ca1cc0ca74eb03897f2b798f05734888b1c1faf0e3f5c6121c51db5",
-      "bytes": 4426,
+      "sha256": "160f8be6cd075bca1d39fbae6aa61c797cc7833b1a9c85d3fa0480c377ab4e9e",
+      "bytes": 4615,
       "mode": "100644",
       "executable": false
     },
