@@ -52,6 +52,18 @@ test("flow-pr command, agent, and skill expose prepare, one approval, and execut
   assert.match(contract, /runtime-created OS-temp|runtime-owned `intentPath`/i); assert.match(contract, /no repository edits|Never edit the repository/i); assert.match(contract, /never.*(?:interpolat|shell|redirect|generic shell writes)/i);
   assert.doesNotMatch(contract, /materialize-request|request-base64|base64url|flow-pr\/request-v1/);
 });
+test("flow-pr resolves genuine clarification inside its dedicated child invocation", () => {
+  const command = read("commands/flow-pr.md"); const agent = read("agents/flow-pr-agent.md"); const skill = read("skills/flow-pr/SKILL.md");
+  for (const surface of [command, agent, skill]) {
+    assert.match(surface, /OpenCode(?:'s)? `question` tool/i);
+    assert.match(surface, /wait[^\n]+(?:same|this) child invocation/i);
+    assert.match(surface, /continue preparation/i);
+    assert.match(surface, /never (?:finish or )?return a plain-text clarification question to the parent/i);
+  }
+  assert.match(agent, /^  question: allow$/m);
+  assert.doesNotMatch(agent, /^  question: ask$/m);
+  assert.doesNotMatch(command, /^\$ARGUMENTS$/m);
+});
 test("flow-pr agent externally reads only its installed contracts before prepare", () => {
   const agent = read("agents/flow-pr-agent.md");
   const external = permissionRules(agent, "external_directory");
