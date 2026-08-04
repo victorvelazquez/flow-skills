@@ -299,7 +299,8 @@ test("flow-commit planning creates a task branch when prepare reports a protecte
   const skill = read("skills/flow-commit/SKILL.md");
 
   for (const surface of [agent, skill]) {
-    assert.match(surface, /`protected` is `true`[^\n]+`\{"action":"create","name":"<type>\/<task>"\}`/i);
+    assert.match(surface, /`protected` is `true`/i);
+    assert.match(surface, /`\{"action":"create","name":"<type>\/<task>"\}`|empty branch `name`/i);
     assert.match(surface, /lowercase kebab-case task name/i);
     assert.match(surface, /`protected` is `false`[^\n]+`\{"action":"keep"\}`/i);
     assert.match(surface, /Never keep a protected branch/i);
@@ -315,7 +316,7 @@ test("Flow records branch provenance only at its supported creation boundary", (
   assert.match(branch, /existing local or remote branch identities/); assert.match(branch, /never creates a new branch identity from the current source/); assert.match(branch, /Flow Commit owns/);
 });
 
-test("flow-commit agent allows only canonical absolute intent edits and their external parents", () => {
+test("flow-commit agent allows only relative intent edits and canonical external parents", () => {
   const agent = read("agents/flow-git-agent.md");
   const edit = permissionRules(agent, "edit");
   const external = permissionRules(agent, "external_directory");
@@ -345,13 +346,16 @@ test("flow-commit agent allows only canonical absolute intent edits and their ex
     const intentFile = nativeIntentFile.split(pathApi.sep).join("/");
     const parentResource = externalResource(intentFile);
     const options = { windows };
-    assert.equal(permissionFor(edit, nativeIntentFile, undefined, options), "allow");
+    assert.equal(permissionFor(edit, relativeResource(pathApi, worktree, nativeIntentFile), undefined, options), "allow");
+    assert.equal(permissionFor(edit, nativeIntentFile, undefined, options), "deny");
     assert.equal(permissionFor(external, parentResource, undefined, options), "allow");
-    assert.equal(permissionFor(edit, nativeIntentFile.replace(/intent\.json$/i, "sibling.json"), undefined, options), "deny");
-    assert.equal(permissionFor(edit, nativeIntentFile.replace(/intent\.json$/i, "request.json"), undefined, options), "deny");
+    assert.equal(permissionFor(edit, relativeResource(pathApi, worktree, nativeIntentFile.replace(/intent\.json$/i, "sibling.json")), undefined, options), "deny");
+    assert.equal(permissionFor(edit, relativeResource(pathApi, worktree, nativeIntentFile.replace(/intent\.json$/i, "request.json")), undefined, options), "deny");
     assert.equal(permissionFor(edit, alternateIntentFile, undefined, options), "deny");
-    assert.equal(permissionFor(external, externalResource(alternateIntentFile.replaceAll("\\", "/")), undefined, options), "deny");
-    assert.equal(permissionFor(edit, relativeResource(pathApi, worktree, nativeIntentFile), undefined, options), "deny");
+    const alternateExternal = externalResource(alternateIntentFile.replaceAll("\\", "/"));
+    assert.equal(permissionFor(external, alternateExternal, undefined, options), "deny");
+    assert.equal(permissionFor(edit, relativeResource(pathApi, worktree, alternateIntentFile), undefined, options) === "allow" && permissionFor(external, alternateExternal, undefined, options) === "allow", false);
+    assert.equal(permissionFor(edit, relativeResource(pathApi, worktree, pathApi.join(worktree, "intent.json")), undefined, options), "deny");
   }
   for (const deniedResource of [
     "/tmp/*",
@@ -363,11 +367,10 @@ test("flow-commit agent allows only canonical absolute intent edits and their ex
   ]) assert.equal(permissionFor(external, deniedResource), "deny");
 
   assert.deepEqual(edit.filter(({ action }) => action === "allow").map(({ pattern }) => pattern), [
-    "/tmp/flow-commit-*/intent.json",
-    "/var/folders/*/*/T/flow-commit-*/intent.json",
-    "C:/Users/*/AppData/Local/Temp/flow-commit-*/intent.json",
+    "../*tmp/flow-commit-*/intent.json",
+    "../*var/folders/*/*/T/flow-commit-*/intent.json",
+    "../*AppData/Local/Temp/flow-commit-*/intent.json",
   ]);
-  assert.equal(edit.some(({ pattern }) => pattern.startsWith("../")), false);
   assert.deepEqual(external.filter(({ action }) => action === "allow").map(({ pattern }) => pattern), [
     "/tmp/flow-commit-*/*",
     "/var/folders/*/*/T/flow-commit-*/*",
@@ -382,8 +385,14 @@ test("flow-commit agent materializes runtime intent only with OpenCode apply_pat
 
   assert.match(materialization, /use OpenCode `apply_patch` directly on the existing runtime-created file/);
   assert.match(materialization, /exact returned canonical absolute `intentPath`/);
-  assert.match(materialization, /replace the exact existing `\{\}` placeholder line with the single strict one-line `flow-commit\/intent-v2` JSON document/);
-  assert.match(materialization, /do not create a different file/);
+  assert.match(materialization, /runtime has already fixed the intent branch action/);
+  assert.match(materialization, /one pretty `flow-commit\/intent-v2` template unit with exact prepared path coverage/);
+  assert.match(materialization, /replace only the empty `title` plus the protected branch `name`/);
+  assert.match(materialization, /multiple semantic units[\s\S]+replace only the `units` block while preserving exact disjoint prepared path coverage/);
+  assert.match(materialization, /`edit` permission receives the worktree-relative escape resource/);
+  assert.match(materialization, /`external_directory` separately receives the canonical absolute temp parent/);
+  assert.match(materialization, /do not create a different file/i);
+  assert.match(materialization, /reconstruct and replace the whole document/);
   assert.match(materialization, /never use `write`, generic `edit`, Bash, shell redirection, interpolation, encoding, or any alternate path/);
   assert.match(materialization, /Never edit the repository or display intent content, the intent path/);
   assert.doesNotMatch(materialization, /use (?:the )?OpenCode `write` tool (?:specifically|directly)|use generic `edit`|use Bash/i);

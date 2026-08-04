@@ -331,6 +331,14 @@ function validateIntent(document, state) {
   return { schema: INTENT_SCHEMA, branch: validateBranch(document.branch, state), units };
 }
 
+function intentTemplate(state) {
+  return {
+    schema: INTENT_SCHEMA,
+    branch: state.protected ? { action: "create", name: "" } : { action: "keep" },
+    units: [{ paths: state.changes.map((change) => change.path), title: "" }],
+  };
+}
+
 export function prepareRepository({ cwd = process.cwd(), now = Date.now(), ttlMs = TTL_MS } = {}) {
   if (!Number.isFinite(ttlMs) || ttlMs <= 0 || ttlMs > TTL_MS) throw new FlowError(`Preparation TTL must be between 1 and ${TTL_MS} milliseconds.`, "blocked", "invalid-ttl");
   const state = currentState(repositoryContext(cwd));
@@ -357,7 +365,7 @@ export function prepareRepository({ cwd = process.cwd(), now = Date.now(), ttlMs
   fs.mkdirSync(paths.store, { mode: 0o700 });
   try {
     exclusiveBytes(paths.prepared, preparedBytes);
-    exclusiveBytes(paths.intent, Buffer.from("{}\n"));
+    exclusiveBytes(paths.intent, Buffer.from(`${JSON.stringify(intentTemplate(state), null, 2)}\n`));
   } catch (error) {
     fs.rmSync(paths.store, { recursive: true, force: true });
     throw error;
