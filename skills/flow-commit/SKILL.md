@@ -36,13 +36,13 @@ Never keep a protected branch. Branch creation belongs only to the sealed Flow C
 
 1. Run `node ~/.config/opencode/scripts/flow-commit.mjs --prepare`. It returns only compact drafting facts plus a runtime-owned OS-temp `intentPath` and opaque handle. `noop` ends the workflow.
 2. Read only necessary `git diff`, `git log`, `git show`, and `git status` information in this same agent session.
-3. Select the branch object from the decision table and write exactly one strict `flow-commit/intent-v2` JSON document to the returned `intentPath` using the path-scoped edit permission. Its shape is:
+3. Edit the pretty strict `flow-commit/intent-v2` template already authored at the returned `intentPath` using the path-scoped `apply_patch` permission. The runtime derives it only from prepared facts: it fixes the branch action from `protected`, creates one unit with exact prepared path coverage, omits `body`, and leaves semantic placeholders that validation rejects until the agent replaces them. Its shape is:
 
    ```json
-   {"schema":"flow-commit/intent-v2","branch":{"action":"create","name":"fix/task-name"},"units":[{"paths":["literal/path"],"title":"type(scope): outcome","body":"Optional useful context."}]}
+   {"schema":"flow-commit/intent-v2","branch":{"action":"create","name":""},"units":[{"paths":["literal/path"],"title":""}]}
    ```
 
-   On a non-protected branch, replace that branch object with `{"action":"keep"}`.
+   On a non-protected branch, the runtime uses `{"action":"keep"}`. For one unit, edit only the title and, on a protected branch, the branch name. For multiple units, deliberately replace the units block while preserving exact disjoint prepared path coverage. Preserve the runtime-authored schema and branch action; never reconstruct the whole document or invent a valid title or branch name on the runtime's behalf. Add an optional body only when useful.
 
 4. Run `--validate-intent --handle <prepare-handle>`. It authenticates prepared authority and validates intent without sealing, claiming, locking, mutating Git, or consuming a valid store. On one approved authoring failure only, correct the same `intentPath` once and validate once more without rereading Git facts, starting another agent, or preparing again. A second or nonrecoverable failure stops.
 5. Run `--prepare --handle <prepare-handle>` once to seal it. Present repository basename, current branch/HEAD abbreviation, branch action, ordered titles, exact paths, body presence/byte counts, and totals. Keep both opaque handles internal. The returned sealed execute handle binds the approved request digest in addition to the original prepared digest. Do not display the raw runtime document and do not ask for approval separately. Seal remains authoritative for repository/content drift, branch conditions, expiry, and intent.

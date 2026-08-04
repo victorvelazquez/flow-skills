@@ -52,6 +52,13 @@ function intent(prepared, units, branch = { action: "keep" }, extra = {}) {
   return document;
 }
 
+function editTemplate(prepared, edit) {
+  const document = JSON.parse(fs.readFileSync(prepared.intentPath, "utf8"));
+  edit(document);
+  fs.writeFileSync(prepared.intentPath, `${JSON.stringify(document, null, 2)}\n`);
+  return document;
+}
+
 function seal(cwd, prepared) {
   const result = run(cwd, ["--prepare", "--handle", prepared.handle]);
   return { result, output: output(result) };
@@ -120,28 +127,77 @@ test("prepare is compact, NUL-safe, and covers hostile, untracked, and deleted p
   assert.deepEqual(prepared.changes.map((item) => item.path).sort(), changedPaths(cwd));
   assert.ok(prepared.changes.some((item) => item.path === hostile));
   assert.ok(prepared.changes.some((item) => item.path === "base.txt" && item.worktreeStatus === "D"));
+  const template = JSON.parse(fs.readFileSync(prepared.intentPath, "utf8"));
+  assert.deepEqual(template, {
+    schema: "flow-commit/intent-v2",
+    branch: { action: "keep" },
+    units: [{ paths: prepared.changes.map((item) => item.path), title: "" }],
+  });
   assert.match(prepared.handle, /^[a-f0-9]{64}\.[a-f0-9]{64}$/);
   assert.equal(fs.existsSync(path.join(cwd, "nope")), false);
   for (const forbidden of ["repositoryRoot", "commonDir", "fingerprint", "snapshot", "request"]) assert.equal(Object.hasOwn(prepared, forbidden), false);
+  assert.equal(JSON.stringify(prepared).includes("flow-commit/intent-v2"), false);
+  assert.equal(Object.hasOwn(prepared, "units"), false);
 });
 
-test("prepare creates the exact non-empty JSON intent placeholder", () => {
-  const cwd = repo();
+test("prepare creates a pretty invalid-until-authored template with the fixed branch action", () => {
+  const cwd = repo("main");
   fs.writeFileSync(path.join(cwd, "change.txt"), "change\n");
   const prepared = prepare(cwd);
-  assert.deepEqual(fs.readFileSync(prepared.intentPath), Buffer.from("{}\n"));
-  assert.equal(fs.statSync(prepared.intentPath).size, 3);
+  const bytes = fs.readFileSync(prepared.intentPath);
+  assert.deepEqual(JSON.parse(bytes.toString("utf8")), {
+    schema: "flow-commit/intent-v2",
+    branch: { action: "create", name: "" },
+    units: [{ paths: ["change.txt"], title: "" }],
+  });
+  assert.match(bytes.toString("utf8"), /^\{\n  "schema": "flow-commit\/intent-v2",/);
   if (process.platform !== "win32") assert.equal(fs.statSync(prepared.intentPath).mode & 0o777, 0o600);
   fs.rmSync(store(prepared), { recursive: true, force: true });
 });
 
-test("seal rejects an untouched placeholder as invalid intent", () => {
+test("validation rejects an untouched semantic template without consuming authority", () => {
   const cwd = repo();
   fs.writeFileSync(path.join(cwd, "change.txt"), "change\n");
-  const response = seal(cwd, prepare(cwd));
+  const prepared = prepare(cwd);
+  const response = validate(cwd, prepared);
   assert.equal(response.result.status, 1);
   assert.equal(response.output.error.code, "invalid-intent");
   assert.notEqual(response.output.error.code, "handle-file-size");
+  assert.equal(fs.existsSync(store(prepared)), true);
+});
+
+test("targeted one-unit template edits validate, seal, and execute", () => {
+  const cwd = repo("main");
+  fs.writeFileSync(path.join(cwd, "change.txt"), "change\n");
+  const prepared = prepare(cwd);
+  editTemplate(prepared, (document) => {
+    document.branch.name = "fix/runtime-template";
+    document.units[0].title = "fix(commit): author runtime template";
+  });
+  assert.deepEqual(validate(cwd, prepared).output, { status: "intent-valid" });
+  const sealed = seal(cwd, prepared);
+  assert.equal(sealed.result.status, 0, sealed.result.stdout);
+  const executed = execute(cwd, { ...prepared, handle: sealed.output.executeHandle });
+  assert.equal(executed.result.status, 0, executed.result.stdout);
+  assert.equal(git(cwd, ["branch", "--show-current"]), "fix/runtime-template");
+  assert.equal(git(cwd, ["log", "-1", "--format=%s"]), "fix(commit): author runtime template");
+});
+
+test("deliberate multi-unit template replacement preserves exact coverage", () => {
+  const cwd = repo();
+  fs.writeFileSync(path.join(cwd, "one.txt"), "one\n");
+  fs.writeFileSync(path.join(cwd, "two.txt"), "two\n");
+  const prepared = prepare(cwd);
+  editTemplate(prepared, (document) => {
+    document.units = [
+      { paths: ["one.txt"], title: "feat(commit): author first unit" },
+      { paths: ["two.txt"], title: "fix(commit): author second unit" },
+    ];
+  });
+  assert.deepEqual(validate(cwd, prepared).output, { status: "intent-valid" });
+  const sealed = seal(cwd, prepared);
+  assert.equal(sealed.result.status, 0, sealed.result.stdout);
+  assert.deepEqual(sealed.output.units.map((unit) => unit.paths), [["one.txt"], ["two.txt"]]);
 });
 
 test("valid intent validation is compact, repeatable, and non-consuming", () => {
