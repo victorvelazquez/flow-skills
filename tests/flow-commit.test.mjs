@@ -7,7 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { contentFactsFingerprint, executeHandle, prepareRepository, repositoryLockPath, sealHandle, validateIntentHandle } from "../scripts/flow-commit.mjs";
+import { authorIntent, contentFactsFingerprint, executeHandle, prepareRepository, repositoryLockPath, sealHandle } from "../scripts/flow-commit.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const runtime = path.join(root, "scripts", "flow-commit.mjs");
@@ -46,26 +46,30 @@ function prepare(cwd) {
   return output(result);
 }
 
-function intent(prepared, units, branch = { action: "keep" }, extra = {}) {
-  const document = { schema: "flow-commit/intent-v2", branch, units, ...extra };
-  fs.writeFileSync(prepared.intentPath, `${JSON.stringify(document)}\n`);
-  return document;
+function canonical(value) {
+  return JSON.stringify(value, (_, item) => item && typeof item === "object" && !Array.isArray(item)
+    ? Object.fromEntries(Object.entries(item).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0))
+    : item);
 }
 
-function editTemplate(prepared, edit) {
-  const document = JSON.parse(fs.readFileSync(prepared.intentPath, "utf8"));
-  edit(document);
-  fs.writeFileSync(prepared.intentPath, `${JSON.stringify(document, null, 2)}\n`);
-  return document;
+function payload(prepared, units, branch = { action: "keep" }, extra = {}) {
+  const ordinals = new Map(prepared.changes.map((change, index) => [change.path, index]));
+  const document = {
+    schema: "flow-commit/author-intent-v1",
+    ...(branch.action === "create" ? { branchName: branch.name } : {}),
+    units: units.map(({ paths, ...unit }) => ({ ordinals: paths.map((file) => ordinals.get(file)), ...unit })),
+    ...extra,
+  };
+  return Buffer.from(canonical(document), "utf8").toString("base64url");
 }
 
-function seal(cwd, prepared) {
-  const result = run(cwd, ["--prepare", "--handle", prepared.handle]);
+function author(cwd, prepared, units, branch = { action: "keep" }, token = payload(prepared, units, branch)) {
+  const result = run(cwd, ["--author-intent", "--handle", prepared.handle, "--payload-b64url", token]);
   return { result, output: output(result) };
 }
 
-function validate(cwd, prepared) {
-  const result = run(cwd, ["--validate-intent", "--handle", prepared.handle]);
+function seal(cwd, prepared) {
+  const result = run(cwd, ["--seal", "--handle", prepared.handle]);
   return { result, output: output(result) };
 }
 
@@ -76,14 +80,16 @@ function execute(cwd, prepared) {
 
 function ready(cwd, units, branch = { action: "keep" }) {
   const prepared = prepare(cwd);
-  intent(prepared, units, branch);
-  const sealed = seal(cwd, prepared);
+  const authored = author(cwd, prepared, units, branch);
+  assert.equal(authored.result.status, 0, authored.result.stdout);
+  const sealed = seal(cwd, { ...prepared, handle: authored.output.authoredHandle });
   assert.equal(sealed.result.status, 0, sealed.result.stdout);
   return { prepared: { ...prepared, handle: sealed.output.executeHandle }, sealed: sealed.output };
 }
 
 function store(prepared) {
-  return path.dirname(prepared.intentPath);
+  const handleId = prepared.handle.split(".")[1];
+  return path.join(fs.realpathSync.native(os.tmpdir()), `flow-commit-${handleId}`);
 }
 
 function changedPaths(cwd) {
@@ -118,7 +124,7 @@ function asyncRun(cwd, args) {
 test("prepare is compact, NUL-safe, and covers hostile, untracked, and deleted paths", () => {
   const cwd = repo();
   const clean = prepare(cwd);
-  assert.deepEqual(clean, { schema: "flow-commit/prepare-v2", status: "noop", branch: "feat/current", head: clean.head, protected: false, changes: [] });
+  assert.deepEqual(clean, { schema: "flow-commit/prepare-v3", status: "noop", branch: "feat/current", head: clean.head, protected: false, changes: [] });
   const hostile = process.platform === "win32" ? " leading $(touch nope); `quoted` name.txt" : " leading $(touch nope); `quoted`\nname.txt";
   fs.writeFileSync(path.join(cwd, hostile), "literal\n");
   fs.unlinkSync(path.join(cwd, "base.txt"));
@@ -127,195 +133,151 @@ test("prepare is compact, NUL-safe, and covers hostile, untracked, and deleted p
   assert.deepEqual(prepared.changes.map((item) => item.path).sort(), changedPaths(cwd));
   assert.ok(prepared.changes.some((item) => item.path === hostile));
   assert.ok(prepared.changes.some((item) => item.path === "base.txt" && item.worktreeStatus === "D"));
-  const template = JSON.parse(fs.readFileSync(prepared.intentPath, "utf8"));
-  assert.deepEqual(template, {
-    schema: "flow-commit/intent-v2",
-    branch: { action: "keep" },
-    units: [{ paths: prepared.changes.map((item) => item.path), title: "" }],
-  });
-  assert.match(prepared.handle, /^[a-f0-9]{64}\.[a-f0-9]{64}$/);
+  assert.match(prepared.handle, /^p3\.[a-f0-9]{64}\.[a-f0-9]{64}$/);
   assert.equal(fs.existsSync(path.join(cwd, "nope")), false);
   for (const forbidden of ["repositoryRoot", "commonDir", "fingerprint", "snapshot", "request"]) assert.equal(Object.hasOwn(prepared, forbidden), false);
-  assert.equal(JSON.stringify(prepared).includes("flow-commit/intent-v2"), false);
+  assert.equal(Object.hasOwn(prepared, "intentPath"), false);
   assert.equal(Object.hasOwn(prepared, "units"), false);
 });
 
-test("prepare creates a pretty invalid-until-authored template with the fixed branch action", () => {
+test("prepare creates only immutable runtime-owned authority", () => {
   const cwd = repo("main");
   fs.writeFileSync(path.join(cwd, "change.txt"), "change\n");
   const prepared = prepare(cwd);
-  const bytes = fs.readFileSync(prepared.intentPath);
-  assert.deepEqual(JSON.parse(bytes.toString("utf8")), {
-    schema: "flow-commit/intent-v2",
-    branch: { action: "create", name: "" },
-    units: [{ paths: ["change.txt"], title: "" }],
-  });
-  assert.match(bytes.toString("utf8"), /^\{\n  "schema": "flow-commit\/intent-v2",/);
-  if (process.platform !== "win32") assert.equal(fs.statSync(prepared.intentPath).mode & 0o777, 0o600);
+  assert.deepEqual(fs.readdirSync(store(prepared)), ["prepared.json"]);
+  if (process.platform !== "win32") assert.equal(fs.statSync(path.join(store(prepared), "prepared.json")).mode & 0o777, 0o600);
   fs.rmSync(store(prepared), { recursive: true, force: true });
 });
 
-test("validation rejects an untouched semantic template without consuming authority", () => {
-  const cwd = repo();
-  fs.writeFileSync(path.join(cwd, "change.txt"), "change\n");
-  const prepared = prepare(cwd);
-  const response = validate(cwd, prepared);
-  assert.equal(response.result.status, 1);
-  assert.equal(response.output.error.code, "invalid-intent");
-  assert.notEqual(response.output.error.code, "handle-file-size");
-  assert.equal(fs.existsSync(store(prepared)), true);
-});
-
-test("targeted one-unit template edits validate, seal, and execute", () => {
+test("runtime encoder constructs canonical payload and author, seal, execute complete the lifecycle", () => {
   const cwd = repo("main");
   fs.writeFileSync(path.join(cwd, "change.txt"), "change\n");
   const prepared = prepare(cwd);
-  editTemplate(prepared, (document) => {
-    document.branch.name = "fix/runtime-template";
-    document.units[0].title = "fix(commit): author runtime template";
-  });
-  assert.deepEqual(validate(cwd, prepared).output, { status: "intent-valid" });
-  const sealed = seal(cwd, prepared);
+  const encoded = run(cwd, ["--encode-author-intent", "--handle", prepared.handle, "--branch-name", "fix/runtime-payload", "--unit", "0", "--title", "fix(commit): author runtime payload"]);
+  const encodedOutput = output(encoded);
+  assert.equal(encoded.status, 0, encoded.stdout);
+  assert.match(encodedOutput.payloadB64url, /^[A-Za-z0-9_-]+$/);
+  assert.ok(encodedOutput.payloadB64url.length <= 6000);
+  const authored = run(cwd, ["--author-intent", "--handle", prepared.handle, "--payload-b64url", encodedOutput.payloadB64url]);
+  const authoredOutput = output(authored);
+  assert.equal(authored.status, 0, authored.stdout);
+  assert.doesNotMatch(authored.stdout, /runtime payload|branchName|ordinals/);
+  const sealed = seal(cwd, { ...prepared, handle: authoredOutput.authoredHandle });
   assert.equal(sealed.result.status, 0, sealed.result.stdout);
   const executed = execute(cwd, { ...prepared, handle: sealed.output.executeHandle });
   assert.equal(executed.result.status, 0, executed.result.stdout);
-  assert.equal(git(cwd, ["branch", "--show-current"]), "fix/runtime-template");
-  assert.equal(git(cwd, ["log", "-1", "--format=%s"]), "fix(commit): author runtime template");
+  assert.equal(git(cwd, ["branch", "--show-current"]), "fix/runtime-payload");
+  assert.equal(git(cwd, ["log", "-1", "--format=%s"]), "fix(commit): author runtime payload");
 });
 
-test("deliberate multi-unit template replacement preserves exact coverage", () => {
+test("rename-like archive moves preserve literal delete and add path authority", () => {
+  const cwd = repo();
+  const source = "changes/request/spec.md";
+  const archived = "changes/archive/request/spec.md";
+  fs.mkdirSync(path.join(cwd, path.dirname(source)), { recursive: true });
+  fs.writeFileSync(path.join(cwd, source), "archive me\n");
+  git(cwd, ["add", source]);
+  git(cwd, ["commit", "-qm", "docs: add active request"]);
+  fs.mkdirSync(path.join(cwd, path.dirname(archived)), { recursive: true });
+  fs.renameSync(path.join(cwd, source), path.join(cwd, archived));
+
+  const prepared = ready(cwd, [{
+    paths: [source, archived],
+    title: "docs(commit): archive completed request",
+  }]).prepared;
+  const response = execute(cwd, prepared);
+
+  assert.equal(response.result.status, 0, response.result.stdout);
+  assert.equal(response.output.status, "success");
+  assert.deepEqual(git(cwd, ["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", "HEAD^", "HEAD"]).split("\n").sort(), [source, archived].sort());
+  assert.deepEqual(changedPaths(cwd), []);
+});
+
+test("ordered ordinal units resolve to exact prepared paths", () => {
   const cwd = repo();
   fs.writeFileSync(path.join(cwd, "one.txt"), "one\n");
   fs.writeFileSync(path.join(cwd, "two.txt"), "two\n");
   const prepared = prepare(cwd);
-  editTemplate(prepared, (document) => {
-    document.units = [
-      { paths: ["one.txt"], title: "feat(commit): author first unit" },
-      { paths: ["two.txt"], title: "fix(commit): author second unit" },
-    ];
-  });
-  assert.deepEqual(validate(cwd, prepared).output, { status: "intent-valid" });
-  const sealed = seal(cwd, prepared);
+  const authored = author(cwd, prepared, [
+    { paths: ["one.txt"], title: "feat(commit): author first unit" },
+    { paths: ["two.txt"], title: "fix(commit): author second unit" },
+  ]);
+  const sealed = seal(cwd, { ...prepared, handle: authored.output.authoredHandle });
   assert.equal(sealed.result.status, 0, sealed.result.stdout);
   assert.deepEqual(sealed.output.units.map((unit) => unit.paths), [["one.txt"], ["two.txt"]]);
 });
 
-test("valid intent validation is compact, repeatable, and non-consuming", () => {
+test("successful authoring is exclusive and exact replay is idempotent", () => {
   const cwd = repo();
   fs.writeFileSync(path.join(cwd, "change.txt"), "change\n");
   const prepared = prepare(cwd);
-  intent(prepared, [{ paths: ["change.txt"], title: "fix(commit): validate without consuming" }]);
-
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const response = validate(cwd, prepared);
-    assert.equal(response.result.status, 0, response.result.stdout);
-    assert.deepEqual(response.output, { status: "intent-valid" });
-    assert.equal(fs.existsSync(store(prepared)), true);
-    assert.equal(fs.existsSync(path.join(store(prepared), "sealed.json")), false);
-  }
+  const token = payload(prepared, [{ paths: ["change.txt"], title: "fix(commit): author once" }]);
+  const first = author(cwd, prepared, [], undefined, token);
+  const replay = author(cwd, prepared, [], undefined, token);
+  assert.equal(first.output.replayed, false);
+  assert.equal(replay.output.replayed, true);
+  assert.equal(replay.output.authoredHandle, first.output.authoredHandle);
 });
 
-test("invalid intent retains the same store and one correction can validate, seal, and execute", () => {
+test("one invalid semantic payload is non-consuming and one correction can author", () => {
   const cwd = repo();
   fs.writeFileSync(path.join(cwd, "change.txt"), "change\n");
   const prepared = prepare(cwd);
   const originalStore = store(prepared);
-  intent(prepared, [{ paths: ["missing.txt"], title: "fix(commit): fail authoring validation" }]);
-
-  const invalid = validate(cwd, prepared);
+  const invalidToken = Buffer.from(canonical({ schema: "flow-commit/author-intent-v1", units: [{ ordinals: [1], title: "fix(commit): fail authoring validation" }] })).toString("base64url");
+  const invalid = author(cwd, prepared, [], undefined, invalidToken);
   assert.equal(invalid.result.status, 1);
   assert.equal(invalid.output.error.code, "coverage-mismatch");
   assert.equal(fs.existsSync(originalStore), true);
-
-  intent(prepared, [{ paths: ["change.txt"], title: "fix(commit): correct same intent" }]);
-  assert.deepEqual(validate(cwd, prepared).output, { status: "intent-valid" });
+  const corrected = author(cwd, prepared, [{ paths: ["change.txt"], title: "fix(commit): correct structured intent" }]);
+  assert.equal(corrected.result.status, 0, corrected.result.stdout);
   assert.equal(store(prepared), originalStore);
-  const sealed = seal(cwd, prepared);
+  const sealed = seal(cwd, { ...prepared, handle: corrected.output.authoredHandle });
   assert.equal(sealed.result.status, 0, sealed.result.stdout);
   const executed = execute(cwd, { ...prepared, handle: sealed.output.executeHandle });
   assert.equal(executed.result.status, 0, executed.result.stdout);
-  assert.equal(git(cwd, ["log", "-1", "--format=%s"]), "fix(commit): correct same intent");
+  assert.equal(git(cwd, ["log", "-1", "--format=%s"]), "fix(commit): correct structured intent");
 });
 
-test("intent validation grants no execute authority", () => {
+test("authored handle grants no execute authority", () => {
   const cwd = repo();
   fs.writeFileSync(path.join(cwd, "change.txt"), "change\n");
   const prepared = prepare(cwd);
-  intent(prepared, [{ paths: ["change.txt"], title: "fix(commit): require sealed authority" }]);
-  assert.deepEqual(validateIntentHandle(prepared.handle), { status: "intent-valid" });
+  const authored = authorIntent(prepared.handle, payload(prepared, [{ paths: ["change.txt"], title: "fix(commit): require sealed authority" }]));
   assert.equal(fs.existsSync(path.join(store(prepared), "sealed.json")), false);
-  assert.throws(() => executeHandle(prepared.handle), (error) => error.code === "handle-not-sealed");
+  assert.throws(() => executeHandle(authored.authoredHandle), (error) => error.code === "handle-not-sealed");
   assert.equal(git(cwd, ["rev-list", "--count", "HEAD"]), "1");
 });
 
-test("prepared intent validation tolerates content drift while seal remains authoritative", () => {
-  const cwd = repo();
-  fs.writeFileSync(path.join(cwd, "change.txt"), "one\n");
-  const prepared = prepare(cwd);
-  intent(prepared, [{ paths: ["change.txt"], title: "fix(commit): defer drift to seal" }]);
-  fs.writeFileSync(path.join(cwd, "change.txt"), "two\n");
-  assert.deepEqual(validate(cwd, prepared).output, { status: "intent-valid" });
-  const response = seal(cwd, prepared);
-  assert.equal(response.result.status, 1);
-  assert.equal(response.output.error.code, "content-drift");
+test("authoring rejects malformed transport variants and bounds one correction", () => {
+  const variants = ["abcd=", "abc+", "A", Buffer.from("{bad").toString("base64url"), Buffer.from("{\"units\":[],\"schema\":\"flow-commit/author-intent-v1\"}").toString("base64url")];
+  for (const token of variants) {
+    const cwd = repo(); fs.writeFileSync(path.join(cwd, "change.txt"), "change\n"); const prepared = prepare(cwd);
+    const response = author(cwd, prepared, [], undefined, token);
+    assert.equal(response.result.status, 1);
+    assert.ok(["invalid-payload", "invalid-intent"].includes(response.output.error.code));
+  }
+  const cwd = repo(); fs.writeFileSync(path.join(cwd, "change.txt"), "change\n"); const prepared = prepare(cwd);
+  assert.equal(author(cwd, prepared, [], undefined, "bad=").result.status, 1);
+  assert.equal(author(cwd, prepared, [], undefined, "bad=").result.status, 1);
+  assert.equal(fs.existsSync(store(prepared)), false);
 });
 
-test("validation fails closed for prepared tamper, expiry, and invalid handles", () => {
+test("authoring fails closed for prepared tamper, expiry, legacy handles, and invalid handles", () => {
   const tamperRepo = repo();
   fs.writeFileSync(path.join(tamperRepo, "change.txt"), "change\n");
   let prepared = prepare(tamperRepo);
-  intent(prepared, [{ paths: ["change.txt"], title: "fix(commit): reject prepared tamper" }]);
   fs.appendFileSync(path.join(store(prepared), "prepared.json"), " ");
-  assert.equal(validate(tamperRepo, prepared).output.error.code, "prepared-tamper");
+  assert.equal(author(tamperRepo, prepared, [{ paths: ["change.txt"], title: "fix(commit): reject prepared tamper" }]).output.error.code, "prepared-tamper");
   assert.equal(fs.existsSync(store(prepared)), false);
 
   const expiryRepo = repo();
   fs.writeFileSync(path.join(expiryRepo, "change.txt"), "change\n");
   prepared = prepareRepository({ cwd: expiryRepo, now: 1000, ttlMs: 10 });
-  intent(prepared, [{ paths: ["change.txt"], title: "fix(commit): reject expired validation" }]);
-  assert.throws(() => validateIntentHandle(prepared.handle, { now: 1011 }), (error) => error.code === "handle-expired");
+  assert.throws(() => authorIntent(prepared.handle, payload(prepared, [{ paths: ["change.txt"], title: "fix(commit): reject expired author" }]), { now: 1011 }), (error) => error.code === "handle-expired");
   assert.equal(fs.existsSync(store(prepared)), false);
-
-  assert.equal(validate(expiryRepo, { handle: "not-a-handle" }).output.error.code, "invalid-handle");
-});
-
-test("validation rejects unsafe symbolic-link stores", { skip: process.platform === "win32" && "Windows symlink creation requires elevated fixture privileges." }, () => {
-  const unsafeRepo = repo();
-  fs.writeFileSync(path.join(unsafeRepo, "change.txt"), "change\n");
-  const prepared = prepare(unsafeRepo);
-  const unsafe = store(prepared); const moved = `${unsafe}-real`;
-  fs.renameSync(unsafe, moved); fs.symlinkSync(moved, unsafe, "dir");
-  assert.equal(validate(unsafeRepo, prepared).output.error.code, "unsafe-handle-store");
-  fs.unlinkSync(unsafe); fs.rmSync(moved, { recursive: true, force: true });
-});
-
-test("prepared authority intent-like errors are not recoverable", () => {
-  const cwd = repo();
-  fs.writeFileSync(path.join(cwd, "change.txt"), "change\n");
-  const prepared = prepare(cwd);
-  intent(prepared, [{ paths: ["change.txt"], title: "fix(commit): reject overloaded error" }]);
-  const preparedPath = path.join(store(prepared), "prepared.json");
-  const envelope = JSON.parse(fs.readFileSync(preparedPath, "utf8"));
-  envelope.changes[0].path = "../unsafe.txt";
-  envelope.contentFacts[0].path = "../unsafe.txt";
-  const bytes = Buffer.from(`${JSON.stringify(envelope)}\n`);
-  fs.writeFileSync(preparedPath, bytes);
-  const forged = { ...prepared, handle: `${prepared.handle.split(".")[0]}.${crypto.createHash("sha256").update(bytes).digest("hex")}` };
-  assert.equal(validate(cwd, forged).output.error.code, "invalid-intent");
-  assert.equal(fs.existsSync(store(prepared)), false);
-});
-
-test("validation output does not expose intent or authority internals", () => {
-  const cwd = repo();
-  fs.writeFileSync(path.join(cwd, "private-name.txt"), "change\n");
-  const prepared = prepare(cwd);
-  const secretBody = "private body marker";
-  intent(prepared, [{ paths: ["wrong-private-name.txt"], title: "fix(commit): redact validation output", body: secretBody }]);
-  const response = validate(cwd, prepared);
-  assert.equal(response.output.error.code, "coverage-mismatch");
-  for (const forbidden of ["private-name.txt", "wrong-private-name.txt", secretBody, prepared.handle, prepared.intentPath, "prepared.json", "intent.json", "sha256", "digest"]) {
-    assert.equal(response.result.stdout.includes(forbidden), false, forbidden);
-  }
+  assert.equal(output(run(expiryRepo, ["--seal", "--handle", `${"a".repeat(64)}.${"b".repeat(64)}`])).error.code, "legacy-handle");
+  assert.equal(output(run(expiryRepo, ["--seal", "--handle", "not-a-handle"])).error.code, "invalid-handle");
 });
 
 test("prepare rejects a preexisting index and repository operation without mutation", () => {
@@ -342,9 +304,9 @@ test("seal detects changed bytes under the same path", () => {
   const cwd = repo();
   fs.writeFileSync(path.join(cwd, "change.txt"), "one\n");
   const prepared = prepare(cwd);
-  intent(prepared, [{ paths: ["change.txt"], title: "fix(commit): bind changed bytes" }]);
+  const authored = author(cwd, prepared, [{ paths: ["change.txt"], title: "fix(commit): bind changed bytes" }]);
   fs.writeFileSync(path.join(cwd, "change.txt"), "two\n");
-  const response = seal(cwd, prepared);
+  const response = seal(cwd, { ...prepared, handle: authored.output.authoredHandle });
   assert.equal(response.result.status, 1);
   assert.equal(response.output.error.code, "content-drift");
 });
@@ -353,21 +315,21 @@ test("seal detects executable-mode and symlink-target drift", { skip: process.pl
   const modeRepo = repo();
   fs.writeFileSync(path.join(modeRepo, "mode.sh"), "exit 0\n", { mode: 0o644 });
   let prepared = prepare(modeRepo);
-  intent(prepared, [{ paths: ["mode.sh"], title: "fix(commit): bind executable mode" }]);
+  let authored = author(modeRepo, prepared, [{ paths: ["mode.sh"], title: "fix(commit): bind executable mode" }]);
   fs.chmodSync(path.join(modeRepo, "mode.sh"), 0o755);
-  assert.equal(seal(modeRepo, prepared).output.error.code, "content-drift");
+  assert.equal(seal(modeRepo, { ...prepared, handle: authored.output.authoredHandle }).output.error.code, "content-drift");
 
   const linkRepo = repo();
   fs.writeFileSync(path.join(linkRepo, "one"), "one\n");
   fs.writeFileSync(path.join(linkRepo, "two"), "two\n");
   fs.symlinkSync("one", path.join(linkRepo, "link"));
   prepared = prepare(linkRepo);
-  intent(prepared, [
+  authored = author(linkRepo, prepared, [
     { paths: ["link", "one", "two"], title: "fix(commit): bind symlink target" },
   ]);
   fs.unlinkSync(path.join(linkRepo, "link"));
   fs.symlinkSync("two", path.join(linkRepo, "link"));
-  assert.equal(seal(linkRepo, prepared).output.error.code, "content-drift");
+  assert.equal(seal(linkRepo, { ...prepared, handle: authored.output.authoredHandle }).output.error.code, "content-drift");
 });
 
 test("content fingerprint binds executable mode and symlink target on every platform", () => {
@@ -377,45 +339,43 @@ test("content fingerprint binds executable mode and symlink target on every plat
   assert.notEqual(contentFactsFingerprint([link]), contentFactsFingerprint([{ ...link, bytes: 4, content: "c".repeat(64) }]));
 });
 
-test("seal strictly validates intent, coverage, branch collision, and compact summary", () => {
+test("author strictly validates schema, coverage, and titles while seal returns a compact summary", () => {
   const cwd = repo();
   fs.writeFileSync(path.join(cwd, "one.txt"), "one\n");
   fs.writeFileSync(path.join(cwd, "two.txt"), "two\n");
   for (const [document, expected] of [
-    [{ schema: "flow-commit/intent-v2", branch: { action: "keep" }, units: [{ paths: ["one.txt"], title: "fix(commit): miss coverage" }] }, "coverage-mismatch"],
-    [{ schema: "flow-commit/intent-v2", branch: { action: "keep" }, units: [{ paths: ["one.txt", "../two.txt"], title: "fix(commit): reject traversal" }] }, "invalid-intent"],
-    [{ schema: "flow-commit/intent-v2", branch: { action: "keep" }, units: [{ paths: ["one.txt", "two.txt"], title: "not conventional" }] }, "invalid-intent"],
-    [{ schema: "flow-commit/intent-v2", branch: { action: "keep" }, units: [{ paths: ["one.txt", "two.txt"], title: "feat!(commit): reject misplaced marker" }] }, "invalid-intent"],
-    [{ schema: "flow-commit/intent-v2", branch: { action: "keep" }, units: [{ paths: ["one.txt", "two.txt"], title: "feat(commit)!!: reject doubled marker" }] }, "invalid-intent"],
-    [{ schema: "flow-commit/intent-v2", branch: { action: "keep" }, units: [{ paths: ["one.txt", "two.txt"], title: "feat(commit)! : reject marker whitespace" }] }, "invalid-intent"],
-    [{ schema: "flow-commit/intent-v2", branch: { action: "keep" }, units: [{ paths: ["one.txt", "two.txt"], title: "fix(commit): reject extras", extra: true }] }, "invalid-intent"],
-    [{ schema: "flow-commit/intent-v2", branch: { action: "keep" }, units: [{ paths: ["one.txt", "two.txt"], title: "fix(commit): reject root extras" }], extra: true }, "invalid-intent"],
+    [{ schema: "flow-commit/author-intent-v1", units: [{ ordinals: [0], title: "fix(commit): miss coverage" }] }, "coverage-mismatch"],
+    [{ schema: "flow-commit/author-intent-v1", units: [{ ordinals: [0, 0], title: "fix(commit): repeat ordinal" }] }, "coverage-mismatch"],
+    [{ schema: "flow-commit/author-intent-v1", units: [{ ordinals: [0, 2], title: "fix(commit): reject range" }] }, "coverage-mismatch"],
+    [{ schema: "flow-commit/author-intent-v1", units: [{ ordinals: [0, 1], title: "not conventional" }] }, "invalid-intent"],
+    [{ schema: "flow-commit/author-intent-v1", units: [{ ordinals: [0, 1], title: "feat!(commit): reject misplaced marker" }] }, "invalid-intent"],
+    [{ schema: "flow-commit/author-intent-v1", units: [{ ordinals: [0, 1], title: "fix(commit): reject extras", extra: true }] }, "invalid-intent"],
+    [{ schema: "flow-commit/author-intent-v1", units: [{ ordinals: [0, 1], title: "fix(commit): reject root extras" }], extra: true }, "invalid-intent"],
   ]) {
     const prepared = prepare(cwd);
-    fs.writeFileSync(prepared.intentPath, JSON.stringify(document));
-    assert.equal(seal(cwd, prepared).output.error.code, expected);
+    const token = Buffer.from(canonical(document)).toString("base64url");
+    assert.equal(author(cwd, prepared, [], undefined, token).output.error.code, expected);
   }
   const body = "Useful context.";
   const prepared = prepare(cwd);
-  intent(prepared, [
+  const authored = author(cwd, prepared, [
     { paths: ["one.txt"], title: "feat(commit)!: add first unit", body },
     { paths: ["two.txt"], title: "fix(commit): add second unit" },
   ]);
-  const summary = seal(cwd, prepared);
+  const summary = seal(cwd, { ...prepared, handle: authored.output.authoredHandle });
   assert.equal(summary.result.status, 0);
   assert.deepEqual(summary.output.repository, { name: path.basename(cwd), branch: "feat/current", head: git(cwd, ["rev-parse", "--short=12", "HEAD"]) });
   assert.deepEqual(summary.output.counts, { commits: 2, files: 2 });
   assert.equal(summary.output.units[0].title, "feat(commit)!: add first unit");
   assert.deepEqual(summary.output.units[0].paths, ["one.txt"]);
   assert.deepEqual(summary.output.units[0].body, { present: true, bytes: Buffer.byteLength(body) });
-  assert.doesNotMatch(summary.result.stdout, /Useful context|fingerprint|snapshot|request-v2/);
+  assert.doesNotMatch(summary.result.stdout, /Useful context|fingerprint|snapshot|request-v3/);
 
   const collisionRepo = repo("main");
   fs.writeFileSync(path.join(collisionRepo, "change.txt"), "change\n");
   git(collisionRepo, ["branch", "feat/collision"]);
   const collision = prepare(collisionRepo);
-  intent(collision, [{ paths: ["change.txt"], title: "fix(commit): reject collision" }], { action: "create", name: "feat/collision" });
-  assert.equal(seal(collisionRepo, collision).output.error.code, "branch-collision");
+  assert.equal(author(collisionRepo, collision, [{ paths: ["change.txt"], title: "fix(commit): reject collision" }], { action: "create", name: "feat/collision" }).output.error.code, "branch-collision");
 });
 
 test("prepared authority digest and strict envelope block repository substitution", () => {
@@ -423,9 +383,9 @@ test("prepared authority digest and strict envelope block repository substitutio
   fs.writeFileSync(path.join(repoA, "a.txt"), "a\n");
   fs.writeFileSync(path.join(repoB, "b.txt"), "b\n");
   let preparedA = prepare(repoA); let preparedB = prepare(repoB);
-  intent(preparedA, [{ paths: ["a.txt"], title: "fix(commit): keep repository a" }]);
+  const authoredA = author(repoA, preparedA, [{ paths: ["a.txt"], title: "fix(commit): keep repository a" }]);
   fs.copyFileSync(path.join(store(preparedB), "prepared.json"), path.join(store(preparedA), "prepared.json"));
-  let response = seal(repoA, preparedA);
+  let response = seal(repoA, { ...preparedA, handle: authoredA.output.authoredHandle });
   assert.equal(response.result.status, 1);
   assert.equal(response.output.error.code, "prepared-tamper");
   assert.equal(git(repoA, ["rev-list", "--count", "HEAD"]), "1");
@@ -445,13 +405,13 @@ test("prepared authority digest and strict envelope block repository substitutio
   const strictRepo = repo();
   fs.writeFileSync(path.join(strictRepo, "change.txt"), "change\n");
   const strictPrepared = prepare(strictRepo);
-  intent(strictPrepared, [{ paths: ["change.txt"], title: "fix(commit): reject prepared extras" }]);
+  const strictAuthored = author(strictRepo, strictPrepared, [{ paths: ["change.txt"], title: "fix(commit): reject prepared extras" }]);
   const preparedPath = path.join(store(strictPrepared), "prepared.json");
   const envelope = JSON.parse(fs.readFileSync(preparedPath, "utf8"));
   envelope.extra = true;
   const bytes = Buffer.from(`${JSON.stringify(envelope)}\n`);
   fs.writeFileSync(preparedPath, bytes);
-  const forgedHandle = `${strictPrepared.handle.split(".")[0]}.${crypto.createHash("sha256").update(bytes).digest("hex")}`;
+  const forgedHandle = `a3.${strictPrepared.handle.split(".")[1]}.${crypto.createHash("sha256").update(bytes).digest("hex")}.${strictAuthored.output.authoredHandle.split(".")[3]}`;
   assert.throws(() => sealHandle(forgedHandle), (error) => error.code === "prepared-tamper");
   assert.equal(git(strictRepo, ["rev-list", "--count", "HEAD"]), "1");
 });
@@ -462,25 +422,25 @@ test("sealed execute handle binds the exact approved request", () => {
   fs.writeFileSync(path.join(repoB, "b.txt"), "b\n");
   const preparedA = ready(repoA, [{ paths: ["a.txt"], title: "fix(commit): approve repository a" }]).prepared;
   const preparedB = ready(repoB, [{ paths: ["b.txt"], title: "fix(commit): approve repository b" }]).prepared;
-  fs.copyFileSync(path.join(store(preparedB), "intent.json"), path.join(store(preparedA), "intent.json"));
+  fs.copyFileSync(path.join(store(preparedB), "authored.json"), path.join(store(preparedA), "authored.json"));
   fs.copyFileSync(path.join(store(preparedB), "sealed.json"), path.join(store(preparedA), "sealed.json"));
   const response = execute(repoA, preparedA);
   assert.equal(response.result.status, 1);
-  assert.equal(response.output.error.code, "sealed-tamper");
+  assert.equal(response.output.error.code, "authored-tamper");
   assert.equal(git(repoA, ["rev-list", "--count", "HEAD"]), "1");
   assert.equal(git(repoB, ["rev-list", "--count", "HEAD"]), "1");
 });
 
-test("intent tamper, expiry, consumed handle, and reuse fail closed", () => {
+test("authored tamper, expiry, consumed handle, and reuse fail closed", () => {
   const cwd = repo();
   fs.writeFileSync(path.join(cwd, "change.txt"), "change\n");
-  let prepared = ready(cwd, [{ paths: ["change.txt"], title: "fix(commit): reject intent tamper" }]).prepared;
-  fs.writeFileSync(prepared.intentPath, `${JSON.stringify({ schema: "flow-commit/intent-v2", branch: { action: "keep" }, units: [{ paths: ["change.txt"], title: "fix(commit): tampered title" }] })}\n`);
-  assert.equal(execute(cwd, prepared).output.error.code, "intent-tamper");
+  let prepared = ready(cwd, [{ paths: ["change.txt"], title: "fix(commit): reject authored tamper" }]).prepared;
+  fs.appendFileSync(path.join(store(prepared), "authored.json"), " ");
+  assert.equal(execute(cwd, prepared).output.error.code, "authored-tamper");
 
   prepared = prepareRepository({ cwd, now: 1000, ttlMs: 10 });
-  intent(prepared, [{ paths: ["change.txt"], title: "fix(commit): reject expiry" }]);
-  assert.throws(() => sealHandle(prepared.handle, { now: 1011 }), (error) => error.code === "handle-expired");
+  const expiring = authorIntent(prepared.handle, payload(prepared, [{ paths: ["change.txt"], title: "fix(commit): reject expiry" }]), { now: 1001 });
+  assert.throws(() => sealHandle(expiring.authoredHandle, { now: 1011 }), (error) => error.code === "handle-expired");
 
   prepared = ready(cwd, [{ paths: ["change.txt"], title: "fix(commit): consume once" }]).prepared;
   assert.equal(execute(cwd, prepared).result.status, 0);
@@ -668,13 +628,13 @@ test("CLI rejects unknown, duplicate, missing, and incompatible options", () => 
     [["--unknown"], /Unsupported option/],
     [["--prepare", "--prepare"], /Duplicate option/],
     [["--prepare", "--execute", "--handle", "a".repeat(64)], /exactly one operation/],
-    [["--prepare", "--validate-intent", "--handle", "a".repeat(64)], /one operation/],
-    [["--validate-intent", "--execute", "--handle", "a".repeat(64)], /one operation/],
-    [["--validate-intent", "--validate-intent", "--handle", "a".repeat(64)], /duplicated/],
-    [["--validate-intent"], /requires a handle/],
-    [["--validate-intent", "--handle"], /missing its value/],
+    [["--prepare", "--seal", "--handle", "a".repeat(64)], /one operation/],
+    [["--author-intent", "--execute", "--handle", "a".repeat(64), "--payload-b64url", "abc"], /one operation/],
+    [["--seal", "--seal", "--handle", "a".repeat(64)], /duplicate/i],
+    [["--seal"], /requires --handle/],
+    [["--author-intent", "--handle", "a".repeat(64)], /CLI options are invalid/i],
     [["--execute"], /requires --handle/],
-    [["--prepare", "--handle"], /Missing value/],
+    [["--prepare", "--handle", "x"], /accepts no handle/i],
     [["--execute", "--handle", "a".repeat(64), "--handle", "b".repeat(64)], /Duplicate option/],
   ]) {
     const response = run(cwd, args); const document = output(response);
@@ -694,7 +654,7 @@ test("ordered units retain commit verification and compact success omits sensiti
   ]).prepared;
   const response = execute(cwd, prepared);
   assert.equal(response.result.status, 0, response.result.stdout);
-  assert.equal(response.output.schema, "flow-commit/result-v2");
+  assert.equal(response.output.schema, "flow-commit/result-v3");
   assert.equal(response.output.status, "success");
   assert.deepEqual(response.output.completed.map((unit) => unit.title), ["feat(commit)!: create first unit", "fix(commit): create second unit"]);
   assert.equal(response.output.stoppedAt, null);
@@ -703,7 +663,7 @@ test("ordered units retain commit verification and compact success omits sensiti
   assert.deepEqual(response.output.counts, { completed: 2, notAttempted: 0, outstandingPaths: 0, leftovers: 0 });
   assert.deepEqual(response.output.leftovers, []);
   assert.deepEqual(response.output.effects.branch, { state: "kept" });
-  assert.doesNotMatch(response.result.stdout, /Why this unit exists|request-v2|snapshot|fingerprint|"paths"/);
+  assert.doesNotMatch(response.result.stdout, /Why this unit exists|request-v3|snapshot|fingerprint|"paths"/);
   assert.equal(git(cwd, ["log", "-1", "--format=%s"]), "fix(commit): create second unit");
   const firstCommit = git(cwd, ["rev-parse", "HEAD~1"]);
   const commitObject = execFileSync("git", ["cat-file", "commit", firstCommit], { cwd, encoding: "utf8" });

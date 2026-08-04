@@ -12,10 +12,12 @@ permission:
     "git rev-parse*": allow
     "node *scripts/flow-commit.mjs* --prepare": allow
     'node *scripts\flow-commit.mjs* --prepare': allow
-    "node *scripts/flow-commit.mjs* --prepare --handle *": allow
-    'node *scripts\flow-commit.mjs* --prepare --handle *': allow
-    "node *scripts/flow-commit.mjs* --validate-intent --handle *": allow
-    'node *scripts\flow-commit.mjs* --validate-intent --handle *': allow
+    "node *scripts/flow-commit.mjs* --encode-author-intent --handle *": allow
+    'node *scripts\flow-commit.mjs* --encode-author-intent --handle *': allow
+    "node *scripts/flow-commit.mjs* --author-intent --handle * --payload-b64url *": allow
+    'node *scripts\flow-commit.mjs* --author-intent --handle * --payload-b64url *': allow
+    "node *scripts/flow-commit.mjs* --seal --handle *": allow
+    'node *scripts\flow-commit.mjs* --seal --handle *': allow
     "node *scripts/flow-commit.mjs* --execute --handle *": ask
     'node *scripts\flow-commit.mjs* --execute --handle *': ask
     "git add*": deny
@@ -34,27 +36,23 @@ permission:
     "*$(*": deny
     "*>*": deny
     "*<*": deny
+    "*&*": deny
+    "*$*": deny
   read: allow
-  edit:
-    "*": deny
-    "../*tmp/flow-commit-*/intent.json": allow
-    "../*var/folders/*/*/T/flow-commit-*/intent.json": allow
-    "../*AppData/Local/Temp/flow-commit-*/intent.json": allow
+  edit: deny
+  write: deny
   external_directory:
     "*": deny
-    "/tmp/flow-commit-*/*": allow
-    "/var/folders/*/*/T/flow-commit-*/*": allow
-    "C:/Users/*/AppData/Local/Temp/flow-commit-*/*": allow
   task:
     "*": deny
 ---
 
 Never delegate. Read the `flow-commit` skill first and own semantic diff reading and grouping in this one session.
 
-Run `--prepare` exactly once. Read only necessary `git diff`, `git log`, `git show`, and `git status` facts exactly once. The runtime has already fixed the intent branch action from the prepared `protected` fact and authored one pretty `flow-commit/intent-v2` template unit with exact prepared path coverage, no body, and semantic placeholders that cannot validate. When `protected` is `true`, replace only the empty branch `name` with a concise lowercase kebab-case task name in `<type>/<task>` form, derived from the dominant work unit and valid for `git check-ref-format --branch`; when `protected` is `false`, preserve `{"action":"keep"}`. Never keep a protected branch, and never create it directly; sealed Flow Commit execution owns branch creation plus transactional `branch.<new>.gh-merge-base=<source>` provenance and rollback. For one unit, use OpenCode `apply_patch` directly on the existing runtime-created file at the exact returned canonical absolute `intentPath` and replace only the empty `title` plus the protected branch `name` when present. For multiple semantic units, deliberately replace only the `units` block while preserving exact disjoint prepared path coverage and the runtime-authored schema and branch action. Do not create a different file, add a body unless useful, or reconstruct and replace the whole document. The `edit` permission receives the worktree-relative escape resource produced for the absolute patch hunk path, while `external_directory` separately receives the canonical absolute temp parent; the narrow relative and absolute rules above intentionally authorize those different resources. For this authoring step, never use `write`, generic `edit`, Bash, shell redirection, interpolation, encoding, or any alternate path. Never edit the repository or display intent content, the intent path, raw JSON, snapshots, fingerprints, requests, handles, or temp internals.
+Run `--prepare` exactly once, then read only necessary `git diff`, `git log`, `git show`, and `git status` facts exactly once. Prepared changes are ordered and addressed only by their zero-based integer ordinals. Build ordered semantic units with exact once-only ordinal coverage and Conventional Commit titles. Supply the `branchName` field through `--branch-name <type>/<lowercase-kebab-task>` only when `protected` is `true`; derive a lowercase kebab-case task name and omit the field otherwise. Never keep a protected branch. The runtime derives keep/create, validates the name and collision state, and execution alone creates the branch with transactional `branch.<new>.gh-merge-base=<source>` provenance.
 
-Validate with `--validate-intent --handle <prepare-handle>`. If validation reports `invalid-json`, `invalid-intent`, `coverage-mismatch`, `invalid-branch`, or `protected-branch` after accepting prepared authority, use `apply_patch` to correct the SAME Windows or POSIX temp `intentPath` at most once, then run validation exactly once more. Safe diagnostics may identify only the violated rule or unit; never echo the document, body, handle, path, digest, or temp internals. A second validation failure or any nonrecoverable or unknown failure stops. During correction, never reread diff/status/log/show facts, start a new agent, run a fresh prepare, retry seal or execute, or ask another human question.
+Construct transport only through `--encode-author-intent --handle <prepare-handle> [--branch-name <name>] --unit <comma-separated-ordinals> --title <title> [--body <exact-body>] ...`. Pass each textual value as one quoted argument and never include shell control syntax; omit an optional body rather than weakening permissions. This read-only helper validates the structured `flow-commit/author-intent-v1` input against prepared authority and returns one canonical unpadded Base64URL token bounded to 6000 characters. Copy that safe token verbatim into `--author-intent --handle <prepare-handle> --payload-b64url <token>`. Never encode mentally, use shell substitution/redirection/interpolation, write a file, expose payload content, or display handles.
 
-After successful validation, seal once with `--prepare --handle <prepare-handle>`. Present compact prose with repository basename, current branch/HEAD abbreviation, branch action, ordered titles, and exact paths; report only body presence/byte counts. `type(scope)!: outcome` is reserved for breaking compatibility changes. The optional exact-preserved body may include a `BREAKING CHANGE: ...` footer. Keep both opaque handles internal and invoke `--execute --handle` once only with the sealed execute handle returned by seal, so caller-carried digests bind both prepared authority and the approved request. Do not ask for separate conversational approval; the execute `ask` permission is the one human mutation approval. Seal or execute failure requires fresh user action and a fresh preparation.
+If authoring returns `invalid-payload`, `invalid-intent`, `coverage-mismatch`, `invalid-branch`, or `protected-branch`, correct the structured fields once and repeat encoder plus author once without rereading Git facts or preparing again. A second author failure consumes authority and stops. Successful authoring is exclusive; exact replay is idempotent and returns the same authored handle. Seal once with `--seal --handle <authored-handle>`, present its compact repository/branch/HEAD, ordered titles/paths, body byte counts, and totals, then invoke `--execute --handle <sealed-handle>` once. The execute `ask` is the one human mutation approval. Never ask for a separate conversational approval.
 
-Never run direct Git mutation, push, PR, audit, build, install, sync, automatic retry beyond the single bounded intent correction, or another agent. Stop once on noop, blocker, drift, partial, failure, or unknown effects; fresh user action must start a fresh prepare.
+Never run direct Git mutation, push, PR, audit, build, install, sync, generic file mutation, automatic retry beyond the one bounded author correction, or another agent. Stop once on noop, blocker, drift, partial, failure, or unknown effects; fresh user action must start a fresh prepare.

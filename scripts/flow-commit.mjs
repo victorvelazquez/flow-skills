@@ -8,21 +8,24 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 const PROTECTED_BRANCHES = new Set(["main", "master", "dev", "develop", "development"]);
-const PREPARE_SCHEMA = "flow-commit/prepare-v2";
-const INTENT_SCHEMA = "flow-commit/intent-v2";
-const RESULT_SCHEMA = "flow-commit/result-v2";
+const PREPARE_SCHEMA = "flow-commit/prepare-v3";
+const AUTHOR_INPUT_SCHEMA = "flow-commit/author-intent-v1";
+const INTENT_SCHEMA = "flow-commit/intent-v3";
+const RESULT_SCHEMA = "flow-commit/result-v3";
 const TITLE = /^[a-z][a-z0-9-]*\([a-z0-9][a-z0-9._/-]*\)!?: [^\r\n]+$/;
-const HANDLE = /^([a-f0-9]{64})\.([a-f0-9]{64})(?:\.([a-f0-9]{64}))?$/;
+const HANDLE = /^(p3|a3|s3)\.([a-f0-9]{64})\.([a-f0-9]{64})(?:\.([a-f0-9]{64}))?(?:\.([a-f0-9]{64}))?$/;
+const LEGACY_HANDLE = /^[a-f0-9]{64}\.[a-f0-9]{64}(?:\.[a-f0-9]{64})?$/;
 const STORE_PREFIX = "flow-commit-";
 const LOCK_PREFIX = "flow-commit-lock-";
 const TTL_MS = 30 * 60 * 1000;
-const MAX_INTENT_BYTES = 128 * 1024;
+// 6000 Base64URL characters leave room for the executable path, handle, and
+// flags under Windows' conservative 8191-character command-line boundary.
+const MAX_PAYLOAD_B64URL_CHARS = 6000;
 const MAX_STORE_BYTES = 16 * 1024 * 1024;
 const MAX_UNITS = 100;
-const MAX_PATHS = 10_000;
 const MAX_TITLE_BYTES = 256;
 const MAX_BODY_BYTES = 16 * 1024;
-const RECOVERABLE_INTENT_ERRORS = new Set(["invalid-json", "invalid-intent", "coverage-mismatch", "invalid-branch", "protected-branch"]);
+const RECOVERABLE_AUTHOR_ERRORS = new Set(["invalid-payload", "invalid-intent", "coverage-mismatch", "invalid-branch", "protected-branch"]);
 
 class FlowError extends Error {
   constructor(message, status = "blocked", code = "blocked") {
@@ -180,11 +183,15 @@ function assertOwned(stat, label) {
 
 function storePaths(handle, mustExist = true) {
   const match = typeof handle === "string" ? handle.match(HANDLE) : null;
-  if (!match) throw new FlowError("Handle is not a valid opaque Flow Commit handle.", "blocked", "invalid-handle");
-  const [, handleId, preparedDigest, sealedDigest = null] = match;
+  if (!match) {
+    if (typeof handle === "string" && LEGACY_HANDLE.test(handle)) throw new FlowError("Flow Commit v2 handles are obsolete; prepare again.", "blocked", "legacy-handle");
+    throw new FlowError("Handle is not a valid opaque Flow Commit handle; prepare again.", "blocked", "invalid-handle");
+  }
+  const [, phase, handleId, preparedDigest, authoredDigest = null, sealedDigest = null] = match;
+  if ((phase === "p3" && (authoredDigest || sealedDigest)) || (phase === "a3" && (!authoredDigest || sealedDigest)) || (phase === "s3" && (!authoredDigest || !sealedDigest))) throw new FlowError("Handle phase is inconsistent; prepare again.", "blocked", "invalid-handle");
   const root = tempRoot();
   const store = path.join(root, `${STORE_PREFIX}${handleId}`);
-  if (!mustExist) return { root, store, handleId, preparedDigest, sealedDigest, prepared: path.join(store, "prepared.json"), intent: path.join(store, "intent.json"), sealed: path.join(store, "sealed.json"), claim: path.join(store, "execute.claim") };
+  if (!mustExist) return { root, store, phase, handleId, preparedDigest, authoredDigest, sealedDigest, prepared: path.join(store, "prepared.json"), authored: path.join(store, "authored.json"), authorFailure: path.join(store, "author-failure.json"), sealed: path.join(store, "sealed.json"), claim: path.join(store, "execute.claim") };
   let stat;
   try { stat = fs.lstatSync(store); }
   catch (error) {
@@ -195,7 +202,7 @@ function storePaths(handle, mustExist = true) {
   assertOwned(stat, "Handle store");
   const canonicalStore = fs.realpathSync.native(store);
   if (!samePath(path.dirname(canonicalStore), root) || !samePath(canonicalStore, store)) throw new FlowError("Handle store escaped the OS temporary root.", "blocked", "unsafe-handle-store");
-  return { root, store, handleId, preparedDigest, sealedDigest, prepared: path.join(store, "prepared.json"), intent: path.join(store, "intent.json"), sealed: path.join(store, "sealed.json"), claim: path.join(store, "execute.claim") };
+  return { root, store, phase, handleId, preparedDigest, authoredDigest, sealedDigest, prepared: path.join(store, "prepared.json"), authored: path.join(store, "authored.json"), authorFailure: path.join(store, "author-failure.json"), sealed: path.join(store, "sealed.json"), claim: path.join(store, "execute.claim") };
 }
 
 function safeFile(file, maxBytes, allowEmpty = false) {
@@ -214,10 +221,10 @@ function readJson(file, maxBytes) {
   catch (error) { throw new FlowError(`${path.basename(file)} is invalid JSON: ${error.message}`, "blocked", "invalid-json"); }
 }
 
-function exactObject(value, allowed, label) {
+function exactObject(value, required, label, optional = []) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new FlowError(`${label} must be an object.`, "blocked", "invalid-intent");
-  const extras = Object.keys(value).filter((key) => !allowed.includes(key));
-  const missing = allowed.filter((key) => !Object.hasOwn(value, key));
+  const extras = Object.keys(value).filter((key) => !required.includes(key) && !optional.includes(key));
+  const missing = required.filter((key) => !Object.hasOwn(value, key));
   if (extras.length || missing.length) throw new FlowError(`${label} has invalid properties (missing: ${missing.join(", ") || "none"}; extra: ${extras.join(", ") || "none"}).`, "blocked", "invalid-intent");
 }
 
@@ -306,37 +313,46 @@ function validateBranch(branch, state) {
   return { action: "create", name: branch.name };
 }
 
-function validateIntent(document, state) {
-  exactObject(document, ["schema", "branch", "units"], "intent");
-  if (document.schema !== INTENT_SCHEMA) throw new FlowError(`Intent schema must be ${INTENT_SCHEMA}.`, "blocked", "invalid-intent");
+function validateAuthorInput(document, state) {
+  exactObject(document, ["schema", "units"], "author intent", ["branchName"]);
+  if (document.schema !== AUTHOR_INPUT_SCHEMA) throw new FlowError(`Author intent schema must be ${AUTHOR_INPUT_SCHEMA}.`, "blocked", "invalid-intent");
+  if (state.protected !== Object.hasOwn(document, "branchName")) throw new FlowError(state.protected ? "Protected preparation requires branchName." : "branchName is allowed only when preparation requires branch creation.", "blocked", state.protected ? "protected-branch" : "invalid-intent");
   if (!Array.isArray(document.units) || document.units.length === 0 || document.units.length > MAX_UNITS) throw new FlowError(`Intent must contain 1-${MAX_UNITS} ordered units.`, "blocked", "invalid-intent");
-  let pathCount = 0;
   const units = document.units.map((unit, index) => {
-    const allowed = Object.hasOwn(unit || {}, "body") ? ["paths", "title", "body"] : ["paths", "title"];
-    exactObject(unit, allowed, `unit ${index + 1}`);
-    if (!Array.isArray(unit.paths) || unit.paths.length === 0) throw new FlowError(`Unit ${index + 1} must include paths.`, "blocked", "invalid-intent");
-    const paths = unit.paths.map(validatePath);
-    pathCount += paths.length;
-    if (pathCount > MAX_PATHS || new Set(paths).size !== paths.length) throw new FlowError(`Unit ${index + 1} has too many or repeated paths.`, "blocked", "invalid-intent");
+    exactObject(unit, ["ordinals", "title"], `unit ${index + 1}`, ["body"]);
+    if (!Array.isArray(unit.ordinals) || unit.ordinals.length === 0) throw new FlowError(`Unit ${index + 1} must include ordinals.`, "blocked", "invalid-intent");
+    const ordinals = unit.ordinals.map((ordinal) => {
+      if (!Number.isSafeInteger(ordinal) || ordinal < 0 || ordinal >= state.changes.length) throw new FlowError(`Unit ${index + 1} has an out-of-range ordinal.`, "blocked", "coverage-mismatch");
+      return ordinal;
+    });
+    if (new Set(ordinals).size !== ordinals.length) throw new FlowError(`Unit ${index + 1} repeats an ordinal.`, "blocked", "coverage-mismatch");
     if (typeof unit.title !== "string" || byteLength(unit.title) > MAX_TITLE_BYTES || !TITLE.test(unit.title)) throw new FlowError(`Unit ${index + 1} title must use type(scope): outcome or type(scope)!: outcome.`, "blocked", "invalid-intent");
     if (unit.body !== undefined && (typeof unit.body !== "string" || !unit.body || unit.body.includes("\0") || byteLength(unit.body) > MAX_BODY_BYTES)) throw new FlowError(`Unit ${index + 1} body is invalid or exceeds ${MAX_BODY_BYTES} bytes.`, "blocked", "invalid-intent");
-    return { paths: sorted(paths), title: unit.title, ...(unit.body === undefined ? {} : { body: unit.body }) };
+    return { ordinals, title: unit.title, ...(unit.body === undefined ? {} : { body: unit.body }) };
   });
-  const supplied = units.flatMap((unit) => unit.paths);
-  if (new Set(supplied).size !== supplied.length) throw new FlowError("Unit paths must be disjoint.", "blocked", "invalid-intent");
-  const actual = state.changes.map((change) => change.path);
-  const missing = actual.filter((file) => !supplied.includes(file));
-  const extra = supplied.filter((file) => !actual.includes(file));
-  if (missing.length || extra.length) throw new FlowError(`Unit coverage must exactly match prepared changes (missing: ${missing.join(", ") || "none"}; extra: ${extra.join(", ") || "none"}).`, "blocked", "coverage-mismatch");
-  return { schema: INTENT_SCHEMA, branch: validateBranch(document.branch, state), units };
+  const supplied = units.flatMap((unit) => unit.ordinals);
+  if (new Set(supplied).size !== supplied.length || supplied.length !== state.changes.length || supplied.some((ordinal, index) => [...supplied].sort((a, b) => a - b)[index] !== index)) throw new FlowError("Unit ordinals must cover every prepared change exactly once.", "blocked", "coverage-mismatch");
+  const branch = state.protected ? validateBranch({ action: "create", name: document.branchName }, state) : validateBranch({ action: "keep" }, state);
+  return { schema: INTENT_SCHEMA, branch, units: units.map(({ ordinals, ...unit }) => ({ paths: sorted(ordinals.map((ordinal) => state.changes[ordinal].path)), ...unit })) };
 }
 
-function intentTemplate(state) {
-  return {
-    schema: INTENT_SCHEMA,
-    branch: state.protected ? { action: "create", name: "" } : { action: "keep" },
-    units: [{ paths: state.changes.map((change) => change.path), title: "" }],
-  };
+function decodeAuthorPayload(token) {
+  if (typeof token !== "string" || !token || token.length > MAX_PAYLOAD_B64URL_CHARS || !/^[A-Za-z0-9_-]+$/.test(token)) throw new FlowError(`Author payload must be unpadded Base64URL and at most ${MAX_PAYLOAD_B64URL_CHARS} characters.`, "blocked", "invalid-payload");
+  let bytes;
+  try { bytes = Buffer.from(token, "base64url"); } catch { throw new FlowError("Author payload is not valid Base64URL.", "blocked", "invalid-payload"); }
+  if (bytes.toString("base64url") !== token) throw new FlowError("Author payload is not canonical Base64URL.", "blocked", "invalid-payload");
+  let text;
+  try { text = new TextDecoder("utf-8", { fatal: true }).decode(bytes); } catch { throw new FlowError("Author payload is not valid UTF-8.", "blocked", "invalid-payload"); }
+  let document;
+  try { document = JSON.parse(text); } catch { throw new FlowError("Author payload is not valid JSON.", "blocked", "invalid-payload"); }
+  if (canonical(document) !== text) throw new FlowError("Author payload JSON is not canonical.", "blocked", "invalid-payload");
+  return document;
+}
+
+function encodeAuthorPayload(document) {
+  const token = Buffer.from(canonical(document), "utf8").toString("base64url");
+  if (token.length > MAX_PAYLOAD_B64URL_CHARS) throw new FlowError(`Canonical author payload exceeds the ${MAX_PAYLOAD_B64URL_CHARS}-character cross-platform limit.`, "blocked", "invalid-payload");
+  return token;
 }
 
 export function prepareRepository({ cwd = process.cwd(), now = Date.now(), ttlMs = TTL_MS } = {}) {
@@ -360,12 +376,11 @@ export function prepareRepository({ cwd = process.cwd(), now = Date.now(), ttlMs
     contentFacts: state.contentFacts,
   };
   const preparedBytes = Buffer.from(`${JSON.stringify(prepared)}\n`);
-  const handle = `${handleId}.${digest(preparedBytes)}`;
+  const handle = `p3.${handleId}.${digest(preparedBytes)}`;
   const paths = storePaths(handle, false);
   fs.mkdirSync(paths.store, { mode: 0o700 });
   try {
     exclusiveBytes(paths.prepared, preparedBytes);
-    exclusiveBytes(paths.intent, Buffer.from(`${JSON.stringify(intentTemplate(state), null, 2)}\n`));
   } catch (error) {
     fs.rmSync(paths.store, { recursive: true, force: true });
     throw error;
@@ -378,28 +393,45 @@ export function prepareRepository({ cwd = process.cwd(), now = Date.now(), ttlMs
     protected: state.protected,
     changes: state.changes,
     handle,
-    intentPath: paths.intent,
   };
 }
 
-export function validateIntentHandle(handle, { now = Date.now() } = {}) {
+function authorState(prepared) {
+  return { root: prepared.root, branch: prepared.branch, protected: prepared.protected, changes: prepared.changes };
+}
+
+export function encodeAuthorIntent(handle, document, { now = Date.now() } = {}) {
+  const paths = storePaths(handle);
+  if (paths.phase !== "p3") throw new FlowError("Payload construction requires a fresh prepare handle; prepare again.", "blocked", "invalid-handle");
+  const prepared = loadPrepared(paths, now);
+  validateAuthorInput(document, authorState(prepared));
+  return { schema: AUTHOR_INPUT_SCHEMA, status: "encoded", payloadB64url: encodeAuthorPayload(document), maxPayloadB64urlChars: MAX_PAYLOAD_B64URL_CHARS };
+}
+
+export function authorIntent(handle, payloadB64url, { now = Date.now() } = {}) {
   const paths = storePaths(handle);
   let preparedAccepted = false;
   try {
-    if (paths.sealedDigest) throw new FlowError("A sealed execute handle cannot validate prepared intent.", "blocked", "invalid-handle");
+    if (paths.phase !== "p3") throw new FlowError("Authoring requires a fresh prepare handle; prepare again.", "blocked", "invalid-handle");
     const prepared = loadPrepared(paths, now);
     preparedAccepted = true;
-    if (fs.existsSync(paths.sealed)) throw new FlowError("Handle is already sealed; prepare again.", "blocked", "handle-sealed");
-    const intentDocument = readJson(paths.intent, MAX_INTENT_BYTES);
-    validateIntent(intentDocument.value, {
-      root: prepared.root,
-      branch: prepared.branch,
-      protected: prepared.protected,
-      changes: prepared.changes,
-    });
-    return { status: "intent-valid" };
+    const input = decodeAuthorPayload(payloadB64url);
+    const intent = validateAuthorInput(input, authorState(prepared));
+    const authored = { schema: "flow-commit/authored-v3", preparedHandle: handle, payloadDigest: digest(payloadB64url), intent };
+    const authoredBytes = Buffer.from(canonical(authored), "utf8");
+    const authoredDigest = digest(authoredBytes);
+    if (fs.existsSync(paths.authored)) {
+      const existingBytes = safeFile(paths.authored, MAX_STORE_BYTES);
+      if (digest(existingBytes) === authoredDigest && existingBytes.equals(authoredBytes)) return { schema: PREPARE_SCHEMA, status: "authored", authoredHandle: `a3.${paths.handleId}.${paths.preparedDigest}.${authoredDigest}`, replayed: true };
+      throw new FlowError("Prepared authority already has a different authored intent; prepare again.", "blocked", "author-exclusive");
+    }
+    exclusiveBytes(paths.authored, authoredBytes);
+    fs.rmSync(paths.authorFailure, { force: true });
+    return { schema: PREPARE_SCHEMA, status: "authored", authoredHandle: `a3.${paths.handleId}.${paths.preparedDigest}.${authoredDigest}`, replayed: false };
   } catch (error) {
-    if (!preparedAccepted || !RECOVERABLE_INTENT_ERRORS.has(error.code)) fs.rmSync(paths.store, { recursive: true, force: true });
+    if (!preparedAccepted || !RECOVERABLE_AUTHOR_ERRORS.has(error.code)) fs.rmSync(paths.store, { recursive: true, force: true });
+    else if (fs.existsSync(paths.authorFailure)) fs.rmSync(paths.store, { recursive: true, force: true });
+    else exclusiveJson(paths.authorFailure, { schema: "flow-commit/author-failure-v1", code: error.code, failedAt: now });
     throw error;
   }
 }
@@ -407,19 +439,25 @@ export function validateIntentHandle(handle, { now = Date.now() } = {}) {
 export function sealHandle(handle, { now = Date.now() } = {}) {
   const paths = storePaths(handle);
   try {
-    if (paths.sealedDigest) throw new FlowError("A sealed execute handle cannot be sealed again.", "blocked", "invalid-handle");
+    if (paths.phase !== "a3") throw new FlowError("Seal requires an authored handle; prepare again.", "blocked", "invalid-handle");
     const prepared = loadPrepared(paths, now);
     if (fs.existsSync(paths.sealed)) throw new FlowError("Handle is already sealed; use its existing approval summary or prepare again.", "blocked", "handle-sealed");
+    const authoredBytes = safeFile(paths.authored, MAX_STORE_BYTES);
+    if (digest(authoredBytes) !== paths.authoredDigest) throw new FlowError("Authored intent integrity failed; prepare again.", "blocked", "authored-tamper");
+    let authored;
+    try { authored = JSON.parse(authoredBytes.toString("utf8")); } catch { throw new FlowError("Authored intent integrity failed; prepare again.", "blocked", "authored-tamper"); }
+    const preparedHandle = `p3.${paths.handleId}.${paths.preparedDigest}`;
+    if (authored.schema !== "flow-commit/authored-v3" || authored.preparedHandle !== preparedHandle || canonical(authored) !== authoredBytes.toString("utf8")) throw new FlowError("Authored intent integrity failed; prepare again.", "blocked", "authored-tamper");
     const context = repositoryContext(prepared.root);
     if (!samePath(context.root, prepared.root) || !samePath(context.commonDir, prepared.commonDir)) throw new FlowError("Repository identity drifted; prepare again.", "drift", "repository-drift");
     const state = currentState(context);
     ensureReady(state);
     if (state.fingerprint !== prepared.fingerprint) throw new FlowError("Prepared content drifted; prepare and draft again.", "drift", "content-drift");
-    const intentDocument = readJson(paths.intent, MAX_INTENT_BYTES);
-    const intent = validateIntent(intentDocument.value, state);
-    const request = { schema: "flow-commit/request-v2", handle, preparedFingerprint: prepared.fingerprint, preparedContentFacts: prepared.contentFacts, root: prepared.root, commonDir: prepared.commonDir, branch: prepared.branch, head: prepared.head, intent };
+    const intent = authored.intent;
+    validateAuthorInput(decodeAuthorPayload(Buffer.from(canonical({ schema: AUTHOR_INPUT_SCHEMA, ...(intent.branch.action === "create" ? { branchName: intent.branch.name } : {}), units: intent.units.map((unit) => ({ ordinals: unit.paths.map((file) => prepared.changes.findIndex((change) => change.path === file)), title: unit.title, ...(unit.body === undefined ? {} : { body: unit.body }) })) }), "utf8").toString("base64url")), state);
+    const request = { schema: "flow-commit/request-v3", authoredHandle: handle, preparedFingerprint: prepared.fingerprint, preparedContentFacts: prepared.contentFacts, root: prepared.root, commonDir: prepared.commonDir, branch: prepared.branch, head: prepared.head, intent };
     const requestDigest = digest(canonical(request));
-    exclusiveJson(paths.sealed, { schema: "flow-commit/sealed-v2", request, requestDigest, intentDigest: digest(intentDocument.bytes) });
+    exclusiveJson(paths.sealed, { schema: "flow-commit/sealed-v3", request, requestDigest });
     return {
       schema: PREPARE_SCHEMA,
       status: "sealed",
@@ -428,7 +466,7 @@ export function sealHandle(handle, { now = Date.now() } = {}) {
       units: intent.units.map((unit) => ({ title: unit.title, paths: unit.paths, body: unit.body === undefined ? { present: false, bytes: 0 } : { present: true, bytes: byteLength(unit.body) } })),
       counts: { commits: intent.units.length, files: state.changes.length },
       digest: requestDigest.slice(0, 12),
-      executeHandle: `${handle}.${requestDigest}`,
+      executeHandle: `s3.${paths.handleId}.${paths.preparedDigest}.${paths.authoredDigest}.${requestDigest}`,
     };
   } catch (error) {
     fs.rmSync(paths.store, { recursive: true, force: true });
@@ -481,7 +519,7 @@ function restoreIndex(root, before, ownedDigests) {
 }
 
 function stagedPaths(root) {
-  const result = git(["diff", "--cached", "--name-only", "-z", "HEAD", "--"], { cwd: root });
+  const result = git(["diff", "--cached", "--name-only", "--no-renames", "-z", "HEAD", "--"], { cwd: root });
   if (!result.ok) throw new FlowError(`Could not inspect staged paths: ${result.stderr}`, "drift", "staged-paths-failed");
   return sorted(parseNullDelimitedPaths(result.stdout));
 }
@@ -533,7 +571,7 @@ function recordBranchProvenance(root, branch, sourceBranch) {
 function verifyCommit(root, oldHead, createdHead, stagedTree, unit) {
   const parent = gitValue(["rev-parse", `${createdHead}^`], "commit parent", root);
   const tree = gitValue(["rev-parse", `${createdHead}^{tree}`], "commit tree", root);
-  const paths = git(["diff-tree", "--no-commit-id", "--name-only", "-r", "-z", oldHead, createdHead], { cwd: root });
+  const paths = git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", "-z", oldHead, createdHead], { cwd: root });
   if (!paths.ok) throw new FlowError(`Could not inspect committed paths: ${paths.stderr}`, "drift", "commit-paths-failed");
   const requested = unit.body === undefined ? unit.title : `${unit.title}\n\n${unit.body}`;
   const expectedMessage = requested.endsWith("\n") ? requested : `${requested}\n`;
@@ -708,13 +746,16 @@ export function executeHandle(handle, { now = Date.now(), onContentRead, onProve
   let prepared; let sealedDocument;
   try {
     prepared = loadPrepared(paths, now);
-    if (!paths.sealedDigest) throw new FlowError("Execute requires the sealed approval handle.", "blocked", "handle-not-sealed");
+    if (paths.phase !== "s3") throw new FlowError("Execute requires the sealed approval handle; prepare again.", "blocked", "handle-not-sealed");
     sealedDocument = readJson(paths.sealed, MAX_STORE_BYTES).value;
-    const preparedHandle = `${paths.handleId}.${paths.preparedDigest}`;
+    const authoredHandle = `a3.${paths.handleId}.${paths.preparedDigest}.${paths.authoredDigest}`;
     const request = sealedDocument.request;
-    if (sealedDocument.schema !== "flow-commit/sealed-v2" || sealedDocument.requestDigest !== paths.sealedDigest || digest(canonical(request)) !== paths.sealedDigest) throw new FlowError("Sealed request integrity failed; prepare again.", "blocked", "sealed-tamper");
-    if (request?.schema !== "flow-commit/request-v2" || request.handle !== preparedHandle || request.preparedFingerprint !== prepared.fingerprint || request.root !== prepared.root || request.commonDir !== prepared.commonDir || request.branch !== prepared.branch || request.head !== prepared.head || canonical(request.preparedContentFacts) !== canonical(prepared.contentFacts)) throw new FlowError("Sealed request is inconsistent with prepared authority.", "blocked", "sealed-tamper");
-    if (digest(safeFile(paths.intent, MAX_INTENT_BYTES)) !== sealedDocument.intentDigest) throw new FlowError("Intent changed after sealing; prepare again.", "drift", "intent-tamper");
+    const authoredBytes = safeFile(paths.authored, MAX_STORE_BYTES);
+    let authored;
+    try { authored = JSON.parse(authoredBytes.toString("utf8")); } catch { throw new FlowError("Authored intent integrity failed; prepare again.", "blocked", "authored-tamper"); }
+    if (authored.schema !== "flow-commit/authored-v3" || digest(authoredBytes) !== paths.authoredDigest || canonical(authored) !== authoredBytes.toString("utf8") || authored.preparedHandle !== `p3.${paths.handleId}.${paths.preparedDigest}`) throw new FlowError("Authored intent integrity failed; prepare again.", "blocked", "authored-tamper");
+    if (sealedDocument.schema !== "flow-commit/sealed-v3" || sealedDocument.requestDigest !== paths.sealedDigest || digest(canonical(request)) !== paths.sealedDigest) throw new FlowError("Sealed request integrity failed; prepare again.", "blocked", "sealed-tamper");
+    if (request?.schema !== "flow-commit/request-v3" || request.authoredHandle !== authoredHandle || request.preparedFingerprint !== prepared.fingerprint || request.root !== prepared.root || request.commonDir !== prepared.commonDir || request.branch !== prepared.branch || request.head !== prepared.head || canonical(request.preparedContentFacts) !== canonical(prepared.contentFacts) || canonical(request.intent) !== canonical(authored.intent)) throw new FlowError("Sealed request is inconsistent with prepared and authored authority.", "blocked", "sealed-tamper");
   } catch (error) {
     fs.rmSync(paths.store, { recursive: true, force: true });
     throw error;
@@ -748,9 +789,30 @@ export function executeHandle(handle, { now = Date.now(), onContentRead, onProve
 }
 
 function parseArgs(argv) {
+  if (argv.includes("--encode-author-intent")) {
+    const document = { schema: AUTHOR_INPUT_SCHEMA, units: [] };
+    let handle; let current = null;
+    for (let index = 0; index < argv.length; index += 1) {
+      const key = argv[index];
+      if (key === "--encode-author-intent") continue;
+      const value = argv[++index];
+      if (!value || value.startsWith("--")) throw new FlowError(`Missing value for ${key}.`, "blocked", "invalid-cli");
+      if (key === "--handle" && !handle) handle = value;
+      else if (key === "--branch-name" && !Object.hasOwn(document, "branchName")) document.branchName = value;
+      else if (key === "--unit") {
+        const ordinals = value.split(",").map((entry) => /^\d+$/.test(entry) ? Number(entry) : Number.NaN);
+        current = { ordinals, title: null };
+        document.units.push(current);
+      } else if (key === "--title" && current && current.title === null) current.title = value;
+      else if (key === "--body" && current && !Object.hasOwn(current, "body")) current.body = value;
+      else throw new FlowError(`Unsupported, duplicate, or out-of-order encoder option: ${key}.`, "blocked", "invalid-cli");
+    }
+    if (!handle || document.units.some((unit) => unit.title === null)) throw new FlowError("Encoder requires --handle and each --unit must be followed by --title.", "blocked", "invalid-cli");
+    return { "encode-author-intent": true, handle, document };
+  }
   const flags = {};
-  const valued = new Set(["handle"]);
-  const boolean = new Set(["prepare", "validate-intent", "execute"]);
+  const valued = new Set(["handle", "payload-b64url"]);
+  const boolean = new Set(["prepare", "author-intent", "seal", "execute"]);
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index];
     if (!value.startsWith("--")) throw new FlowError(`Unsupported argument: ${value}.`, "blocked", "invalid-cli");
@@ -764,11 +826,12 @@ function parseArgs(argv) {
       flags[key] = next;
     }
   }
-  const operations = [flags.prepare, flags["validate-intent"], flags.execute].filter(Boolean).length;
-  if (operations > 1) throw new FlowError("Choose exactly one operation: --prepare, --validate-intent, or --execute.", "blocked", "invalid-cli");
-  if (flags["validate-intent"] && !flags.handle) throw new FlowError("--validate-intent requires --handle.", "blocked", "invalid-cli");
-  if (flags.execute && !flags.handle) throw new FlowError("--execute requires --handle.", "blocked", "invalid-cli");
-  if (operations === 0) throw new FlowError("Usage: node flow-commit.mjs --prepare [--handle <handle>] | --validate-intent --handle <handle> | --execute --handle <handle>.", "blocked", "invalid-cli");
+  const operations = [flags.prepare, flags["author-intent"], flags.seal, flags.execute].filter(Boolean).length;
+  if (operations !== 1) throw new FlowError("Choose exactly one operation: --prepare, --author-intent, --seal, or --execute.", "blocked", "invalid-cli");
+  if (flags.prepare && (flags.handle || flags["payload-b64url"])) throw new FlowError("--prepare accepts no handle or payload.", "blocked", "invalid-cli");
+  if (!flags.prepare && !flags.handle) throw new FlowError("This operation requires --handle.", "blocked", "invalid-cli");
+  if (Boolean(flags["author-intent"]) !== Boolean(flags["payload-b64url"])) throw new FlowError("--author-intent requires exactly one --payload-b64url value.", "blocked", "invalid-cli");
+  if (!flags["author-intent"] && flags["payload-b64url"]) throw new FlowError("--payload-b64url is valid only with --author-intent.", "blocked", "invalid-cli");
   return flags;
 }
 
@@ -780,7 +843,7 @@ function safeValidationMessage(error) {
     if (/requires --handle/i.test(error.message)) return "CLI operation requires a handle value.";
     return "CLI options are invalid.";
   }
-  if (error.code === "invalid-json") return "Intent document is invalid JSON.";
+  if (error.code === "invalid-payload") return error.message;
   if (error.code === "coverage-mismatch") return "Intent path coverage does not match the prepared changes.";
   if (error.code === "invalid-branch") return "Intent branch name violates Git branch naming rules.";
   if (error.code === "protected-branch") return "Prepared protected branch requires a create branch action.";
@@ -792,6 +855,7 @@ function safeValidationMessage(error) {
     "prepared-tamper": "Prepared authority failed integrity validation.",
     "handle-expired": "Prepared authority expired.",
     "invalid-handle": "Prepared authority handle is invalid.",
+    "legacy-handle": "Flow Commit v2 authority is obsolete; prepare again.",
     "handle-unavailable": "Prepared authority is unavailable.",
     "unsafe-handle-store": "Prepared authority store is unsafe.",
     "unsafe-handle-file": "Prepared authority file is unsafe.",
@@ -806,8 +870,10 @@ function safeValidationMessage(error) {
 
 function main() {
   const flags = parseArgs(process.argv.slice(2));
-  if (flags.prepare) return { document: flags.handle ? sealHandle(flags.handle) : prepareRepository(), exitCode: 0 };
-  if (flags["validate-intent"]) return { document: validateIntentHandle(flags.handle), exitCode: 0 };
+  if (flags.prepare) return { document: prepareRepository(), exitCode: 0 };
+  if (flags["encode-author-intent"]) return { document: encodeAuthorIntent(flags.handle, flags.document), exitCode: 0 };
+  if (flags["author-intent"]) return { document: authorIntent(flags.handle, flags["payload-b64url"]), exitCode: 0 };
+  if (flags.seal) return { document: sealHandle(flags.handle), exitCode: 0 };
   const document = executeHandle(flags.handle);
   return { document, exitCode: document.status === "success" ? 0 : document.status === "partial" ? 2 : 1 };
 }
@@ -818,9 +884,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToP
     process.stdout.write(`${JSON.stringify(document)}\n`);
     process.exitCode = exitCode;
   } catch (error) {
-    const validatingIntent = process.argv.slice(2).includes("--validate-intent");
-    const document = validatingIntent
-      ? { status: "intent-invalid", error: { code: error.code || "runtime-failure", message: safeValidationMessage(error) }, recovery: RECOVERABLE_INTENT_ERRORS.has(error.code) ? "Correct the same intent document once and validate again." : "Start a fresh Flow Commit action." }
+    const authoringIntent = process.argv.slice(2).includes("--author-intent") || process.argv.slice(2).includes("--encode-author-intent");
+    const document = authoringIntent
+      ? { status: "author-invalid", error: { code: error.code || "runtime-failure", message: safeValidationMessage(error) }, recovery: RECOVERABLE_AUTHOR_ERRORS.has(error.code) ? "Correct the structured author intent once and author again." : "Prepare again." }
       : resultDocument({ status: error.status || "failure", error: { code: error.code || "runtime-failure", message: error.message }, recovery: "Prepare a fresh handle after resolving the blocker." });
     process.stdout.write(`${JSON.stringify(document)}\n`);
     process.exitCode = 1;

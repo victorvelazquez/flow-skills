@@ -248,31 +248,32 @@ test("flow-branch agent permits its installed runtime with POSIX and Windows sep
   ]) assert.equal(permissionFor(bash, command), "deny");
 });
 
-test("flow-commit exposes compact prepare, semantic intent validation, seal, and one approval", () => {
+test("flow-commit exposes prepare, structured authoring, seal, and one approval", () => {
   const command = read("commands/flow-commit.md"); const agent = read("agents/flow-git-agent.md"); const skill = read("skills/flow-commit/SKILL.md"); const contract = `${command}\n${agent}\n${skill}`;
   assert.match(command, /^agent: flow-git-agent$/m);
-  assert.match(contract, /--prepare/); assert.match(contract, /flow-commit\/intent-v2/); assert.match(contract, /--validate-intent --handle/); assert.match(contract, /--prepare --handle/); assert.match(contract, /--execute --handle/);
+  assert.match(contract, /--prepare/); assert.match(contract, /flow-commit\/author-intent-v1/); assert.match(contract, /--encode-author-intent/); assert.match(contract, /--author-intent --handle/); assert.match(contract, /--seal --handle/); assert.match(contract, /--execute --handle/);
   for (const surface of [command, agent, skill]) {
     assert.match(surface, /one human mutation approval|one human mutation approval|one approval/i);
     assert.match(surface, /Never ask for (?:a )?separate|Do not ask for separate/i);
-    assert.match(surface, /raw JSON|Never repeat bodies|without raw JSON/i);
+    assert.match(surface, /raw payload|raw JSON|payload content|Never repeat bodies/i);
   }
   assert.match(agent, /bash:\n    "\*": deny/);
   assert.match(agent, /task:\n    "\*": deny/);
   assert.match(agent, /--prepare": allow/);
-  assert.match(agent, /--prepare --handle \*": allow/);
-  assert.match(agent, /--validate-intent --handle \*": allow/);
+  assert.match(agent, /--encode-author-intent --handle \*": allow/);
+  assert.match(agent, /--author-intent --handle \* --payload-b64url \*": allow/);
+  assert.match(agent, /--seal --handle \*": allow/);
   assert.match(agent, /--execute --handle \*": ask/);
   assert.match(agent, /git add\*": deny/); assert.match(agent, /git commit\*": deny/); assert.match(agent, /git push\*": deny/); assert.match(agent, /git switch\*": deny/); assert.match(agent, /git update-ref\*": deny/);
-  assert.match(agent, /edit:\n    "\*": deny/); assert.match(agent, /flow-commit-\*\/intent\.json": allow/);
+  assert.match(agent, /^  edit: deny$/m); assert.match(agent, /^  write: deny$/m); assert.match(agent, /external_directory:\n    "\*": deny/);
   assert.match(agent, /Never delegate/); assert.doesNotMatch(contract, /flow-pr\.mjs|flow-pr-agent|--execute --request|flow-commit\/request-v1|--inspect/);
   assert.match(`${agent}\n${skill}`, /repository basename.*(?:branch\/HEAD|branch.*HEAD)/i);
   assert.match(skill, /prepared-envelope bytes.*opaque prepare handle digest/i);
   assert.match(contract, /Never run.*automatic retry|Never use.*automatic retries/i);
-  assert.doesNotMatch(contract, /base64|planId|journal|full request.*approv|exact request.*approv/i);
+  assert.doesNotMatch(contract, /planId|journal|full request.*approv|exact request.*approv/i);
 });
 
-test("flow-commit agent permits one bounded same-path intent correction without rereading Git facts", () => {
+test("flow-commit agent permits one bounded structured correction without rereading Git facts", () => {
   const agent = read("agents/flow-git-agent.md");
   const command = read("commands/flow-commit.md");
   const auto = read("commands/flow-auto-deliver.md");
@@ -280,17 +281,12 @@ test("flow-commit agent permits one bounded same-path intent correction without 
   const contract = `${agent}\n${command}\n${auto}\n${skill}`;
   const bash = permissionRules(agent, "bash");
 
-  for (const executable of ["scripts/flow-commit.mjs", "scripts\\flow-commit.mjs"]) {
-    const commandLine = `node "C:/Users/opencode/.config/opencode/${executable}" --validate-intent --handle opaque`;
-    assert.equal(permissionFor(bash, commandLine), "allow");
-  }
+  for (const executable of ["scripts/flow-commit.mjs", "scripts\\flow-commit.mjs"]) assert.equal(permissionFor(bash, `node "C:/Users/opencode/.config/opencode/${executable}" --author-intent --handle opaque --payload-b64url abc_DEF-123`), "allow");
   assert.equal(bash.filter(({ pattern, action }) => pattern.includes("--execute --handle") && action === "ask").length, 2);
-  assert.equal(bash.some(({ pattern, action }) => pattern.includes("--validate-intent") && action === "ask"), false);
-  assert.match(agent, /SAME Windows or POSIX temp `intentPath` at most once/);
-  assert.match(contract, /`invalid-json`[\s\S]+`invalid-intent`[\s\S]+`coverage-mismatch`[\s\S]+`invalid-branch`[\s\S]+`protected-branch`/);
-  assert.match(agent, /run validation exactly once more/);
-  assert.match(agent, /second validation failure or any nonrecoverable or unknown failure stops/i);
-  assert.match(agent, /never reread diff\/status\/log\/show facts, start a new agent, run a fresh prepare, retry seal or execute/i);
+  assert.equal(bash.some(({ pattern, action }) => pattern.includes("--author-intent") && action === "ask"), false);
+  assert.match(contract, /`invalid-payload`[\s\S]+`invalid-intent`[\s\S]+`coverage-mismatch`[\s\S]+`invalid-branch`[\s\S]+`protected-branch`/);
+  assert.match(agent, /second author failure consumes authority and stops/i);
+  assert.match(agent, /without rereading Git facts or preparing again|without rereading Git facts/i);
   assert.match(contract, /Seal or execute failure requires fresh user action|seal failure, or execute failure/i);
 });
 
@@ -300,13 +296,15 @@ test("flow-commit planning creates a task branch when prepare reports a protecte
 
   for (const surface of [agent, skill]) {
     assert.match(surface, /`protected` is `true`/i);
-    assert.match(surface, /`\{"action":"create","name":"<type>\/<task>"\}`|empty branch `name`/i);
+    assert.match(surface, /branchName/i);
     assert.match(surface, /lowercase kebab-case task name/i);
-    assert.match(surface, /`protected` is `false`[^\n]+`\{"action":"keep"\}`/i);
+    assert.match(surface, /`protected` is `false`[^\n]+omit|omit the field otherwise/i);
     assert.match(surface, /Never keep a protected branch/i);
   }
   assert.doesNotMatch(skill, /write exactly this strict document[\s\S]{0,300}"branch":\{"action":"keep"\}/i);
-  assert.match(`${agent}\n${skill}`, /sealed Flow Commit execution[^\n]+branch creation|Branch creation belongs only to the sealed Flow Commit execution/i);
+  assert.match(agent, /runtime derives keep\/create/i);
+  assert.match(skill, /runtime derives create[\s\S]+runtime derives keep/i);
+  assert.match(agent, /"git switch\*": deny/);
 });
 
 test("Flow records branch provenance only at its supported creation boundary", () => {
@@ -316,84 +314,21 @@ test("Flow records branch provenance only at its supported creation boundary", (
   assert.match(branch, /existing local or remote branch identities/); assert.match(branch, /never creates a new branch identity from the current source/); assert.match(branch, /Flow Commit owns/);
 });
 
-test("flow-commit agent allows only relative intent edits and canonical external parents", () => {
+test("flow-commit agent has no edit or external-directory exceptions", () => {
   const agent = read("agents/flow-git-agent.md");
   const edit = permissionRules(agent, "edit");
   const external = permissionRules(agent, "external_directory");
-  const cases = [
-    {
-      pathApi: path.posix,
-      worktree: "/home/opencode/repo",
-      intentFile: "/tmp/flow-commit-a1b2/intent.json",
-      alternateIntentFile: "/var/tmp/flow-commit-a1b2/intent.json",
-    },
-    {
-      pathApi: path.posix,
-      worktree: "/Users/opencode/repo",
-      intentFile: "/var/folders/ab/cd/T/flow-commit-a1b2/intent.json",
-      alternateIntentFile: "/private/var/folders/ab/cd/T/flow-commit-a1b2/intent.json",
-    },
-    {
-      pathApi: path.win32,
-      worktree: "C:\\Users\\opencode-test\\repo",
-      intentFile: "c:\\users\\OPENCODE-test\\appdata\\local\\temp\\flow-commit-a1b2\\intent.json",
-      alternateIntentFile: "D:\\Temp\\flow-commit-a1b2\\intent.json",
-      windows: true,
-    },
-  ];
-
-  for (const { pathApi, worktree, intentFile: nativeIntentFile, alternateIntentFile, windows = false } of cases) {
-    const intentFile = nativeIntentFile.split(pathApi.sep).join("/");
-    const parentResource = externalResource(intentFile);
-    const options = { windows };
-    assert.equal(permissionFor(edit, relativeResource(pathApi, worktree, nativeIntentFile), undefined, options), "allow");
-    assert.equal(permissionFor(edit, nativeIntentFile, undefined, options), "deny");
-    assert.equal(permissionFor(external, parentResource, undefined, options), "allow");
-    assert.equal(permissionFor(edit, relativeResource(pathApi, worktree, nativeIntentFile.replace(/intent\.json$/i, "sibling.json")), undefined, options), "deny");
-    assert.equal(permissionFor(edit, relativeResource(pathApi, worktree, nativeIntentFile.replace(/intent\.json$/i, "request.json")), undefined, options), "deny");
-    assert.equal(permissionFor(edit, alternateIntentFile, undefined, options), "deny");
-    const alternateExternal = externalResource(alternateIntentFile.replaceAll("\\", "/"));
-    assert.equal(permissionFor(external, alternateExternal, undefined, options), "deny");
-    assert.equal(permissionFor(edit, relativeResource(pathApi, worktree, alternateIntentFile), undefined, options) === "allow" && permissionFor(external, alternateExternal, undefined, options) === "allow", false);
-    assert.equal(permissionFor(edit, relativeResource(pathApi, worktree, pathApi.join(worktree, "intent.json")), undefined, options), "deny");
-  }
-  for (const deniedResource of [
-    "/tmp/*",
-    "/tmp/flow-pr-request-a1b2/*",
-    "/var/folders/ab/cd/T/*",
-    "/var/folders/ab/cd/T/flow-pr-request-a1b2/*",
-    "C:/Users/opencode-test/AppData/Local/Temp/*",
-    "C:/Users/opencode-test/AppData/Local/Temp/flow-pr-request-a1b2/*",
-  ]) assert.equal(permissionFor(external, deniedResource), "deny");
-
-  assert.deepEqual(edit.filter(({ action }) => action === "allow").map(({ pattern }) => pattern), [
-    "../*tmp/flow-commit-*/intent.json",
-    "../*var/folders/*/*/T/flow-commit-*/intent.json",
-    "../*AppData/Local/Temp/flow-commit-*/intent.json",
-  ]);
-  assert.deepEqual(external.filter(({ action }) => action === "allow").map(({ pattern }) => pattern), [
-    "/tmp/flow-commit-*/*",
-    "/var/folders/*/*/T/flow-commit-*/*",
-    "C:/Users/*/AppData/Local/Temp/flow-commit-*/*",
-  ]);
-  assert.equal(permissionFor([{ pattern: "*", action: "allow" }, { pattern: "*", action: "deny" }], "resource"), "deny");
+  assert.deepEqual(edit, []);
+  assert.deepEqual(external, [{ pattern: "*", action: "deny" }]);
+  assert.match(agent, /^  edit: deny$/m);
+  assert.match(agent, /^  write: deny$/m);
 });
 
-test("flow-commit agent materializes runtime intent only with OpenCode apply_patch", () => {
+test("flow-commit agent uses the runtime encoder without files or shell composition", () => {
   const agent = read("agents/flow-git-agent.md");
-  const materialization = agent.split("\n\n").find((paragraph) => paragraph.includes("OpenCode `apply_patch` directly")) || "";
-
-  assert.match(materialization, /use OpenCode `apply_patch` directly on the existing runtime-created file/);
-  assert.match(materialization, /exact returned canonical absolute `intentPath`/);
-  assert.match(materialization, /runtime has already fixed the intent branch action/);
-  assert.match(materialization, /one pretty `flow-commit\/intent-v2` template unit with exact prepared path coverage/);
-  assert.match(materialization, /replace only the empty `title` plus the protected branch `name`/);
-  assert.match(materialization, /multiple semantic units[\s\S]+replace only the `units` block while preserving exact disjoint prepared path coverage/);
-  assert.match(materialization, /`edit` permission receives the worktree-relative escape resource/);
-  assert.match(materialization, /`external_directory` separately receives the canonical absolute temp parent/);
-  assert.match(materialization, /do not create a different file/i);
-  assert.match(materialization, /reconstruct and replace the whole document/);
-  assert.match(materialization, /never use `write`, generic `edit`, Bash, shell redirection, interpolation, encoding, or any alternate path/);
-  assert.match(materialization, /Never edit the repository or display intent content, the intent path/);
-  assert.doesNotMatch(materialization, /use (?:the )?OpenCode `write` tool (?:specifically|directly)|use generic `edit`|use Bash/i);
+  assert.match(agent, /--encode-author-intent/);
+  assert.match(agent, /canonical unpadded Base64URL token bounded to 6000 characters/i);
+  assert.match(agent, /Never encode mentally/i);
+  assert.match(agent, /Never encode mentally, use shell substitution\/redirection\/interpolation, write a file/i);
+  assert.doesNotMatch(agent, /apply_patch|intentPath|flow-commit\/intent-v2/);
 });
