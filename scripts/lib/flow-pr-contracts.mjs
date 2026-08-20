@@ -74,7 +74,7 @@ export function snapshotWithIdentity(snapshot) {
 }
 
 export function validateSnapshot(value) {
-  exact(value, ["base", "branch", "clean", "committed", "commonDir", "detached", "head", "headOid", "identity", "mergeState", "pr", "push", "relation", "remotes", "root", "target", "upstream"], "snapshot");
+  exact(value, ["base", "branch", "candidate", "clean", "committed", "commonDir", "detached", "head", "headOid", "identity", "mergeState", "pr", "push", "relation", "remotes", "root", "target", "upstream"], "snapshot");
   if (typeof value.root !== "string" || typeof value.commonDir !== "string" || hasControl(value.root) || hasControl(value.commonDir)) throw new ContractError("snapshot paths are invalid.");
   if (value.branch !== null) validateRef(value.branch, "snapshot.branch"); if (value.headOid !== null) validateOid(value.headOid, "snapshot.headOid");
   if (typeof value.clean !== "boolean" || typeof value.detached !== "boolean" || typeof value.committed !== "boolean" || !["none", "merge", "rebase", "cherry-pick", "revert", "bisect", "unknown"].includes(value.mergeState)) throw new ContractError("snapshot state is invalid.");
@@ -83,6 +83,12 @@ export function validateSnapshot(value) {
   if (value.committed !== (value.headOid !== null) || value.head.oid !== value.headOid || value.detached !== (value.branch === null && value.committed) || value.head.ref !== value.branch) throw new ContractError("snapshot head state is inconsistent.");
   exact(value.base, ["evidence", "oid", "ref", "repository", "source"], "snapshot.base"); validateRepo(value.base.repository, "snapshot.base.repository"); validateRef(value.base.ref, "snapshot.base.ref"); validateOid(value.base.oid, "snapshot.base.oid");
   if (!["explicit", "branch-config", "existing-pr", "github-default", "origin-head"].includes(value.base.source) || hasControl(value.base.evidence)) throw new ContractError("snapshot.base authority is invalid.");
+  if (value.candidate !== null) {
+    exact(value.candidate, ["baseOid", "changedPaths", "commitCount", "commitSubjects", "headOid", "truncated"], "snapshot.candidate");
+    validateOid(value.candidate.baseOid, "snapshot.candidate.baseOid"); validateOid(value.candidate.headOid, "snapshot.candidate.headOid");
+    if (value.candidate.baseOid !== value.base.oid || value.candidate.headOid !== value.headOid || !Number.isSafeInteger(value.candidate.commitCount) || value.candidate.commitCount < 0 || typeof value.candidate.truncated !== "boolean") throw new ContractError("snapshot candidate is invalid.");
+    list(value.candidate.commitSubjects, "snapshot.candidate.commitSubjects"); list(value.candidate.changedPaths, "snapshot.candidate.changedPaths");
+  }
   if (value.upstream !== null) { exact(value.upstream, ["ref", "remote"], "snapshot.upstream"); text(value.upstream.remote, "snapshot.upstream.remote"); validateRef(value.upstream.ref, "snapshot.upstream.ref"); }
   if (!Array.isArray(value.remotes)) throw new ContractError("snapshot.remotes must be an array."); for (const remote of value.remotes) { exact(remote, ["fetch", "name", "push"], "remote"); text(remote.name, "remote.name"); validateRepo(remote.fetch, "remote.fetch"); validateRepo(remote.push, "remote.push"); }
   exact(value.relation, ["ahead", "behind", "divergence"], "snapshot.relation");

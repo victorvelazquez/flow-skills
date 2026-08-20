@@ -124,6 +124,7 @@ function inspectFacts(base, pushRemote) {
   safeSnapshot(response.snapshot.facts); return response.snapshot.facts;
 }
 function intentTemplate(snapshot) {
+  const upstreamExact = snapshot.upstream?.remote === snapshot.push.remote && snapshot.upstream.ref === snapshot.branch;
   return {
     schema: "flow-pr/intent-v2",
     title: "",
@@ -132,7 +133,7 @@ function intentTemplate(snapshot) {
     labels: { add: [], remove: [] },
     updateExisting: ["title", "body", "draft", "labels"],
     deliveryMode: repoIdentity(snapshot.target) === repoIdentity(snapshot.push.repository) ? "same-repo" : "fork",
-    push: snapshot.pr.exact ? "verify-existing" : "publish",
+    push: snapshot.pr.exact && snapshot.push.remoteHeadOid === snapshot.headOid && upstreamExact ? "verify-existing" : "publish",
   };
 }
 function prepare(base, pushRemote, verbose) {
@@ -203,7 +204,7 @@ function compactResult(value, verbose) {
   const pr = value.pr ? { number: value.pr.number, url: value.pr.url, state: value.pr.state, draft: value.pr.draft, title: value.pr.title, labels: value.pr.labels } : null;
   const prAction = effects.prCreate === "confirmed" ? "created" : effects.prUpdate === "confirmed" ? "updated" : value.status === "noop" ? "noop" : [effects.prCreate, effects.prUpdate].includes("unknown") ? "unknown" : "none";
   const output = { schema: value.schema, status: value.status, exit: value.exit, phase: value.phase, effects, pr, blocker: value.blocker, error: value.error, recovery: value.recovery,
-    publication: facts ? { repository: compactRepo(facts.target), branch: facts.branch, headOid: facts.headOid, base: facts.base.ref, baseOid: facts.base.oid, action: { git: effects.push === "confirmed" ? "pushed" : "verified", pullRequest: prAction }, delivery: { target: compactRepo(facts.target), pushRemote: facts.push.remote, pushRepository: compactRepo(facts.push.repository) } } : null };
+    publication: facts ? { repository: compactRepo(facts.target), branch: facts.branch, headOid: facts.headOid, base: facts.base.ref, baseOid: facts.base.oid, candidate: facts.candidate, action: { git: effects.push === "confirmed" ? "pushed" : "verified", pullRequest: prAction }, delivery: { target: compactRepo(facts.target), pushRemote: facts.push.remote, pushRepository: compactRepo(facts.push.repository) } } : null };
   if (verbose) output.diagnostics = { snapshot: value.snapshot };
   return output;
 }

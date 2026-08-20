@@ -4,12 +4,31 @@ import { spawnSync } from "node:child_process";
 import { ContractError, blankEffects, snapshotWithIdentity, validateOid, validateRef } from "./flow-pr-contracts.mjs";
 
 function run(command, args, options = {}) {
-  const result = spawnSync(command, args, { cwd: options.cwd, input: options.input, encoding: "utf8", shell: false, env: options.env || process.env });
+  const result = spawnSync(command, args, { cwd: options.cwd, input: options.input, encoding: "utf8", shell: false, env: options.env || process.env, ...(options.maxBuffer === undefined ? {} : { maxBuffer: options.maxBuffer }) });
   return { ok: result.status === 0 && !result.error, stdout: result.stdout || "", stderr: result.stderr || result.error?.message || "" };
 }
 function value(cwd, args, label) { const result = run("git", args, { cwd }); if (!result.ok || !result.stdout.trim()) throw new ContractError(`Could not resolve ${label}: ${result.stderr || result.stdout}`, "inspection-unavailable"); return result.stdout.trim(); }
 function maybe(cwd, args) { const result = run("git", args, { cwd }); return result.ok ? result.stdout.trim() : null; }
 function canonicalPath(value) { const resolved = fs.realpathSync.native(value).replaceAll("\\", "/"); return process.platform === "win32" ? resolved.toLowerCase() : resolved; }
+const MAX_CANDIDATE_COMMITS = 20;
+const MAX_CANDIDATE_PATHS = 100;
+const MAX_CANDIDATE_PATH_BYTES = 64 * 1024;
+const candidateEntries = (value) => String(value || "").split("\0").map((entry) => entry.replace(/^\r?\n/, "")).filter(Boolean);
+const safeCandidateValues = (value) => candidateEntries(value).filter((entry) => !/[\u0000-\u001f\u007f]/.test(entry));
+
+function verifiedCandidate(cwd, baseOid, headOid) {
+  const range = `${baseOid}..${headOid}`;
+  const count = run("git", ["rev-list", "--count", range], { cwd });
+  const commitCount = Number(count.stdout.trim());
+  if (!count.ok || !Number.isSafeInteger(commitCount) || commitCount < 0) return null;
+  const subjects = run("git", ["log", "--format=tformat:%s%x00", `--max-count=${MAX_CANDIDATE_COMMITS + 1}`, range], { cwd });
+  const paths = run("git", ["diff", "--name-only", "-z", range], { cwd, maxBuffer: MAX_CANDIDATE_PATH_BYTES });
+  if (!subjects.ok || !paths.ok) return null;
+  const rawSubjects = candidateEntries(subjects.stdout); const rawPaths = candidateEntries(paths.stdout);
+  const commitSubjects = safeCandidateValues(subjects.stdout).slice(0, MAX_CANDIDATE_COMMITS); const changedPaths = safeCandidateValues(paths.stdout).slice(0, MAX_CANDIDATE_PATHS);
+  return { baseOid, headOid, commitCount, commitSubjects, changedPaths,
+    truncated: commitCount > MAX_CANDIDATE_COMMITS || rawSubjects.length > commitSubjects.length || rawPaths.length > changedPaths.length || rawPaths.length > MAX_CANDIDATE_PATHS };
+}
 
 export function parseGitHubRemote(input) {
   const raw = String(input || "").trim();
@@ -149,7 +168,8 @@ export function inspect({ cwd = process.cwd(), baseRef, pushRemote = "origin", e
     const resolvedBase = branch && committed ? resolveBase(cwd, target, branch, pr, baseRef, env) : { ref: baseRef, source: "explicit", evidence: "--base" };
     const baseOid = remoteBranchOid(cwd, "origin", resolvedBase.ref, env, "base");
     if (pr.exact && (pr.exact.base.ref !== resolvedBase.ref || pr.exact.base.oid !== baseOid)) throw new ContractError("The existing pull request base authority is inconsistent with the live target branch.", "pr-base-invalid");
-    const snapshot = snapshotWithIdentity({ root, commonDir, branch, headOid, clean, mergeState: mergeState(cwd, gitDir), detached, committed, upstream, remotes, target, push: { remote: pushRemote, repository: push.push, remoteHeadOid }, head, base: { repository: target, ref: resolvedBase.ref, oid: baseOid, source: resolvedBase.source, evidence: resolvedBase.evidence }, relation: committed ? relation(cwd, remoteHeadOid, headOid) : { ahead: null, behind: null, divergence: "unborn" }, pr });
+    const candidate = committed ? verifiedCandidate(cwd, baseOid, headOid) : null;
+    const snapshot = snapshotWithIdentity({ root, commonDir, branch, headOid, candidate, clean, mergeState: mergeState(cwd, gitDir), detached, committed, upstream, remotes, target, push: { remote: pushRemote, repository: push.push, remoteHeadOid }, head, base: { repository: target, ref: resolvedBase.ref, oid: baseOid, source: resolvedBase.source, evidence: resolvedBase.evidence }, relation: committed ? relation(cwd, remoteHeadOid, headOid) : { ahead: null, behind: null, divergence: "unborn" }, pr });
     return { schema: "flow-pr/inspection-v1", status: "inspect", exit: 0, phase: "inspect", snapshot: { expected: null, observed: snapshot.identity, facts: snapshot }, effects: blankEffects(), pr: pr.exact, blocker: null, error: null, recovery: null };
   } catch (error) {
     return { schema: "flow-pr/inspection-v1", status: "failure", exit: 5, phase: "inspect", snapshot: { expected: null, observed: null, facts: null }, effects: blankEffects(), pr: null, blocker: null, error: { code: error.code || "inspection-failure", message: error.message }, recovery: null };

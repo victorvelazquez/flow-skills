@@ -142,7 +142,7 @@ test("runtime intent template preserves operational policy while malformed exter
     const rejected = output(run(item, ["--prepare", "--handle", context.handle]));
     assert.equal(rejected.status, "failure"); assert.equal(rejected.error.code, "invalid-contract"); assert.equal(calls(item).length, before);
   });
-  await t.test("existing PR and fork authority select deterministic operational defaults", () => {
+  await t.test("existing PR selects verify-existing only for exact remote and upstream state", () => {
     for (const draft of [false, true]) {
       const existing = fixture(); publish(existing); const baseline = snapshot(existing);
       fs.writeFileSync(existing.state, JSON.stringify([rawPr(baseline, { isDraft: draft })]));
@@ -150,6 +150,30 @@ test("runtime intent template preserves operational policy while malformed exter
       assert.equal(existingTemplate.draft, draft); assert.equal(existingTemplate.push, "verify-existing"); assert.equal(existingTemplate.deliveryMode, "same-repo");
       assert.deepEqual(existingTemplate.labels, { add: [], remove: [] }); assert.deepEqual(existingTemplate.updateExisting, ["title", "body", "draft", "labels"]);
     }
+  });
+
+  await t.test("existing PR with local commits ahead selects publish", () => {
+    const item = fixture(); publish(item); const baseline = snapshot(item); fs.writeFileSync(item.state, JSON.stringify([rawPr(baseline)]));
+    fs.writeFileSync(path.join(item.cwd, "ahead.txt"), "ahead\n"); git(item.cwd, ["add", "."]); git(item.cwd, ["commit", "-qm", "fix: local ahead"]);
+    const context = begin(item); const template = JSON.parse(fs.readFileSync(context.intentPath, "utf8"));
+    assert.ok(context.context.existingPr); assert.equal(context.context.upstream.remote, "origin"); assert.equal(context.context.upstream.ref, "feat/contract"); assert.equal(template.push, "publish");
+  });
+
+  await t.test("existing PR with missing or mismatched upstream selects publish", () => {
+    for (const upstream of ["missing", "mismatched"]) {
+      const item = fixture(); publish(item); const baseline = snapshot(item); fs.writeFileSync(item.state, JSON.stringify([rawPr(baseline)]));
+      if (upstream === "missing") git(item.cwd, ["branch", "--unset-upstream"]);
+      else {
+        git(item.cwd, ["remote", "add", "backup", "https://github.com/example/repo.git"]); git(item.cwd, ["fetch", "-q", "backup", "feat/contract"]); git(item.cwd, ["branch", "--set-upstream-to", "backup/feat/contract"]);
+      }
+      const context = begin(item); const template = JSON.parse(fs.readFileSync(context.intentPath, "utf8"));
+      assert.ok(context.context.existingPr); assert.equal(template.push, "publish");
+    }
+  });
+
+  await t.test("new PR and fork authority keep publish defaults", () => {
+    const fresh = fixture(); const freshContext = begin(fresh); const freshTemplate = JSON.parse(fs.readFileSync(freshContext.intentPath, "utf8"));
+    assert.equal(freshContext.context.existingPr, null); assert.equal(freshTemplate.push, "publish");
 
     const fork = fixture(); const forkBare = path.join(fork.directory, "fork.git"); git(fork.directory, ["init", "--bare", "-q", forkBare]);
     const forkUrl = "https://github.com/contributor/repo.git"; git(fork.cwd, ["config", `url.file://${forkBare.replaceAll("\\", "/")}.insteadOf`, forkUrl]); git(fork.cwd, ["remote", "add", "fork", forkUrl]);
@@ -315,8 +339,37 @@ test("unsupported custom temp roots fail preparation early and actionably", () =
 });
 
 test("default output is compact and verbose diagnostics are explicit", () => {
-  const compactItem = fixture(); const compactPlan = prepared(compactItem); const compact = execute(compactItem, compactPlan); assert.equal("diagnostics" in compact, false); assert.equal("snapshot" in compact, false); assert.deepEqual(compact.publication, { repository: "example/repo", branch: "feat/contract", headOid: git(compactItem.cwd, ["rev-parse", "HEAD"]), base: "main", baseOid: git(compactItem.cwd, ["rev-parse", "main"]), action: { git: "pushed", pullRequest: "created" }, delivery: { target: "example/repo", pushRemote: "origin", pushRepository: "example/repo" } }); assert.deepEqual(Object.values(compact.effects).every((entry) => typeof entry === "string"), true); assert.deepEqual(Object.keys(compact.pr).sort(), ["draft", "labels", "number", "state", "title", "url"]);
+  const compactItem = fixture(); const compactPlan = prepared(compactItem); const compact = execute(compactItem, compactPlan); const headOid = git(compactItem.cwd, ["rev-parse", "HEAD"]); const baseOid = git(compactItem.cwd, ["rev-parse", "main"]); assert.equal("diagnostics" in compact, false); assert.equal("snapshot" in compact, false); assert.deepEqual(compact.publication, { repository: "example/repo", branch: "feat/contract", headOid, base: "main", baseOid, candidate: { baseOid, headOid, commitCount: 1, commitSubjects: ["feat: contract"], changedPaths: ["feature.txt"], truncated: false }, action: { git: "pushed", pullRequest: "created" }, delivery: { target: "example/repo", pushRemote: "origin", pushRepository: "example/repo" } }); assert.deepEqual(Object.values(compact.effects).every((entry) => typeof entry === "string"), true); assert.deepEqual(Object.keys(compact.pr).sort(), ["draft", "labels", "number", "state", "title", "url"]);
   const verboseItem = fixture(); const verbosePlan = prepared(verboseItem); const verbose = execute(verboseItem, verbosePlan, {}, true); assert.equal(validateSnapshot(verbose.diagnostics.snapshot.facts), verbose.diagnostics.snapshot.facts);
+});
+
+test("normal publication projects a bounded candidate from the verified range", () => {
+  const item = fixture();
+  for (let index = 0; index < 20; index += 1) {
+    fs.writeFileSync(path.join(item.cwd, `candidate-${index}.txt`), `${index}\n`); git(item.cwd, ["add", "."]);
+    git(item.cwd, ["commit", "-qm", `feat: candidate ${index}`, "-m", "FLOW_PR_CANDIDATE_PRIVATE_BODY"]);
+  }
+  const result = execute(item, prepared(item)); const { publication } = result; const candidate = publication.candidate;
+  assert.equal(candidate.baseOid, publication.baseOid); assert.equal(candidate.headOid, publication.headOid); assert.equal(candidate.commitCount, 21); assert.equal(candidate.commitSubjects.length, 20); assert.equal(candidate.truncated, true);
+  assert.ok(candidate.commitSubjects.includes("feat: candidate 19")); assert.ok(candidate.changedPaths.includes("feature.txt")); assert.ok(candidate.changedPaths.includes("candidate-19.txt"));
+  assert.doesNotMatch(JSON.stringify(candidate), /FLOW_PR_CANDIDATE_PRIVATE_BODY|snapshot|handle|secret/i);
+});
+
+test("candidate marks changed paths as truncated after the bounded projection", () => {
+  const item = fixture();
+  for (let index = 0; index <= 100; index += 1) fs.writeFileSync(path.join(item.cwd, `candidate-path-${String(index).padStart(3, "0")}.txt`), `${index}\n`);
+  git(item.cwd, ["add", "."]); git(item.cwd, ["commit", "-qm", "feat: candidate paths"]);
+  const candidate = execute(item, prepared(item)).publication.candidate;
+  assert.equal(candidate.changedPaths.length, 100); assert.equal(candidate.truncated, true);
+  assert.ok(candidate.changedPaths.includes("candidate-path-000.txt")); assert.ok(candidate.changedPaths.includes("candidate-path-099.txt")); assert.ok(!candidate.changedPaths.includes("candidate-path-100.txt"));
+});
+
+test("candidate is omitted when the changed-path byte limit is exceeded", () => {
+  const item = fixture(); const suffix = "x".repeat(150);
+  for (let index = 0; index < 400; index += 1) fs.writeFileSync(path.join(item.cwd, `candidate-bound-${String(index).padStart(3, "0")}-${suffix}.txt`), `${index}\n`);
+  git(item.cwd, ["add", "."]); git(item.cwd, ["commit", "-qm", "feat: oversized candidate paths"]);
+  const result = execute(item, prepared(item));
+  assert.equal(result.status, "success"); assert.equal(result.publication.candidate, null);
 });
 
 test("secret-like multiline bodies never appear in default create or update JSON", async (t) => {

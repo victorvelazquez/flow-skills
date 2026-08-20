@@ -28,6 +28,9 @@ const jiraTemplate = `### <FEATURE|FIX|REFACTOR|CHORE|DOCS>: <human-readable tit
 ### Cambios técnicos
 - <reviewer-facing change>
 
+### Validación ejecutada
+- <executed check or No se ejecutaron validaciones automatizadas>
+
 ### Cómo validar
 - <concrete validation step>
 
@@ -185,6 +188,20 @@ test("flow-pr Jira presentation uses evidenced values and optional bounded subta
   assert.match(output, /Include `### Bugs resueltos` only for evidenced, non-trivial fixes/);
   assert.match(output, /_Subtareas derivadas de commits \(sin SDD tasks detectadas\)_/); assert.match(output, /_Subtareas derivadas de archivos cambiados \(sin commits significativos\)_/);
   assert.match(output, /completed SDD task context first, meaningful commits second, and changed architectural layers last/); assert.match(output, /Do not make Engram mandatory/);
+});
+test("flow-pr Jira contract requires durable evidence, manual validation, and lossless relay", () => {
+  const command = read("commands/flow-pr.md"); const agent = read("agents/flow-pr-agent.md"); const skill = read("skills/flow-pr/SKILL.md"); const output = read("skills/flow-pr/references/output-contract.md"); const contract = `${command}\n${agent}\n${skill}\n${output}`;
+  assert.ok(output.indexOf("### Validación ejecutada") < output.indexOf("### Cómo validar"));
+  assert.match(output, /reports only checks actually executed/i); assert.match(output, /No se ejecutaron validaciones automatizadas/);
+  assert.match(output, /ALWAYS contains concrete manual steps a QA or reviewer can follow/i); assert.match(output, /Cómo validar: write concrete steps a QA or reviewer can follow, not generic instructions/);
+  assert.match(output, /`Not run`, `Not provided`[\s\S]+prohibited as the sole content of `### Cómo validar`/);
+  for (const surface of [agent, skill]) assert.match(surface, /never (?:use either as the Jira|as Jira) `Cómo validar` content/i);
+  assert.match(contract, /publication\.candidate/); assert.match(contract, /publication\.baseOid\.\.publication\.headOid/); assert.match(contract, /never inspect another (?:ref, range, working tree, or remote state|range or state)/i);
+  assert.match(output, /Require at least one evidenced technical change/); assert.match(output, /Require at least one concrete, actionable manual validation step/); assert.match(output, /suppress the entire Jira block and return structured recovery/i);
+  assert.match(output, /Every subtask must be derived from the same evidenced task, commit, or path source/); assert.match(output, /applicable derivation note/i);
+  for (const surface of [command, agent, skill, output]) assert.match(surface, /lossless relay payload/i);
+  assert.match(contract, /byte-for-byte without paraphras(?:e|ing), truncat(?:e|ing), reformat(?:ting|), or summariz(?:e|ing)/i);
+  assert.match(contract, /unverified or insufficient-evidence|insufficient evidence/i);
 });
 test("flow-pr keeps Jira inert and preserves the fenced block through every handoff", () => {
   const command = read("commands/flow-pr.md"); const agent = read("agents/flow-pr-agent.md"); const skill = read("skills/flow-pr/SKILL.md"); const output = read("skills/flow-pr/references/output-contract.md");

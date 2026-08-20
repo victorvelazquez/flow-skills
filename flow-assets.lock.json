@@ -10,7 +10,7 @@
     "sha256": "9b2d9d93a615f4d2175dfb344c37073c428faeda6958e4badd429c4f295b82dc"
   },
   "totals": {
-    "bytes": 646774,
+    "bytes": 653210,
     "count": 70
   },
   "files": [
@@ -30,8 +30,8 @@
     },
     {
       "path": "agents/flow-pr-agent.md",
-      "sha256": "531d97a194277a897641607e5e326eeb18943bdbebc2138447ccc7900bed878e",
-      "bytes": 4990,
+      "sha256": "eec402d1d18fe1f08bdd9d9a3eb94119296f5d9418769690a2ea9dcc2ba424b3",
+      "bytes": 5899,
       "mode": "100644",
       "executable": false
     },
@@ -107,8 +107,8 @@
     },
     {
       "path": "commands/flow-pr.md",
-      "sha256": "1212c8bbd56f32d926674841c1958ca8256a0d2fc5a74fdeac6f10e0922e4838",
-      "bytes": 2058,
+      "sha256": "bc67f9a7af2e774affd5aa797ba146e6bd26cb0bc5dda14a01f908de1d7056ee",
+      "bytes": 2630,
       "mode": "100644",
       "executable": false
     },
@@ -184,8 +184,8 @@
     },
     {
       "path": "scripts/flow-pr.mjs",
-      "sha256": "38ef4ee416cb3d199efac8a06f06e850332a3953d9d0c26390666b12f97494ad",
-      "bytes": 18853,
+      "sha256": "c844cdd91553995d7d8cfe7da6206fff7563bc83893736c2bbbb3474e7aeee3a",
+      "bytes": 19071,
       "mode": "100644",
       "executable": false
     },
@@ -240,8 +240,8 @@
     },
     {
       "path": "scripts/lib/flow-pr-contracts.mjs",
-      "sha256": "1d895333cfb88ee2de469ca01fa53c131a8b6a6e6af900f5ae82bbb3864836e8",
-      "bytes": 13382,
+      "sha256": "1ff1bb9d9a49112a7ca3e61745d9d96eac684934f0181df00763b3d4e84f97d2",
+      "bytes": 14154,
       "mode": "100644",
       "executable": false
     },
@@ -261,8 +261,8 @@
     },
     {
       "path": "scripts/lib/flow-pr-inspection.mjs",
-      "sha256": "c0682e685fc25b796fad1e7256335687fe8abd1df63e949287ad2e3e01035848",
-      "bytes": 14383,
+      "sha256": "3c5abf6d1d0745363654a80d791a2ecccd366b4884d3ff90246c73562009306d",
+      "bytes": 16045,
       "mode": "100644",
       "executable": false
     },
@@ -457,15 +457,15 @@
     },
     {
       "path": "skills/flow-pr/SKILL.md",
-      "sha256": "ac4bb74d479a50dfb1a12d92f556df6526082d4120090e5b9b9e570d14adddfb",
-      "bytes": 5505,
+      "sha256": "56d614dfc63111faaaa285ee914bfa217a852044360213d71baddda9ded1234f",
+      "bytes": 6155,
       "mode": "100644",
       "executable": false
     },
     {
       "path": "skills/flow-pr/references/output-contract.md",
-      "sha256": "750af16bdcab5930067c9ee65ebfd87819a7c5865e6dcb1553dde8880d85b40f",
-      "bytes": 3039,
+      "sha256": "78caf1fd56ee33042302d3a93a0c3683aae701a7fa8b5293f549eecd813cf05c",
+      "bytes": 4692,
       "mode": "100644",
       "executable": false
     },
