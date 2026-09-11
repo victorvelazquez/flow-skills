@@ -78,7 +78,10 @@ test("development aliases follow deterministic fallback while exact protected na
     assert.equal(json.branch, "development");
   }
 
-  for (const [available, expected] of [["develop", "develop"], ["dev", "dev"]]) {
+  for (const [available, expected] of [
+    ["develop", "develop"],
+    ["dev", "dev"],
+  ]) {
     const fallback = fixture([available]);
     const { execution, json } = result(fallback.work, ["dev"]);
     assert.equal(execution.status, 0, execution.stderr);
@@ -117,7 +120,11 @@ test("development aliases follow deterministic fallback while exact protected na
 });
 
 test("direct resolution prefers exact names, accepts unique prefixes, and blocks ambiguity", () => {
-  const { work } = fixture(["feature/alpha", "feature/beta", "feature/beta-extra"]);
+  const { work } = fixture([
+    "feature/alpha",
+    "feature/beta",
+    "feature/beta-extra",
+  ]);
   let direct = result(work, ["feature/alph"]);
   assert.equal(direct.execution.status, 0, direct.execution.stderr);
   assert.equal(direct.json.branch, "feature/alpha");
@@ -140,12 +147,17 @@ test("direct mode fetches once and fast-forwards exactly from origin", () => {
   git(seed, ["push", "origin", "feature/update"]);
   const expected = git(seed, ["rev-parse", "feature/update"]);
   const trace = path.join(directory, "git-trace.log");
-  const { execution, json } = result(work, ["feature/update"], { GIT_TRACE: trace });
+  const { execution, json } = result(work, ["feature/update"], {
+    GIT_TRACE: trace,
+  });
   assert.equal(execution.status, 0, execution.stderr);
   assert.equal(json.updateStrategy, "ff-only");
   assert.equal(json.updated, true);
   assert.equal(git(work, ["rev-parse", "HEAD"]), expected);
-  const fetches = fs.readFileSync(trace, "utf8").split(/\r?\n/).filter((line) => /built-in: git fetch origin$/.test(line));
+  const fetches = fs
+    .readFileSync(trace, "utf8")
+    .split(/\r?\n/)
+    .filter((line) => /built-in: git fetch origin$/.test(line));
   assert.equal(fetches.length, 1, fs.readFileSync(trace, "utf8"));
 });
 
@@ -165,7 +177,12 @@ test("direct mode blocks divergence before checkout", () => {
 
 test("fetch failure is explicit and does not use stale refs", () => {
   const { work } = fixture(["development"]);
-  git(work, ["remote", "set-url", "origin", path.join(work, "missing-origin.git")]);
+  git(work, [
+    "remote",
+    "set-url",
+    "origin",
+    path.join(work, "missing-origin.git"),
+  ]);
   const { execution, json } = result(work, ["development"]);
   assert.notEqual(execution.status, 0);
   assert.match(json.error, /fetch from origin failed/i);
@@ -177,7 +194,15 @@ test("remote-only direct checkout creates the correct tracking branch", () => {
   const { execution, json } = result(work, ["feature/remote-only"]);
   assert.equal(execution.status, 0, execution.stderr);
   assert.equal(json.updateStrategy, "tracking-checkout");
-  assert.equal(git(work, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"]), "origin/feature/remote-only");
+  assert.equal(
+    git(work, [
+      "rev-parse",
+      "--abbrev-ref",
+      "--symbolic-full-name",
+      "@{upstream}",
+    ]),
+    "origin/feature/remote-only",
+  );
 });
 
 test("dirty worktrees and branches owned by another worktree fail non-destructively", () => {
@@ -186,7 +211,10 @@ test("dirty worktrees and branches owned by another worktree fail non-destructiv
   let direct = result(dirty.work, ["feature/target"]);
   assert.notEqual(direct.execution.status, 0);
   assert.equal(direct.json.dirty, true);
-  assert.equal(fs.readFileSync(path.join(dirty.work, "untracked.txt"), "utf8"), "preserve me\n");
+  assert.equal(
+    fs.readFileSync(path.join(dirty.work, "untracked.txt"), "utf8"),
+    "preserve me\n",
+  );
   assert.equal(git(dirty.work, ["branch", "--show-current"]), "main");
 
   const occupied = fixture(["feature/occupied"]);
@@ -201,9 +229,14 @@ test("dirty worktrees and branches owned by another worktree fail non-destructiv
 
 test("deletion uses the full inventory and only unmerged failures request force", () => {
   const item = fixture();
-  for (let index = 0; index < 12; index += 1) git(item.work, ["branch", `old/${String(index).padStart(2, "0")}`]);
+  for (let index = 0; index < 12; index += 1)
+    git(item.work, ["branch", `old/${String(index).padStart(2, "0")}`]);
   const listed = result(item.work, ["--auto-list"]).json;
-  const hidden = listed.allBranches.find((entry) => entry.type === "local only" && !listed.branches.some((shown) => shown.name === entry.name));
+  const hidden = listed.allBranches.find(
+    (entry) =>
+      entry.type === "local only" &&
+      !listed.branches.some((shown) => shown.name === entry.name),
+  );
   assert.ok(hidden, "expected a local branch outside the displayed top ten");
   let deletion = result(item.work, ["--delete", "--branch", hidden.name]);
   assert.equal(deletion.execution.status, 0, deletion.execution.stderr);
@@ -228,8 +261,43 @@ test("deletion uses the full inventory and only unmerged failures request force"
 
 test("protected branches cannot be deleted", () => {
   const { work } = fixture(["development"]);
-  const { execution, json } = result(work, ["--delete", "--branch", "development"]);
+  const { execution, json } = result(work, [
+    "--delete",
+    "--branch",
+    "development",
+  ]);
   assert.notEqual(execution.status, 0);
   assert.match(json.error, /protected/i);
   assert.equal(json.nextAction, "error");
+});
+
+test("direct checkout configures the sole matching remote as the upstream", () => {
+  const { work } = fixture(["feature/tracked"]);
+  git(work, ["branch", "feature/tracked", "origin/feature/tracked"]);
+  git(work, ["branch", "--unset-upstream", "feature/tracked"]);
+  const { execution, json } = result(work, ["feature/tracked"]);
+  assert.equal(execution.status, 0, execution.stderr);
+  assert.equal(json.trackingConfigured, true);
+  assert.equal(
+    git(work, [
+      "rev-parse",
+      "--abbrev-ref",
+      "--symbolic-full-name",
+      "@{upstream}",
+    ]),
+    "origin/feature/tracked",
+  );
+});
+
+test("direct checkout refuses an ambiguous upstream instead of guessing", () => {
+  const { remote, work } = fixture(["feature/ambiguous"]);
+  git(work, ["branch", "feature/ambiguous", "origin/feature/ambiguous"]);
+  git(work, ["branch", "--unset-upstream", "feature/ambiguous"]);
+  git(work, ["remote", "add", "backup", remote]);
+  git(work, ["fetch", "backup"]);
+  const { execution, json } = result(work, ["feature/ambiguous"]);
+  assert.notEqual(execution.status, 0);
+  assert.match(json.error, /multiple remote branches/i);
+  assert.equal(json.trackingConfigured, false);
+  assert.equal(git(work, ["branch", "--show-current"]), "main");
 });
