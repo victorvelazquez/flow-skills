@@ -1,0 +1,113 @@
+{
+  "$schema": "flow-workflows/v1",
+  "workflows": [
+    {
+      "id": "flow-audit",
+      "contract": "skills/flow-audit/SKILL.md",
+      "resources": ["skills/flow-audit"],
+      "runtime": "scripts/flow-audit.mjs",
+      "outcome": "scoped audit evidence and review findings",
+      "mutation": "approval-required",
+      "hosts": { "opencode": "supported", "pi": "supported" }
+    },
+    {
+      "id": "flow-branch",
+      "contract": "skills/flow-branch/SKILL.md",
+      "resources": ["skills/flow-branch"],
+      "runtime": "scripts/flow-branch.mjs",
+      "outcome": "safe existing-branch selection and updates",
+      "mutation": "approval-required",
+      "hosts": { "opencode": "supported", "pi": "supported" }
+    },
+    {
+      "id": "flow-build",
+      "contract": "skills/flow-build/SKILL.md",
+      "resources": ["skills/flow-build"],
+      "runtime": "scripts/flow-build.mjs",
+      "outcome": "guided project documentation generation",
+      "mutation": "approval-required",
+      "hosts": { "opencode": "supported", "pi": "supported" }
+    },
+    {
+      "id": "flow-commit",
+      "contract": "skills/flow-commit/SKILL.md",
+      "resources": ["skills/flow-commit"],
+      "runtime": "scripts/flow-commit.mjs",
+      "outcome": "sealed and verified semantic commits",
+      "mutation": "approval-required",
+      "hosts": { "opencode": "supported", "pi": "supported" }
+    },
+    {
+      "id": "flow-debt",
+      "contract": "skills/flow-debt/SKILL.md",
+      "resources": ["skills/flow-debt"],
+      "runtime": null,
+      "outcome": "project-local debt lifecycle guidance",
+      "mutation": "approval-required",
+      "hosts": { "opencode": "supported", "pi": "supported" }
+    },
+    {
+      "id": "flow-docs-sync",
+      "contract": "skills/flow-docs-sync/SKILL.md",
+      "resources": ["skills/flow-docs-sync"],
+      "runtime": "scripts/flow-docs-sync.mjs",
+      "outcome": "previewed incremental documentation updates",
+      "mutation": "approval-required",
+      "hosts": { "opencode": "supported", "pi": "supported" }
+    },
+    {
+      "id": "flow-playbook-sync",
+      "contract": "skills/flow-playbook-sync/SKILL.md",
+      "resources": ["skills/flow-playbook-sync"],
+      "runtime": "scripts/flow-playbook-sync.mjs",
+      "outcome": "previewed project and playbook comparison",
+      "mutation": "approval-required",
+      "hosts": { "opencode": "supported", "pi": "supported" }
+    },
+    {
+      "id": "flow-pr",
+      "contract": "skills/flow-pr/SKILL.md",
+      "resources": ["skills/flow-pr"],
+      "runtime": "scripts/flow-pr.mjs",
+      "outcome": "prepared and verified pull request",
+      "mutation": "approval-required",
+      "hosts": { "opencode": "supported", "pi": "supported" }
+    },
+    {
+      "id": "flow-refactor",
+      "contract": "skills/flow-refactor/SKILL.md",
+      "resources": ["skills/flow-refactor"],
+      "runtime": "scripts/flow-refactor.mjs",
+      "outcome": "read-only scoped refactoring audit",
+      "mutation": "read-only",
+      "hosts": { "opencode": "supported", "pi": "supported" }
+    },
+    {
+      "id": "flow-request",
+      "contract": "skills/flow-request/SKILL.md",
+      "resources": ["skills/flow-request"],
+      "runtime": null,
+      "outcome": "cross-project request lifecycle guidance",
+      "mutation": "approval-required",
+      "hosts": { "opencode": "supported", "pi": "supported" }
+    },
+    {
+      "id": "flow-ui",
+      "contract": "skills/flow-ui/SKILL.md",
+      "resources": ["skills/flow-ui", "skills/ui-design-system"],
+      "runtime": "scripts/flow-ui.mjs",
+      "outcome": "read-only UI compliance audit",
+      "mutation": "read-only",
+      "hosts": { "opencode": "supported", "pi": "supported" }
+    },
+    {
+      "id": "ui-design-system",
+      "contract": "skills/ui-design-system/SKILL.md",
+      "resources": ["skills/ui-design-system"],
+      "runtime": null,
+      "outcome": "portable UI design reference",
+      "mutation": "read-only",
+      "hosts": { "opencode": "supported", "pi": "supported" }
+    }
+  ]
+}

@@ -1,145 +1,19 @@
 {
   "$schema": "flow-assets-lock/v1",
-  "capturedAt": "2026-10-13T00:00:00.000Z",
+  "capturedAt": "2026-04-01T00:00:00.000Z",
   "source": {
     "kind": "opencode-user-config",
-    "opencodeVersion": "1.18.11",
-    "gentleAiVersion": "gentle-ai 2.2.4"
+    "opencodeVersion": "repository-local",
+    "gentleAiVersion": "repository-local"
   },
   "manifest": {
     "sha256": "9b2d9d93a615f4d2175dfb344c37073c428faeda6958e4badd429c4f295b82dc"
   },
   "totals": {
-    "bytes": 696069,
-    "count": 70
+    "bytes": 658805,
+    "count": 51
   },
   "files": [
-    {
-      "path": "agents/flow-branch-agent.md",
-      "sha256": "8a6afb2426db13c61af74d884c0fc622aead8fd78363aa27291b3e32c3f09dde",
-      "bytes": 1532,
-      "mode": "100644",
-      "executable": false
-    },
-    {
-      "path": "agents/flow-git-agent.md",
-      "sha256": "328a20a07747f3b253d8093df2e9ca1bcae645c1a57484435a81a4594e570461",
-      "bytes": 4011,
-      "mode": "100644",
-      "executable": false
-    },
-    {
-      "path": "agents/flow-pr-agent.md",
-      "sha256": "941a73016b501517efddf86cf58bec08ed6f5a3cd17da41dbb270c019b11977e",
-      "bytes": 6490,
-      "mode": "100644",
-      "executable": false
-    },
-    {
-      "path": "agents/flow-review-agent.md",
-      "sha256": "4d9064def8b948423b30aa1f02e10288fa8cbc66cbb9e01c9d14147145fca320",
-      "bytes": 2525,
-      "mode": "100644",
-      "executable": false
-    },
-    {
-      "path": "commands/flow-audit.md",
-      "sha256": "f3009f6c4e2236f751bfa1b27a8bf6d8a060060011cbe0d20537f585b8781c60",
-      "bytes": 444,
-      "mode": "100644",
-      "executable": false
-    },
-    {
-      "path": "commands/flow-auto-deliver.md",
-      "sha256": "2817239823beed703bbface69736f38fa5927491d9ff87bc26388b0d305cfde6",
-      "bytes": 1224,
-      "mode": "100644",
-      "executable": false
-    },
-    {
-      "path": "commands/flow-branch.md",
-      "sha256": "b4a67f1c342c528a02d141a9f7124483b8a3318f6e3bf7a38ca6968da89f862d",
-      "bytes": 427,
-      "mode": "100644",
-      "executable": false
-    },
-    {
-      "path": "commands/flow-build.md",
-      "sha256": "57f14d9c5641379e8189be329153a0d1cbfd4b7f6ad9c35b643315f8dcf29def",
-      "bytes": 531,
-      "mode": "100644",
-      "executable": false
-    },
-    {
-      "path": "commands/flow-commit.md",
-      "sha256": "7c51774c11aabc79218dd8b58db30667db67db77cde2c53223369b89cbe454dd",
-      "bytes": 1220,
-      "mode": "100644",
-      "executable": false
-    },
-    {
-      "path": "commands/flow-debt.md",
-      "sha256": "3b781e605df6e13d25ec0cba46b2d71f3fb51a78bd63a116f9b40744a7107e89",
-      "bytes": 1869,
-      "mode": "100644",
-      "executable": false
-    },
-    {
-      "path": "commands/flow-docs-sync.md",
-      "sha256": "ff161a0a3bb8fff9d9d8cd958f23c00fe91caab640f036eb3c7280ee7a0816ec",
-      "bytes": 529,
-      "mode": "100644",
-      "executable": false
-    },
-    {
-      "path": "commands/flow-figma.md",
-      "sha256": "2cd494da0f7285f62afd3c5df221004b2188a8e4d33610d33ca67d2a62074d97",
-      "bytes": 472,
-      "mode": "100644",
-      "executable": false
-    },
-    {
-      "path": "commands/flow-playbook-sync.md",
-      "sha256": "b5082a879571cfbd96b8c34da75d0cbce4148975d54dca6e859a7b0456d0c7af",
-      "bytes": 764,
-      "mode": "100644",
-      "executable": false
-    },
-    {
-      "path": "commands/flow-pr.md",
-      "sha256": "e33550a4aa79c213564a12d5c8806f9a539987a96eab112963d4a3fe4fa53c69",
-      "bytes": 2903,
-      "mode": "100644",
-      "executable": false
-    },
-    {
-      "path": "commands/flow-refactor.md",
-      "sha256": "36536eca248e21148c2d331567d9a8b10d701bfc09648235984d4e8601363ae3",
-      "bytes": 527,
-      "mode": "100644",
-      "executable": false
-    },
-    {
-      "path": "commands/flow-request.md",
-      "sha256": "9f311c8d5be5227e773fd6d494cab6760db38af5e169ec7938d28092374d8fae",
-      "bytes": 439,
-      "mode": "100644",
-      "executable": false
-    },
-    {
-      "path": "commands/flow-skills-sync.md",
-      "sha256": "0c12c71e4a03e2608a7cc74d3d7050684453ac401200cc37e05351f9228a49e4",
-      "bytes": 850,
-      "mode": "100644",
-      "executable": false
-    },
-    {
-      "path": "commands/flow-ui.md",
-      "sha256": "8014af31372ad12d09a6e1966a751e8582099ab9deb3e767d2d07dd5b6467d6a",
-      "bytes": 759,
-      "mode": "100644",
-      "executable": false
-    },
     {
       "path": "scripts/flow-audit.mjs",
       "sha256": "b3a4ee59b51abdd3d8bb91e0a3dd221ef2fecf4905fb549012e1a4d33e4f212e",
@@ -198,8 +72,8 @@
     },
     {
       "path": "scripts/flow-skills.mjs",
-      "sha256": "058541b210156e707429cff5bf4acccf2827ae60904545f1e84668a404b74ded",
-      "bytes": 3314,
+      "sha256": "4d21c60902140d69eac809495a9475780ed54f62e924747ac2ed4a25f0868e4d",
+      "bytes": 220,
       "mode": "100644",
       "executable": false
     },
@@ -289,15 +163,15 @@
     },
     {
       "path": "skills/flow-audit/SKILL.md",
-      "sha256": "d7891f56fda96b0d24f150343542c8e7db6015a7d86c1bc5011521dec55f31d9",
-      "bytes": 5419,
+      "sha256": "325aac8cae8a6b96346b87dbf11034ef3d6f8ea8a5ee2d5b201cdc287fe49fa2",
+      "bytes": 5214,
       "mode": "100644",
       "executable": false
     },
     {
       "path": "skills/flow-branch/SKILL.md",
-      "sha256": "0ed538be62f703193ca88d431b0c6c75c39453f74122a3dca0b9ce497c4fb1ac",
-      "bytes": 2886,
+      "sha256": "d72a0ce02fd9147dfb4f445946b541932d576508fd8be9b9d7f4ee88b6b4c252",
+      "bytes": 2877,
       "mode": "100644",
       "executable": false
     },
@@ -310,8 +184,8 @@
     },
     {
       "path": "skills/flow-build/SKILL.md",
-      "sha256": "66d994d9051f4023da6d9928269382ed0728c30b82ffc3e821db90770c5c4d25",
-      "bytes": 6008,
+      "sha256": "9134d4bf7eb6bb6871ad89f00a5d947e2870c086c932e6dc2560d822b37682f7",
+      "bytes": 5664,
       "mode": "100644",
       "executable": false
     },
@@ -429,8 +303,8 @@
     },
     {
       "path": "skills/flow-commit/SKILL.md",
-      "sha256": "d32f10fd307fc7e7bd448f6c9979fe5df732263538d1c0e07c6dc8faebdb813d",
-      "bytes": 6734,
+      "sha256": "1174879dc6794b4574c46096311f13f8f99800ea9c1ab9b4084e39013d3360bf",
+      "bytes": 6468,
       "mode": "100644",
       "executable": false
     },
@@ -443,22 +317,22 @@
     },
     {
       "path": "skills/flow-docs-sync/SKILL.md",
-      "sha256": "e244220551d33f3892c981d1260f82cae6cdf9f231cbe489fc0519335849d3ed",
-      "bytes": 2224,
+      "sha256": "1bcb376df94d7dc28c8b9ae1cb35ae90a1543f919d7ee0a49a2ebdb9ba8b88cd",
+      "bytes": 2112,
       "mode": "100644",
       "executable": false
     },
     {
       "path": "skills/flow-playbook-sync/SKILL.md",
-      "sha256": "14ccedddc7c8333701f32f3edd4263e7925e9195f5060b8919589009c0d1b2c6",
-      "bytes": 2838,
+      "sha256": "ac1ee1069b2c269f247e04175b3c92cf6b74fd964ec6a9de47169a8ff6b7ee4c",
+      "bytes": 2717,
       "mode": "100644",
       "executable": false
     },
     {
       "path": "skills/flow-pr/SKILL.md",
-      "sha256": "81ccbcb402a082fe50c7fc2bdd050f861f1b2fffd3f16dd67374e658220fb61d",
-      "bytes": 8590,
+      "sha256": "e373d895f54465759c6d89790b008cb66eab4639d254348336764d63130401c2",
+      "bytes": 8319,
       "mode": "100644",
       "executable": false
     },
@@ -471,8 +345,8 @@
     },
     {
       "path": "skills/flow-refactor/SKILL.md",
-      "sha256": "6ddea5ee3b08ecaab0c4b3e6c72349d5a9a6422070dc24d742fa65e266ea0959",
-      "bytes": 16955,
+      "sha256": "c0f242af29f1ab755e70c137b39a7c4b33c63b03e9865e5e3d5c03c3dff4f36c",
+      "bytes": 16920,
       "mode": "100644",
       "executable": false
     },
@@ -484,16 +358,9 @@
       "executable": false
     },
     {
-      "path": "skills/flow-skills-sync/SKILL.md",
-      "sha256": "cc85a066997124ebaa4c85e466b5e2748134c27884bb55f995b57a97b7ce5da0",
-      "bytes": 5268,
-      "mode": "100644",
-      "executable": false
-    },
-    {
       "path": "skills/flow-ui/SKILL.md",
-      "sha256": "96b07638dfbaea9d3f90dcdd0f258d2ad90da3b020c65bd3a4e428881f1a321a",
-      "bytes": 8462,
+      "sha256": "f63ba6be90ae8a418887498775f32533faee1ca331f06366706b407502d09247",
+      "bytes": 8439,
       "mode": "100644",
       "executable": false
     },

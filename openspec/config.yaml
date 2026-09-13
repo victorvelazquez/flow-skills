@@ -1,0 +1,103 @@
+schema: gentle-ai/sdd-config-v1
+
+project:
+  name: flow-skills
+  root: C:/Users/victor/Developer/Tools/flow-skills
+  summary: >-
+    Versioned OpenCode skills and deterministic Node.js workflow tooling with
+    zero runtime dependencies.
+  context_file: openspec/project.md
+  language: English
+
+context: >-
+  flow-skills distributes flow-* commands, agents, skills, and supporting
+  Node.js executors. It uses ECMAScript modules on Node.js 18+ and declares no
+  runtime dependencies. Product behavior lives in scripts/*.mjs and
+  scripts/lib/*.mjs. Tests use node:test. Managed assets are declared in
+  flow-assets.json, with integrity metadata in flow-assets.lock.json.
+  install.mjs provides preview-first, verified installation. The playbook is
+  generic shared guidance, not evidence of this repository's own stack.
+
+sdd:
+  execution: auto
+  artifact_store: openspec
+  strict_tdd:
+    enabled: true
+    command: node --test tests/*.test.mjs
+    focused_command_template: node --test tests/<affected>.test.mjs
+    cycle:
+      RED: >-
+        Add or change a focused behavioral test and confirm it fails for the
+        intended reason.
+      GREEN: >-
+        Make the smallest product change that passes the focused test.
+      TRIANGULATE: >-
+        Add boundary or counterexample coverage when one example does not
+        establish the rule.
+      REFACTOR: >-
+        Improve structure without changing behavior, then rerun focused tests.
+      VERIFY: >-
+        Run the complete suite once the change is ready for phase verification.
+  phase_rules:
+    init: >-
+      Inspect current evidence and safely update canonical project context.
+      Do not change product source.
+    explore: >-
+      Record behavior, dependencies, affected surfaces, and unknowns.
+    proposal: >-
+      Define outcome, scope, non-goals, acceptance criteria, and review budget.
+    spec: >-
+      Express observable requirements and scenarios before implementation.
+    design: >-
+      Record boundaries, interfaces, safety, alternatives, and rollback.
+    tasks: >-
+      Create reviewable units with focused TDD commands and evidence.
+    apply: >-
+      Follow strict TDD and keep apply-progress evidence current.
+    verify: >-
+      Run focused checks and the full suite. Skips or aborts are not passes.
+    archive: >-
+      Preserve final artifacts, evidence, and historical decisions.
+
+testing:
+  runtime: Node.js 18+ (inspection used Node.js v22.20.0)
+  runner: node:test
+  assertion_library: node:assert/strict
+  test_glob: tests/*.test.mjs
+  test_files_detected: 11
+  commands:
+    focused: node --test tests/<affected>.test.mjs
+    full: node --test tests/*.test.mjs
+    coverage: >-
+      node --experimental-test-coverage --test tests/*.test.mjs
+  capabilities:
+    - Unit tests for pure modules and contract validation.
+    - Integration tests with temporary filesystems and Git repositories.
+    - Process-level CLI tests with fake external programs where needed.
+    - Capability-based skips for unsupported Windows filesystem behavior.
+  unavailable_or_unconfigured:
+    - No package.json test script; invoke node --test directly.
+    - No repository-specific lint command detected.
+    - No repository-specific typecheck command detected.
+    - No committed CI workflow detected.
+    - No configured coverage threshold detected.
+
+delivery:
+  strategy: ask-on-risk
+  review_budget_changed_lines: 400
+  rules:
+    - >-
+      Pause when forecast changes exceed 400 lines or span multiple review
+      areas.
+    - >-
+      Do not infer size:exception; it requires explicit human acceptance.
+    - >-
+      Keep consent, authorization, security, destructive, publishing, and
+      ambiguous-scope gates under human control.
+
+repository:
+  default_branch: main
+  remote: https://github.com/victorvelazquez/flow-skills.git
+  asset_registry: flow-assets.json
+  asset_lock: flow-assets.lock.json
+  skill_registry: .atl/skill-registry.md

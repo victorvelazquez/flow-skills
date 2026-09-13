@@ -1,23 +1,22 @@
 # flow-skills
 
-A versioned repository of `flow-*` AI skills for [OpenCode](https://opencode.ai). Share and install git workflow automation across machines and teams.
-
-## What's included
-
-| Skill            | Description                                                                       |
-| ---------------- | --------------------------------------------------------------------------------- |
-| `flow-audit`     | Code quality audit — lint, typecheck, tests, security, AI review                  |
-| `flow-branch`    | Interactive branch switcher with pull prompt and cleanup                          |
-| `flow-build`     | Universal documentation builder (15-17 docs across 11 phases)                     |
-| `flow-commit`    | Git workflow automation — Conventional Commits, atomic commits, branch protection |
-| `flow-docs-sync` | Incremental documentation sync — detects changes, updates affected docs           |
-| `flow-finish`    | Generate professional PR description + Jira comment                               |
-| `flow-release`   | Semantic versioning + CHANGELOG + git tag + push                                  |
-| `flow-skills-sync` | Manage this repo — publish, update, or install skills conversationally          |
+Flow Skills is a versioned collection of portable `flow-*` AI workflows. **Pi is the primary platform**: its package resources provide native skill discovery without an OpenCode installation, command tree, or permission model.
 
 ## Install
 
-### Quick path
+### Pi (primary)
+
+Install the reviewed Flow package through Pi's package workflow:
+
+```bash
+pi install <package-source>
+```
+
+Pi discovers only the explicitly declared `flow-*` resources in `package.json`. The package does not copy files into Pi settings or require OpenCode assets. Review the package source before installation; package installation, updates, and removal remain under Pi's security model.
+
+### OpenCode (supported compatibility path)
+
+OpenCode continues to use the repository-local preview-first installer:
 
 ```bash
 git clone https://github.com/victorvelazquez/flow-skills.git ~/Developer/Tools/flow-skills
@@ -25,34 +24,43 @@ cd ~/Developer/Tools/flow-skills
 node install.mjs
 ```
 
-The command is a read-only preview. Confirm that `configuration.ready` is `true`, then run the exact `applyCommand` printed by the preview. Restart OpenCode after apply.
+The command is a read-only preview whose JSON identifies `host: "opencode"`. Run only the exact `applyCommand` printed by that preview; it binds the committed `HEAD` target commit and plan ID. Restart OpenCode after apply. The bootstrap installs only the committed Flow generation at repository `HEAD`, preserves `opencode.json` byte-for-byte, and uses a verified backup plus transactional apply. `--host pi` intentionally fails with Pi package-install guidance; it never copies Pi resources.
 
-The bootstrap installs only the committed Flow generation at repository `HEAD`. It preserves `opencode.json` byte-for-byte and uses a verified backup plus transactional apply.
+## What's included
 
-### Update after pulling
+| Skill | Description |
+| --- | --- |
+| `flow-audit` | Code quality audit — lint, typecheck, tests, security, and review evidence |
+| `flow-branch` | Safe existing-branch selection, updates, and guarded cleanup |
+| `flow-build` | Guided project documentation generation |
+| `flow-commit` | Prepared, sealed, and verified semantic commits |
+| `flow-debt` | Project-local technical-debt lifecycle guidance |
+| `flow-docs-sync` | Previewed incremental documentation updates |
+| `flow-playbook-sync` | Previewed project/playbook comparison |
+| `flow-pr` | Prepared and verified pull-request workflow |
+| `flow-refactor` | Read-only scoped refactoring audit |
+| `flow-request` | Cross-project request lifecycle guidance |
+| `flow-ui` | Read-only UI compliance audit |
 
-```bash
-cd ~/Developer/Tools/flow-skills
-git pull
-node install.mjs # preview the new HEAD, then run its exact applyCommand
-```
+`ui-design-system` is a support resource used by relevant Flow skills; it is not an end-user workflow.
 
-### Or use the AI skill
-
-After installing, use `/flow-skills-sync` for status, snapshots, and historical restores.
-
-## Commands
+## OpenCode commands
 
 ```bash
 node install.mjs             # preview HEAD without changes
 node install.mjs --dry-run   # compatibility alias for preview
-node install.mjs --destination <path>
+node install.mjs --host opencode --destination <path>
 node install.mjs --help
 ```
 
-`--export`, `--update`, `--uninstall`, and historical `--ref` workflows are intentionally rejected. Use `/flow-skills-sync` for live-to-repository snapshots and historical restores.
+This one-release compatibility adapter supports OpenCode only. `--host pi`, `--export`, `--update`, `--uninstall`, and historical `--ref` workflows are intentionally rejected. See the [multihost migration matrix](docs/multihost-migration.md) for supported workflow transitions and the exceptional maintainer-only reconciliation path.
+
+## Migration
+
+Pi package resources are the primary path, while OpenCode retains native adapters with the same supported workflow outcomes. The [multihost migration matrix](docs/multihost-migration.md) records every prior command and skill as retained, replaced, or removed, including the no-blind-replacement rule.
 
 ## Requirements
 
 - Node.js 18+ (ESM, zero external dependencies)
-- OpenCode installed at `~/.config/opencode/`
+- Pi package installation for the primary experience
+- OpenCode installed at `~/.config/opencode/` only when using the supported OpenCode compatibility path

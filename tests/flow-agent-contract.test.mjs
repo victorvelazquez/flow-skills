@@ -13,7 +13,7 @@ const permissionRules = (source, permission) => {
     source.match(
       new RegExp(`^  ${permission}:\\n([\\s\\S]*?)(?=^  [a-z_]+:|^---$)`, "m"),
     )?.[1] || "";
-  return [...block.matchAll(/^    (["'])(.*?)\1: (allow|ask|deny)$/gm)].map(
+  return [...block.matchAll(/^ {4}(["'])(.*?)\1: (allow|ask|deny)$/gm)].map(
     ([, , pattern, action]) => ({ pattern, action }),
   );
 };
@@ -42,8 +42,8 @@ const permissionFor = (rules, resource, home, options) =>
       : action;
   }, undefined);
 test("flow-pr command, agent, and skill expose prepare, one approval, and execute", () => {
-  const command = read("commands/flow-pr.md");
-  const agent = read("agents/flow-pr-agent.md");
+  const command = read("hosts/opencode/commands/flow-pr.md");
+  const agent = read("hosts/opencode/agents/flow-pr-agent.md");
   const skill = read("skills/flow-pr/SKILL.md");
   const contract = `${command}\n${agent}\n${skill}`;
   assert.match(command, /^agent: flow-pr-agent$/m);
@@ -56,10 +56,10 @@ test("flow-pr command, agent, and skill expose prepare, one approval, and execut
     assert.match(surface, /one human mutation approval|one approval/i);
     assert.match(surface, /Never ask for a separate|do not ask separately/i);
   }
-  assert.match(agent, /task:\n    "\*": deny/);
+  assert.match(agent, /task:\n {4}"\*": deny/);
   assert.match(agent, /git push\*": deny/);
   assert.match(agent, /"gh \*": deny/);
-  assert.match(agent, /edit:\n    "\*": deny/);
+  assert.match(agent, /edit:\n {4}"\*": deny/);
   assert.match(agent, /flow-pr-request-\*\/intent\.json": allow/);
   assert.match(agent, /--prepare\*": allow/);
   assert.match(agent, /--execute --handle \*": ask/);
@@ -75,10 +75,9 @@ test("flow-pr command, agent, and skill expose prepare, one approval, and execut
   );
 });
 test("flow-pr resolves genuine clarification inside its dedicated child invocation", () => {
-  const command = read("commands/flow-pr.md");
-  const agent = read("agents/flow-pr-agent.md");
-  const skill = read("skills/flow-pr/SKILL.md");
-  for (const surface of [command, agent, skill]) {
+  const command = read("hosts/opencode/commands/flow-pr.md");
+  const agent = read("hosts/opencode/agents/flow-pr-agent.md");
+  for (const surface of [command, agent]) {
     assert.match(surface, /OpenCode(?:'s)? `question` tool/i);
     assert.match(surface, /wait[^\n]+(?:same|this) child invocation/i);
     assert.match(surface, /continue preparation/i);
@@ -87,12 +86,12 @@ test("flow-pr resolves genuine clarification inside its dedicated child invocati
       /never (?:finish or )?return a plain-text clarification question to the parent/i,
     );
   }
-  assert.match(agent, /^  question: allow$/m);
-  assert.doesNotMatch(agent, /^  question: ask$/m);
+  assert.match(agent, /^ {2}question: allow$/m);
+  assert.doesNotMatch(agent, /^ {2}question: ask$/m);
   assert.doesNotMatch(command, /^\$ARGUMENTS$/m);
 });
 test("flow-pr agent externally reads only its installed contracts before prepare", () => {
-  const agent = read("agents/flow-pr-agent.md");
+  const agent = read("hosts/opencode/agents/flow-pr-agent.md");
   const external = permissionRules(agent, "external_directory");
   const edit = permissionRules(agent, "edit");
   const home = "C:/Users/opencode-test";
@@ -137,7 +136,7 @@ test("flow-pr agent externally reads only its installed contracts before prepare
   );
 });
 test("flow-pr agent permits only relative intent edits and canonical external parents", () => {
-  const agent = read("agents/flow-pr-agent.md");
+  const agent = read("hosts/opencode/agents/flow-pr-agent.md");
   const edit = permissionRules(agent, "edit");
   const external = permissionRules(agent, "external_directory");
   const home = "C:/Users/opencode-test";
@@ -229,7 +228,7 @@ test("flow-pr agent permits only relative intent edits and canonical external pa
     assert.equal(permissionFor(edit, resource, home), "deny");
 });
 test("flow-pr agent preserves runtime operational fields during semantic apply_patch authoring", () => {
-  const agent = read("agents/flow-pr-agent.md");
+  const agent = read("hosts/opencode/agents/flow-pr-agent.md");
   assert.match(
     agent,
     /directly read the complete runtime-created `flow-pr\/intent-v2` template/,
@@ -261,8 +260,8 @@ test("flow-pr agent preserves runtime operational fields during semantic apply_p
 });
 test("flow-pr surfaces omit retired publication authority and direct mutation semantics", () => {
   const contract = [
-    "commands/flow-pr.md",
-    "agents/flow-pr-agent.md",
+    "hosts/opencode/commands/flow-pr.md",
+    "hosts/opencode/agents/flow-pr-agent.md",
     "skills/flow-pr/SKILL.md",
     "scripts/flow-pr.mjs",
   ]
@@ -275,8 +274,8 @@ test("flow-pr surfaces omit retired publication authority and direct mutation se
   );
 });
 test("flow-pr drafting preserves safe templates and never invents governance or evidence", () => {
-  const command = read("commands/flow-pr.md");
-  const agent = read("agents/flow-pr-agent.md");
+  const command = read("hosts/opencode/commands/flow-pr.md");
+  const agent = read("hosts/opencode/agents/flow-pr-agent.md");
   const skill = read("skills/flow-pr/SKILL.md");
   const contract = `${command}\n${agent}\n${skill}`;
   assert.match(contract, /preserve its structure, headings, and checklists/i);
@@ -318,8 +317,8 @@ test("flow-pr drafting preserves safe templates and never invents governance or 
 });
 test("flow-pr candidate docs contain only v2 callable contracts", () => {
   const paths = [
-    "commands/flow-pr.md",
-    "agents/flow-pr-agent.md",
+    "hosts/opencode/commands/flow-pr.md",
+    "hosts/opencode/agents/flow-pr-agent.md",
     "skills/flow-pr/SKILL.md",
     "openspec/changes/simplify-flow-pr/design.md",
     "openspec/changes/simplify-flow-pr/exploration.md",
@@ -337,7 +336,7 @@ test("flow-pr candidate docs contain only v2 callable contracts", () => {
 });
 test("flow-pr renders current compact or detailed Jira output only after verified success or noop", () => {
   const skill = read("skills/flow-pr/SKILL.md");
-  const agent = read("agents/flow-pr-agent.md");
+  const agent = read("hosts/opencode/agents/flow-pr-agent.md");
   const output = read("skills/flow-pr/references/output-contract.md");
   const contract = `${skill}\n${agent}\n${output}`;
   assert.doesNotMatch(output, /Historical Template/);
@@ -397,8 +396,8 @@ test("flow-pr Jira presentation uses flat evidenced values and optional bounded 
   assert.match(output, /Do not make Engram mandatory/);
 });
 test("flow-pr Jira contract requires durable evidence, manual validation, and lossless relay", () => {
-  const command = read("commands/flow-pr.md");
-  const agent = read("agents/flow-pr-agent.md");
+  const command = read("hosts/opencode/commands/flow-pr.md");
+  const agent = read("hosts/opencode/agents/flow-pr-agent.md");
   const skill = read("skills/flow-pr/SKILL.md");
   const output = read("skills/flow-pr/references/output-contract.md");
   const contract = `${command}\n${agent}\n${skill}\n${output}`;
@@ -457,8 +456,8 @@ test("flow-pr Jira contract requires durable evidence, manual validation, and lo
   );
 });
 test("flow-pr keeps Jira inert and preserves the fenced block through every handoff", () => {
-  const command = read("commands/flow-pr.md");
-  const agent = read("agents/flow-pr-agent.md");
+  const command = read("hosts/opencode/commands/flow-pr.md");
+  const agent = read("hosts/opencode/agents/flow-pr-agent.md");
   const skill = read("skills/flow-pr/SKILL.md");
   const output = read("skills/flow-pr/references/output-contract.md");
   for (const surface of [command, agent, skill, output])
@@ -488,18 +487,27 @@ test("flow-pr keeps Jira inert and preserves the fenced block through every hand
     /JIRA COMMENT|Cambios técnicos|Bugs resueltos|Subtareas derivadas/,
   );
 });
-test("flow-commit and flow-auto-deliver remain commit-only", () => {
-  const commit = read("commands/flow-commit.md");
-  const auto = read("commands/flow-auto-deliver.md");
+test("flow-commit remains commit-only after Flow Auto Deliver removal", () => {
+  const commit = read("hosts/opencode/commands/flow-commit.md");
   const runtime = read("scripts/flow-commit.mjs");
-  assert.match(`${commit}\n${auto}\n${runtime}`, /flow-commit/);
-  assert.doesNotMatch(auto, /\/flow-pr/i);
-  assert.match(auto, /Do not audit, edit, push, publish, create a PR/i);
+  const migration = read("docs/multihost-migration.md");
+
+  assert.match(`${commit}\n${runtime}`, /flow-commit/);
+  assert.equal(
+    fs.existsSync(
+      path.join(root, "hosts", "opencode", "commands", "flow-auto-deliver.md"),
+    ),
+    false,
+  );
+  assert.match(
+    migration,
+    /`flow-auto-deliver`[^\n]*Removed[^\n]*`flow-commit`[^\n]*(?:does not create PRs or push|no delivery behavior)/i,
+  );
 });
 
 test("flow-branch command delegates arguments as data to its dedicated runtime-only agent", () => {
-  const command = read("commands/flow-branch.md");
-  const agent = read("agents/flow-branch-agent.md");
+  const command = read("hosts/opencode/commands/flow-branch.md");
+  const agent = read("hosts/opencode/agents/flow-branch-agent.md");
   const skill = read("skills/flow-branch/SKILL.md");
   const contract = `${command}\n${agent}\n${skill}`;
   assert.match(command, /^agent: flow-branch-agent$/m);
@@ -514,7 +522,7 @@ test("flow-branch command delegates arguments as data to its dedicated runtime-o
     agent,
     /Use only `~\/\.config\/opencode\/scripts\/flow-branch\.mjs`/,
   );
-  assert.match(agent, /task:\n    "\*": deny/);
+  assert.match(agent, /task:\n {4}"\*": deny/);
   assert.match(agent, /edit: deny/);
   assert.match(agent, /write: deny/);
   assert.match(agent, /never run Git .* directly/i);
@@ -527,7 +535,7 @@ test("flow-branch command delegates arguments as data to its dedicated runtime-o
 });
 
 test("flow-branch agent permits its installed runtime with POSIX and Windows separators", () => {
-  const agent = read("agents/flow-branch-agent.md");
+  const agent = read("hosts/opencode/agents/flow-branch-agent.md");
   const bash = permissionRules(agent, "bash");
 
   assert.deepEqual(bash, [
@@ -554,8 +562,8 @@ test("flow-branch agent permits its installed runtime with POSIX and Windows sep
 });
 
 test("flow-commit exposes prepare, structured authoring, seal, and one approval", () => {
-  const command = read("commands/flow-commit.md");
-  const agent = read("agents/flow-git-agent.md");
+  const command = read("hosts/opencode/commands/flow-commit.md");
+  const agent = read("hosts/opencode/agents/flow-git-agent.md");
   const skill = read("skills/flow-commit/SKILL.md");
   const contract = `${command}\n${agent}\n${skill}`;
   assert.match(command, /^agent: flow-git-agent$/m);
@@ -579,8 +587,8 @@ test("flow-commit exposes prepare, structured authoring, seal, and one approval"
       /raw payload|raw JSON|payload content|Never repeat bodies/i,
     );
   }
-  assert.match(agent, /bash:\n    "\*": deny/);
-  assert.match(agent, /task:\n    "\*": deny/);
+  assert.match(agent, /bash:\n {4}"\*": deny/);
+  assert.match(agent, /task:\n {4}"\*": deny/);
   assert.match(agent, /--prepare": allow/);
   assert.match(agent, /--encode-author-intent --handle \*": allow/);
   assert.match(
@@ -594,9 +602,9 @@ test("flow-commit exposes prepare, structured authoring, seal, and one approval"
   assert.match(agent, /git push\*": deny/);
   assert.match(agent, /git switch\*": deny/);
   assert.match(agent, /git update-ref\*": deny/);
-  assert.match(agent, /^  edit: deny$/m);
-  assert.match(agent, /^  write: deny$/m);
-  assert.match(agent, /external_directory:\n    "\*": deny/);
+  assert.match(agent, /^ {2}edit: deny$/m);
+  assert.match(agent, /^ {2}write: deny$/m);
+  assert.match(agent, /external_directory:\n {4}"\*": deny/);
   assert.match(agent, /Never delegate/);
   assert.doesNotMatch(
     contract,
@@ -618,11 +626,10 @@ test("flow-commit exposes prepare, structured authoring, seal, and one approval"
 });
 
 test("flow-commit agent permits one bounded structured correction without rereading Git facts", () => {
-  const agent = read("agents/flow-git-agent.md");
-  const command = read("commands/flow-commit.md");
-  const auto = read("commands/flow-auto-deliver.md");
+  const agent = read("hosts/opencode/agents/flow-git-agent.md");
+  const command = read("hosts/opencode/commands/flow-commit.md");
   const skill = read("skills/flow-commit/SKILL.md");
-  const contract = `${agent}\n${command}\n${auto}\n${skill}`;
+  const contract = `${agent}\n${command}\n${skill}`;
   const bash = permissionRules(agent, "bash");
 
   for (const executable of [
@@ -666,7 +673,7 @@ test("flow-commit agent permits one bounded structured correction without reread
 });
 
 test("flow-commit planning creates a task branch when prepare reports a protected branch", () => {
-  const agent = read("agents/flow-git-agent.md");
+  const agent = read("hosts/opencode/agents/flow-git-agent.md");
   const skill = read("skills/flow-commit/SKILL.md");
 
   for (const surface of [agent, skill]) {
@@ -689,8 +696,8 @@ test("flow-commit planning creates a task branch when prepare reports a protecte
 });
 
 test("Flow records branch provenance only at its supported creation boundary", () => {
-  const commit = `${read("agents/flow-git-agent.md")}\n${read("skills/flow-commit/SKILL.md")}`;
-  const branch = `${read("agents/flow-branch-agent.md")}\n${read("skills/flow-branch/SKILL.md")}`;
+  const commit = `${read("hosts/opencode/agents/flow-git-agent.md")}\n${read("skills/flow-commit/SKILL.md")}`;
+  const branch = `${read("hosts/opencode/agents/flow-branch-agent.md")}\n${read("skills/flow-branch/SKILL.md")}`;
   assert.match(commit, /branch\.<new>\.gh-merge-base=<source>/);
   assert.match(commit, /transactional|transactionally/);
   assert.match(commit, /rollback/i);
@@ -703,17 +710,17 @@ test("Flow records branch provenance only at its supported creation boundary", (
 });
 
 test("flow-commit agent has no edit or external-directory exceptions", () => {
-  const agent = read("agents/flow-git-agent.md");
+  const agent = read("hosts/opencode/agents/flow-git-agent.md");
   const edit = permissionRules(agent, "edit");
   const external = permissionRules(agent, "external_directory");
   assert.deepEqual(edit, []);
   assert.deepEqual(external, [{ pattern: "*", action: "deny" }]);
-  assert.match(agent, /^  edit: deny$/m);
-  assert.match(agent, /^  write: deny$/m);
+  assert.match(agent, /^ {2}edit: deny$/m);
+  assert.match(agent, /^ {2}write: deny$/m);
 });
 
 test("flow-commit agent uses the runtime encoder without files or shell composition", () => {
-  const agent = read("agents/flow-git-agent.md");
+  const agent = read("hosts/opencode/agents/flow-git-agent.md");
   assert.match(agent, /--encode-author-intent/);
   assert.match(
     agent,

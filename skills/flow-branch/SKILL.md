@@ -1,6 +1,6 @@
 ---
 name: flow-branch
-description: "Trigger: /flow-branch command. Run deterministic interactive or direct branch workflows without direct Git mutation."
+description: "Run deterministic interactive or direct branch workflows without direct Git mutation."
 license: MIT
 metadata:
   author: gentleman-programming
@@ -9,12 +9,12 @@ metadata:
 
 ## Activation Contract
 
-Load this skill for `/flow-branch` with or without one branch argument. Use `~/.config/opencode/scripts/flow-branch.mjs` as the only branch-policy and mutation authority.
+Use this workflow to select, update, or delete an existing branch. Resolve the packaged `../../scripts/flow-branch.mjs` runtime relative to this skill; it is the only branch-policy and mutation authority.
 
 ## Hard Rules
 
 - Never run mutating Git commands directly or reimplement runtime resolution, inventory, update, or deletion policy.
-- Treat arguments as data. Accept one token matching `^[A-Za-z0-9][A-Za-z0-9._/-]*$`; never interpolate unvalidated input as shell syntax.
+- Treat input as data. Accept one token matching `^[A-Za-z0-9][A-Za-z0-9._/-]*$`; never interpolate unvalidated input as shell syntax.
 - Never delete without a separate explicit confirmation, including when deletion was requested initially.
 - Never delete `main`, `master`, `develop`, `development`, `dev`, `staging`, `production`, the current branch, a remote-only branch, or any entry with `protected: true`.
 - Never force-delete without explicit approval for that specific branch. Do not bulk-approve force deletion.
@@ -25,12 +25,12 @@ Load this skill for `/flow-branch` with or without one branch argument. Use `~/.
 
 | Input or result | Action |
 | --- | --- |
-| No argument | Run `node "$HOME/.config/opencode/scripts/flow-branch.mjs" --auto-list`; print `display` and `instructions` verbatim, then ask for a selection. |
-| One valid branch token | Run the runtime with that single quoted token and report the structured result. |
-| Interactive checkout | Run `--checkout --branch <name>`. On `ask-pull`, ask once, then run the same command with `--pull` only after approval. |
-| Delete request | Build candidates from `allBranches`, filter forbidden entries, show the exact local list, and stop for confirmation. |
-| `ask-force-delete` | Stop and ask only for the named unmerged branch; run `--force` only after approval. |
-| Any other error | Show the runtime error and stop without alternate mutation. |
+| No input | Run the runtime with `--auto-list`; present `display` and `instructions` verbatim, then request a selection through the host. |
+| One valid branch token | Run the runtime with that single argument and present its structured result. |
+| Interactive checkout | Run `--checkout --branch <name>`. On `ask-pull`, collect one approval, then run the same command with `--pull`. |
+| Delete request | Build candidates from `allBranches`, filter forbidden entries, present the exact local list, and stop for confirmation. |
+| `ask-force-delete` | Stop and collect approval only for the named unmerged branch; run `--force` only after that approval. |
+| Any other error | Present the runtime error and stop without alternate mutation. |
 
 ## Execution Steps
 

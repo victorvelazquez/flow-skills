@@ -1,0 +1,502 @@
+{
+  "$schema": "flow-generation-lock/v2",
+  "generationId": "e0a270d9191a67e5fe285f79109369c383f05dac4ddf1bad73a5c2403ec79502",
+  "package": {
+    "sha256": "1cedf6e798f25db48f68b28dc64bcd88e9ac9058480e3ec2ac07db9bb0b8961b"
+  },
+  "hosts": [
+    {
+      "host": "opencode",
+      "sha256": "586d318a0e1ec533697262a8769f660469baadd9ff854ee6b3b766c52a39dc39"
+    },
+    {
+      "host": "pi",
+      "sha256": "e9ebcc27ea4b9d1452df50d1fc21bbb2db40a603b293571cf9140d9bf9e78aef"
+    }
+  ],
+  "sources": [
+    {
+      "source": "README.md",
+      "sha256": "ce7becee6e65aac1acbb0e7876e14b55b6ea1f696b437535826a57b818970e63",
+      "bytes": 3427,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "docs/multihost-migration.md",
+      "sha256": "c963b5980c8f77ac0601f991f2f6a58ca80bfd32b9a3a95f4969b904c076a01b",
+      "bytes": 4703,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "hosts/opencode/agents/flow-branch-agent.md",
+      "sha256": "b017524d153807e3c548d0285beb0a4cef73904644a020a7303cf60f3b6e7db3",
+      "bytes": 1787,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "hosts/opencode/agents/flow-git-agent.md",
+      "sha256": "83f43ebe6aeb622ae3c7a4051ab273ab3e44f29d12657be28623c6d2cc79f38c",
+      "bytes": 4136,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "hosts/opencode/agents/flow-pr-agent.md",
+      "sha256": "c5224bdfb5be8bc3d0726102cf8261337764df99ea5afa68c707a60cf5df018e",
+      "bytes": 6572,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "hosts/opencode/agents/flow-review-agent.md",
+      "sha256": "4d9064def8b948423b30aa1f02e10288fa8cbc66cbb9e01c9d14147145fca320",
+      "bytes": 2525,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "hosts/opencode/commands/flow-audit.md",
+      "sha256": "4a9dc1af68698286270485404d35e98f4fd298490732ed7232a870f5ac2e2c57",
+      "bytes": 433,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "hosts/opencode/commands/flow-branch.md",
+      "sha256": "b4a67f1c342c528a02d141a9f7124483b8a3318f6e3bf7a38ca6968da89f862d",
+      "bytes": 427,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "hosts/opencode/commands/flow-build.md",
+      "sha256": "57f14d9c5641379e8189be329153a0d1cbfd4b7f6ad9c35b643315f8dcf29def",
+      "bytes": 531,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "hosts/opencode/commands/flow-commit.md",
+      "sha256": "7c51774c11aabc79218dd8b58db30667db67db77cde2c53223369b89cbe454dd",
+      "bytes": 1220,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "hosts/opencode/commands/flow-debt.md",
+      "sha256": "3b781e605df6e13d25ec0cba46b2d71f3fb51a78bd63a116f9b40744a7107e89",
+      "bytes": 1869,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "hosts/opencode/commands/flow-docs-sync.md",
+      "sha256": "ff161a0a3bb8fff9d9d8cd958f23c00fe91caab640f036eb3c7280ee7a0816ec",
+      "bytes": 529,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "hosts/opencode/commands/flow-playbook-sync.md",
+      "sha256": "b5082a879571cfbd96b8c34da75d0cbce4148975d54dca6e859a7b0456d0c7af",
+      "bytes": 764,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "hosts/opencode/commands/flow-pr.md",
+      "sha256": "e33550a4aa79c213564a12d5c8806f9a539987a96eab112963d4a3fe4fa53c69",
+      "bytes": 2903,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "hosts/opencode/commands/flow-refactor.md",
+      "sha256": "36536eca248e21148c2d331567d9a8b10d701bfc09648235984d4e8601363ae3",
+      "bytes": 527,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "hosts/opencode/commands/flow-request.md",
+      "sha256": "9f311c8d5be5227e773fd6d494cab6760db38af5e169ec7938d28092374d8fae",
+      "bytes": 439,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "hosts/opencode/commands/flow-ui.md",
+      "sha256": "8014af31372ad12d09a6e1966a751e8582099ab9deb3e767d2d07dd5b6467d6a",
+      "bytes": 759,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "hosts/pi/flow-assets.json",
+      "sha256": "0984d87e7d7cf5bdccbb3335e2acbf87baf1cc1a49270805174260403ce717f6",
+      "bytes": 1755,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "package.json",
+      "sha256": "32b4a99e56485a516544831c587c9b193cb687d0df2f24c3199e380b8ebc8ac8",
+      "bytes": 1980,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "scripts/flow-audit.mjs",
+      "sha256": "b3a4ee59b51abdd3d8bb91e0a3dd221ef2fecf4905fb549012e1a4d33e4f212e",
+      "bytes": 44312,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "scripts/flow-branch.mjs",
+      "sha256": "ce30eb5ce96c5106fa43a505b2bd7acbbfb29541181ac3f83f59b88027024fc9",
+      "bytes": 19531,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "scripts/flow-build.mjs",
+      "sha256": "2916d2e995c0019199310f1b130d00019b944729457b7be3801add3d7983ce13",
+      "bytes": 24353,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "scripts/flow-commit.mjs",
+      "sha256": "132f3e04978c5aebe74f3163c0af068c1a79a6dbe736ff36d7493845b797ba6f",
+      "bytes": 67896,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "scripts/flow-docs-sync.mjs",
+      "sha256": "062853f97ad1175ccd92a7f7abcb03b77745a130b93af0d14c45678deea285f6",
+      "bytes": 20426,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "scripts/flow-playbook-sync.mjs",
+      "sha256": "391eee358c018681b44f11a8b44efab1fd31a147b3d568eac1430cecbc4c8d89",
+      "bytes": 14401,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "scripts/flow-pr.mjs",
+      "sha256": "c844cdd91553995d7d8cfe7da6206fff7563bc83893736c2bbbb3474e7aeee3a",
+      "bytes": 19071,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "scripts/flow-refactor.mjs",
+      "sha256": "7f1ea79e178e1ab95c2d0cea4f3b7053733cac025831b82f01de359e3e4b93de",
+      "bytes": 598,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "scripts/flow-ui.mjs",
+      "sha256": "748ffd74174a5a3416354052867d66344e0f34d33c241dfe1ec22d1c5697f996",
+      "bytes": 27275,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "scripts/lib/detect-tooling.mjs",
+      "sha256": "889141876806cb37f77f70d1122d0887bcb3a6de1122fbee61d39da3e4a473db",
+      "bytes": 12330,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "scripts/lib/dotnet-format.mjs",
+      "sha256": "a7bbee01e6b55013a94f7068bfc1e8d5d1239b7273bfa6ddf475ee143edc0fc3",
+      "bytes": 544,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "scripts/lib/flow-audit-cache.mjs",
+      "sha256": "5eb3c0b4c2030a8d348627555a017b6eafd6fa0458e32d458bc11d6bfbb7810c",
+      "bytes": 8932,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "scripts/lib/flow-audit-output.mjs",
+      "sha256": "76876ed4c52b3686c0083954e82a1f80086d17b49f42796164ebb1d65f818145",
+      "bytes": 1153,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "scripts/lib/flow-pr-contracts.mjs",
+      "sha256": "042a88efcb16667ae23a27233ccb3a14eeff8fcec7a618c4e6e54890ae5e0e7b",
+      "bytes": 15865,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "scripts/lib/flow-pr-drafting.mjs",
+      "sha256": "1c22b5c744d2c9f9f13a5a624cce2bcf1ec8d14e89e06bf39597c54a8c4a4bd9",
+      "bytes": 6905,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "scripts/lib/flow-pr-executor.mjs",
+      "sha256": "b39c8a7ab44a4596cbfb92df4273dbf46c82935777660c74ea994829d567d415",
+      "bytes": 33955,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "scripts/lib/flow-pr-inspection.mjs",
+      "sha256": "3c5abf6d1d0745363654a80d791a2ecccd366b4884d3ff90246c73562009306d",
+      "bytes": 16045,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "scripts/lib/helpers.mjs",
+      "sha256": "c633de92953f9d912fdae0074ebf571de95fa85550e1d2580bea61d377954604",
+      "bytes": 7720,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "scripts/lib/process-control.mjs",
+      "sha256": "98f94ef9e8ccc46120daa6915df85b41a3f6e3c5053732ecd90fdba161141444",
+      "bytes": 1327,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "scripts/lib/scope.mjs",
+      "sha256": "0378bb21706eaff542b40f1028a51caf79fa90efa09f753c03739544a22d1b94",
+      "bytes": 8182,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "skills/flow-audit/SKILL.md",
+      "sha256": "325aac8cae8a6b96346b87dbf11034ef3d6f8ea8a5ee2d5b201cdc287fe49fa2",
+      "bytes": 5214,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "skills/flow-branch/SKILL.md",
+      "sha256": "d72a0ce02fd9147dfb4f445946b541932d576508fd8be9b9d7f4ee88b6b4c252",
+      "bytes": 2877,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "skills/flow-build/REFACTOR-PROMPT.md",
+      "sha256": "ea8fa81d6b7767fa9b414117bbf8ae2024dc8650870ece328cf61eb11a7a50a6",
+      "bytes": 7628,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "skills/flow-build/SKILL.md",
+      "sha256": "9134d4bf7eb6bb6871ad89f00a5d947e2870c086c932e6dc2560d822b37682f7",
+      "bytes": 5664,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "skills/flow-build/phases/phase-0.md",
+      "sha256": "dd32fc71eecbc80a1cdee1175f2d262cc4592aaed5ea06c9c962950f68800093",
+      "bytes": 13803,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "skills/flow-build/phases/phase-1.md",
+      "sha256": "91aa1655251a8a6a12b9b48cce281d00fbd779d4ee58d1d88a1103c0d00db885",
+      "bytes": 18271,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "skills/flow-build/phases/phase-10.md",
+      "sha256": "15e65497b572c54bfd033a5318a61089b3075d941ebc2c6e1139d4e271e66f02",
+      "bytes": 6680,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "skills/flow-build/phases/phase-2.md",
+      "sha256": "bab76f603427880d2056a85e09f22ef10b169035a0c3bbf7fc84f5b4f0728231",
+      "bytes": 10569,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "skills/flow-build/phases/phase-3-playbook.md",
+      "sha256": "a4ad9fe97b64a384e3c4b6542b45647913f82fbe1e9c1dc579d7153159238c10",
+      "bytes": 4432,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "skills/flow-build/phases/phase-3.md",
+      "sha256": "703eafc704e0658681a743c04a36cc2c09468da8192e8b3141708ddb5c8ee868",
+      "bytes": 16269,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "skills/flow-build/phases/phase-4-playbook.md",
+      "sha256": "6d5e3c1a232385623297de215fae4c87e03dc0afaaad09af0f99a6bb14205ba6",
+      "bytes": 5216,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "skills/flow-build/phases/phase-4.md",
+      "sha256": "55aec9e19bd1eb1c1fa13ce27d50d65d48450ef6383c5f7820fb7b2757a694d9",
+      "bytes": 15434,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "skills/flow-build/phases/phase-5-playbook.md",
+      "sha256": "5e4544f3f9fa37d0a1798b7ff9202a9aaf004457be87e06331dc0bd0ef54de51",
+      "bytes": 3656,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "skills/flow-build/phases/phase-5.md",
+      "sha256": "eefeaefa6910bf4542fe51a6ca5e8cf4fc7f4e43e1f1414bd98f917bbcc186e9",
+      "bytes": 15761,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "skills/flow-build/phases/phase-6-playbook.md",
+      "sha256": "8f45f5056d3a43f19addab5cef05bae297870f931685916471b6eaa1b434d8ff",
+      "bytes": 5032,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "skills/flow-build/phases/phase-6.md",
+      "sha256": "9ff006d8fdbb62cec443e67177cd0cd51100aa2a03e3fd0053b649595cd58d4b",
+      "bytes": 14132,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "skills/flow-build/phases/phase-7.md",
+      "sha256": "455cbc0412bf9b620725d71366a91259d3ec915f73e81623c60a476f7028996e",
+      "bytes": 25556,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "skills/flow-build/phases/phase-8-playbook.md",
+      "sha256": "c369fa95aa035a36480e2254ed284c22c4ec8688b0766605c97568d7e3037144",
+      "bytes": 8995,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "skills/flow-build/phases/phase-8.md",
+      "sha256": "4580ef918b6b2b221a1aeffabb57c38f517cb2b02ea43e6087c122d7b0cd02c6",
+      "bytes": 35954,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "skills/flow-build/phases/phase-9.md",
+      "sha256": "3b16aef55aaaa96d67fe4aec8d6895b8f3a8bda4606e6750b0d72883e9087dd3",
+      "bytes": 8056,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "skills/flow-commit/SKILL.md",
+      "sha256": "1174879dc6794b4574c46096311f13f8f99800ea9c1ab9b4084e39013d3360bf",
+      "bytes": 6468,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "skills/flow-debt/SKILL.md",
+      "sha256": "e9b388fb2a147021a27a8dc96ba6f182b7aa2c5d681d185eae3737860a79f698",
+      "bytes": 7342,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "skills/flow-docs-sync/SKILL.md",
+      "sha256": "1bcb376df94d7dc28c8b9ae1cb35ae90a1543f919d7ee0a49a2ebdb9ba8b88cd",
+      "bytes": 2112,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "skills/flow-playbook-sync/SKILL.md",
+      "sha256": "ac1ee1069b2c269f247e04175b3c92cf6b74fd964ec6a9de47169a8ff6b7ee4c",
+      "bytes": 2717,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "skills/flow-pr/SKILL.md",
+      "sha256": "e373d895f54465759c6d89790b008cb66eab4639d254348336764d63130401c2",
+      "bytes": 8319,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "skills/flow-pr/references/output-contract.md",
+      "sha256": "f38fa19c2f7139e91be25cb437029ee15adf8d42d992856b92f39c50ad253a4a",
+      "bytes": 11561,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "skills/flow-refactor/SKILL.md",
+      "sha256": "c0f242af29f1ab755e70c137b39a7c4b33c63b03e9865e5e3d5c03c3dff4f36c",
+      "bytes": 16920,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "skills/flow-request/SKILL.md",
+      "sha256": "eb7fdc2a5241cc3569809551306b7f03bd92c520578d1aa63eda5eff5c1e7ff5",
+      "bytes": 7986,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "skills/flow-ui/SKILL.md",
+      "sha256": "f63ba6be90ae8a418887498775f32533faee1ca331f06366706b407502d09247",
+      "bytes": 8439,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "skills/ui-design-system/SKILL.md",
+      "sha256": "9d36ffc17103059a1418f35a5891ec572557e23ac7ba7b7ecd3090a82da76320",
+      "bytes": 6701,
+      "mode": "100644",
+      "executable": false
+    }
+  ]
+}

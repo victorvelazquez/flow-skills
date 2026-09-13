@@ -1,0 +1,299 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import test from "node:test";
+import { fileURLToPath } from "node:url";
+
+import { validateOpenCodeAdapterMappings } from "../tools/lib/asset-generation.mjs";
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const read = (file) =>
+  fs.readFileSync(path.join(root, ...file.split("/")), "utf8");
+const readJson = (file) => JSON.parse(read(file));
+const exists = (file) => fs.existsSync(path.join(root, ...file.split("/")));
+const opencodeCommand = (name) => `hosts/opencode/commands/${name}.md`;
+const opencodeAgent = (name) => `hosts/opencode/agents/${name}.md`;
+
+const readOnlyWorkflows = [
+  "flow-audit",
+  "flow-build",
+  "flow-debt",
+  "flow-docs-sync",
+  "flow-playbook-sync",
+  "flow-refactor",
+  "flow-request",
+  "flow-ui",
+];
+
+test("OpenCode read-only adapters retain native discovery and route to the portable skills", () => {
+  const adapters = readOnlyWorkflows.map(opencodeCommand);
+
+  for (const adapter of adapters) {
+    const source = read(adapter);
+    assert.match(
+      source,
+      /~\/.config\/opencode\/skills\/flow-(?:audit|build|debt|docs-sync|playbook-sync|refactor|request|ui)\/SKILL\.md/,
+    );
+  }
+  for (const adapter of [
+    opencodeCommand("flow-audit"),
+    opencodeCommand("flow-build"),
+    opencodeCommand("flow-docs-sync"),
+    opencodeCommand("flow-playbook-sync"),
+    opencodeCommand("flow-refactor"),
+    opencodeCommand("flow-request"),
+    opencodeCommand("flow-ui"),
+  ])
+    assert.match(read(adapter), /CONTEXT:/);
+  assert.match(read(opencodeCommand("flow-refactor")), /\$ARGUMENTS/);
+});
+
+test("OpenCode content adapters map repository sources to unchanged command destinations", () => {
+  const manifest = readJson("hosts/opencode/flow-assets.json");
+  const workflows = readJson("core/workflows.json").workflows;
+
+  assert.deepEqual(
+    manifest.workflows.filter((workflow) =>
+      readOnlyWorkflows.includes(workflow),
+    ),
+    readOnlyWorkflows,
+  );
+  assert.deepEqual(
+    manifest.mappings
+      .filter(({ workflow }) => readOnlyWorkflows.includes(workflow))
+      .map(({ source, destination }) => ({ source, destination })),
+    readOnlyWorkflows.map((workflow) => ({
+      source: opencodeCommand(workflow),
+      destination: `commands/${workflow}.md`,
+    })),
+  );
+  for (const mapping of manifest.mappings.filter(({ workflow }) =>
+    readOnlyWorkflows.includes(workflow),
+  )) {
+    assert.equal(
+      exists(mapping.source),
+      true,
+      `missing adapter: ${mapping.source}`,
+    );
+    assert.equal(mapping.destination.startsWith("commands/"), true);
+    assert.equal(
+      exists(mapping.destination),
+      false,
+      `legacy source remains: ${mapping.destination}`,
+    );
+    assert.equal(
+      workflows.some(
+        ({ id, hosts }) =>
+          id === mapping.workflow && hosts.opencode === "supported",
+      ),
+      true,
+      `adapter claims undeclared workflow: ${mapping.workflow}`,
+    );
+  }
+  assert.deepEqual(manifest.protectedScopes, [
+    "cache/**",
+    "credentials/**",
+    "node_modules/**",
+    "opencode.json",
+    "opencode.jsonc",
+    "package.json",
+    "plugins/**",
+    "providers/**",
+    "sessions/**",
+  ]);
+  assert.deepEqual(manifest.excludedScopes, manifest.protectedScopes);
+});
+
+test("OpenCode adapter mapping rejects unsupported workflows and destinations outside commands", () => {
+  const manifest = readJson("hosts/opencode/flow-assets.json");
+  const registry = readJson("core/workflows.json");
+
+  assert.equal(validateOpenCodeAdapterMappings(manifest, registry), manifest);
+
+  const unsupportedWorkflow = structuredClone(manifest);
+  unsupportedWorkflow.workflows[0] = "flow-missing";
+  unsupportedWorkflow.mappings.find(({ role }) => role === "adapter").workflow =
+    "flow-missing";
+  assert.throws(
+    () => validateOpenCodeAdapterMappings(unsupportedWorkflow, registry),
+    /unsupported registry workflow/i,
+  );
+
+  const outsideCommands = structuredClone(manifest);
+  outsideCommands.mappings.find(({ role }) => role === "adapter").destination =
+    "plugins/flow-audit.md";
+  assert.throws(
+    () => validateOpenCodeAdapterMappings(outsideCommands, registry),
+    /mapped destination must remain/i,
+  );
+
+  const legacyRootSource = structuredClone(manifest);
+  legacyRootSource.mappings.find(
+    ({ workflow }) => workflow === "flow-branch",
+  ).source = "commands/flow-branch.md";
+  assert.throws(
+    () => validateOpenCodeAdapterMappings(legacyRootSource, registry),
+    /mapped destination must remain/i,
+  );
+});
+
+test("OpenCode Git and GitHub adapters return unavailable instead of inferring missing approval", () => {
+  for (const [agent, expected] of [
+    [
+      "flow-branch-agent",
+      /approval is unavailable, return `unavailable` without invoking the gated runtime operation/i,
+    ],
+    [
+      "flow-git-agent",
+      /approval is unavailable, return `unavailable` without invoking execute/i,
+    ],
+    [
+      "flow-pr-agent",
+      /question capability is unavailable, return `unavailable` without mutation/i,
+    ],
+  ])
+    assert.match(read(opencodeAgent(agent)), expected);
+});
+
+test("OpenCode managed mappings include each adapter's portable skills and runtime dependencies", () => {
+  const manifest = readJson("hosts/opencode/flow-assets.json");
+  const portable = manifest.mappings.filter(({ role }) => role === "portable");
+
+  for (const skill of readJson("package.json").pi.skills) {
+    assert.deepEqual(
+      portable.find(({ source }) => source === `${skill}/**`),
+      {
+        source: `${skill}/**`,
+        destination: `${skill}/**`,
+        role: "portable",
+      },
+    );
+  }
+  for (const runtime of readJson("core/workflows.json")
+    .workflows.map(({ runtime }) => runtime)
+    .filter(Boolean))
+    assert.deepEqual(
+      portable.find(({ source }) => source === runtime),
+      { source: runtime, destination: runtime, role: "portable" },
+    );
+});
+
+test("OpenCode adapter syntax stays outside the Pi package boundary", () => {
+  const packageFiles = readJson("package.json").files;
+  for (const workflow of readOnlyWorkflows) {
+    const adapter = read(opencodeCommand(workflow));
+    assert.match(adapter, /~\/\.config\/opencode\/skills\//);
+    assert.equal(
+      packageFiles.some((selector) =>
+        opencodeCommand(workflow).startsWith(selector.replace("/**", "")),
+      ),
+      false,
+    );
+  }
+});
+
+test("OpenCode Git adapters retain native argument routing and distinct approval gates", () => {
+  const branch = read(opencodeCommand("flow-branch"));
+  const commit = read(opencodeCommand("flow-commit"));
+  const branchAgent = read(opencodeAgent("flow-branch-agent"));
+  const commitAgent = read(opencodeAgent("flow-git-agent"));
+
+  assert.match(branch, /^agent: flow-branch-agent$/m);
+  assert.match(branch, /^\$ARGUMENTS$/m);
+  assert.match(branchAgent, /--auto-list/);
+  assert.match(branchAgent, /ask-pull/);
+  assert.match(branchAgent, /ask-force-delete/);
+  assert.match(branchAgent, /specific branch/i);
+  assert.match(
+    branchAgent,
+    /approval is unavailable, return `unavailable` without invoking the gated runtime operation/i,
+  );
+  assert.match(commit, /^agent: flow-git-agent$/m);
+  assert.match(commitAgent, /--execute --handle \*": ask/);
+  assert.match(commitAgent, /one human mutation approval/i);
+});
+
+test("OpenCode Git adapters fail closed when approval is unavailable or a sealed plan is stale", () => {
+  const commitAgent = read(opencodeAgent("flow-git-agent"));
+  assert.match(commitAgent, /approval.*unavailable.*without invoking execute/i);
+  assert.match(commitAgent, /stale.*sealed.*handle.*fresh preparation/i);
+  assert.doesNotMatch(
+    read("skills/flow-commit/SKILL.md"),
+    /permission:\s*(?:allow|ask|deny)/i,
+  );
+});
+
+test("OpenCode Git and GitHub adapter mappings preserve destinations and native contracts", () => {
+  const manifest = readJson("hosts/opencode/flow-assets.json");
+  const registry = readJson("core/workflows.json");
+  const commandWorkflows = ["flow-branch", "flow-commit", "flow-pr"];
+  const agents = [
+    "flow-branch-agent",
+    "flow-git-agent",
+    "flow-pr-agent",
+    "flow-review-agent",
+  ];
+
+  assert.deepEqual(
+    manifest.mappings
+      .filter(({ workflow }) => commandWorkflows.includes(workflow))
+      .map(({ workflow, source, destination }) => ({
+        workflow,
+        source,
+        destination,
+      })),
+    commandWorkflows.map((workflow) => ({
+      workflow,
+      source: opencodeCommand(workflow),
+      destination: `commands/${workflow}.md`,
+    })),
+  );
+  assert.equal(
+    manifest.mappings.some(
+      ({ source }) => source === opencodeCommand("flow-auto-deliver"),
+    ),
+    false,
+  );
+  assert.deepEqual(
+    manifest.mappings
+      .filter(({ role }) => role === "agent")
+      .map(({ source, destination }) => ({ source, destination })),
+    agents.map((agent) => ({
+      source: opencodeAgent(agent),
+      destination: `agents/${agent}.md`,
+    })),
+  );
+  for (const workflow of commandWorkflows.slice(0, 3))
+    assert.equal(
+      registry.workflows.some(
+        ({ id, hosts }) => id === workflow && hosts.opencode === "supported",
+      ),
+      true,
+    );
+  for (const adapter of [
+    ...commandWorkflows.map(opencodeCommand),
+    ...agents.map(opencodeAgent),
+  ])
+    assert.equal(exists(adapter), true, `missing adapter: ${adapter}`);
+  assert.equal(validateOpenCodeAdapterMappings(manifest, registry), manifest);
+});
+
+test("OpenCode PR adapter owns native clarification and one execute approval", () => {
+  const command = read(opencodeCommand("flow-pr"));
+  const agent = read(opencodeAgent("flow-pr-agent"));
+  assert.match(command, /OpenCode's `question` tool/i);
+  assert.match(agent, /^ {2}question: allow$/m);
+  assert.match(agent, /--execute --handle \*": ask/);
+  assert.match(
+    agent,
+    /question capability is unavailable, return `unavailable` without mutation/i,
+  );
+  assert.match(
+    agent,
+    /Drift, blocked, partial, failure, or unknown effects require fresh preparation/i,
+  );
+  assert.doesNotMatch(
+    read("skills/flow-pr/SKILL.md"),
+    /OpenCode|apply_patch|question tool/i,
+  );
+});
