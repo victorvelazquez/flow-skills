@@ -1,0 +1,345 @@
+{
+  "$schema": "flow-host-assets/v2",
+  "host": "opencode",
+  "distribution": {
+    "kind": "managed-deployment"
+  },
+  "workflows": [
+    "flow-audit",
+    "flow-branch",
+    "flow-build",
+    "flow-commit",
+    "flow-debt",
+    "flow-docs-sync",
+    "flow-playbook-sync",
+    "flow-pr",
+    "flow-refactor",
+    "flow-request",
+    "flow-ui"
+  ],
+  "capabilities": {
+    "approval": "permission-ask",
+    "clarification": "question-same-child",
+    "discovery": "slash-command",
+    "presentation": "result-relay"
+  },
+  "sourceSelectors": [
+    "hosts/opencode/agents/flow-branch-agent.md",
+    "hosts/opencode/agents/flow-git-agent.md",
+    "hosts/opencode/agents/flow-pr-agent.md",
+    "hosts/opencode/agents/flow-review-agent.md",
+    "hosts/opencode/commands/flow-audit.md",
+    "hosts/opencode/commands/flow-branch.md",
+    "hosts/opencode/commands/flow-build.md",
+    "hosts/opencode/commands/flow-commit.md",
+    "hosts/opencode/commands/flow-debt.md",
+    "hosts/opencode/commands/flow-docs-sync.md",
+    "hosts/opencode/commands/flow-playbook-sync.md",
+    "hosts/opencode/commands/flow-pr.md",
+    "hosts/opencode/commands/flow-refactor.md",
+    "hosts/opencode/commands/flow-request.md",
+    "hosts/opencode/commands/flow-ui.md",
+    "scripts/flow-audit.mjs",
+    "scripts/flow-branch.mjs",
+    "scripts/flow-build.mjs",
+    "scripts/flow-commit.mjs",
+    "scripts/flow-docs-sync.mjs",
+    "scripts/flow-playbook-sync.mjs",
+    "scripts/flow-pr.mjs",
+    "scripts/flow-refactor.mjs",
+    "scripts/flow-ui.mjs",
+    "scripts/lib/detect-tooling.mjs",
+    "scripts/lib/dotnet-format.mjs",
+    "scripts/lib/flow-audit-cache.mjs",
+    "scripts/lib/flow-audit-output.mjs",
+    "scripts/lib/flow-pr-contracts.mjs",
+    "scripts/lib/flow-pr-drafting.mjs",
+    "scripts/lib/flow-pr-executor.mjs",
+    "scripts/lib/flow-pr-inspection.mjs",
+    "scripts/lib/helpers.mjs",
+    "scripts/lib/process-control.mjs",
+    "scripts/lib/scope.mjs",
+    "skills/flow-audit/**",
+    "skills/flow-branch/**",
+    "skills/flow-build/**",
+    "skills/flow-commit/**",
+    "skills/flow-debt/**",
+    "skills/flow-docs-sync/**",
+    "skills/flow-playbook-sync/**",
+    "skills/flow-pr/**",
+    "skills/flow-refactor/**",
+    "skills/flow-request/**",
+    "skills/flow-ui/**",
+    "skills/ui-design-system/**"
+  ],
+  "mappings": [
+    {
+      "source": "hosts/opencode/agents/flow-branch-agent.md",
+      "destination": "agents/flow-branch-agent.md",
+      "role": "agent"
+    },
+    {
+      "source": "hosts/opencode/agents/flow-git-agent.md",
+      "destination": "agents/flow-git-agent.md",
+      "role": "agent"
+    },
+    {
+      "source": "hosts/opencode/agents/flow-pr-agent.md",
+      "destination": "agents/flow-pr-agent.md",
+      "role": "agent"
+    },
+    {
+      "source": "hosts/opencode/agents/flow-review-agent.md",
+      "destination": "agents/flow-review-agent.md",
+      "role": "agent"
+    },
+    {
+      "workflow": "flow-audit",
+      "source": "hosts/opencode/commands/flow-audit.md",
+      "destination": "commands/flow-audit.md",
+      "role": "adapter"
+    },
+    {
+      "workflow": "flow-branch",
+      "source": "hosts/opencode/commands/flow-branch.md",
+      "destination": "commands/flow-branch.md",
+      "role": "adapter"
+    },
+    {
+      "workflow": "flow-build",
+      "source": "hosts/opencode/commands/flow-build.md",
+      "destination": "commands/flow-build.md",
+      "role": "adapter"
+    },
+    {
+      "workflow": "flow-commit",
+      "source": "hosts/opencode/commands/flow-commit.md",
+      "destination": "commands/flow-commit.md",
+      "role": "adapter"
+    },
+    {
+      "workflow": "flow-debt",
+      "source": "hosts/opencode/commands/flow-debt.md",
+      "destination": "commands/flow-debt.md",
+      "role": "adapter"
+    },
+    {
+      "workflow": "flow-docs-sync",
+      "source": "hosts/opencode/commands/flow-docs-sync.md",
+      "destination": "commands/flow-docs-sync.md",
+      "role": "adapter"
+    },
+    {
+      "workflow": "flow-playbook-sync",
+      "source": "hosts/opencode/commands/flow-playbook-sync.md",
+      "destination": "commands/flow-playbook-sync.md",
+      "role": "adapter"
+    },
+    {
+      "workflow": "flow-pr",
+      "source": "hosts/opencode/commands/flow-pr.md",
+      "destination": "commands/flow-pr.md",
+      "role": "adapter"
+    },
+    {
+      "workflow": "flow-refactor",
+      "source": "hosts/opencode/commands/flow-refactor.md",
+      "destination": "commands/flow-refactor.md",
+      "role": "adapter"
+    },
+    {
+      "workflow": "flow-request",
+      "source": "hosts/opencode/commands/flow-request.md",
+      "destination": "commands/flow-request.md",
+      "role": "adapter"
+    },
+    {
+      "workflow": "flow-ui",
+      "source": "hosts/opencode/commands/flow-ui.md",
+      "destination": "commands/flow-ui.md",
+      "role": "adapter"
+    },
+    {
+      "source": "scripts/flow-audit.mjs",
+      "destination": "scripts/flow-audit.mjs",
+      "role": "portable"
+    },
+    {
+      "source": "scripts/flow-branch.mjs",
+      "destination": "scripts/flow-branch.mjs",
+      "role": "portable"
+    },
+    {
+      "source": "scripts/flow-build.mjs",
+      "destination": "scripts/flow-build.mjs",
+      "role": "portable"
+    },
+    {
+      "source": "scripts/flow-commit.mjs",
+      "destination": "scripts/flow-commit.mjs",
+      "role": "portable"
+    },
+    {
+      "source": "scripts/flow-docs-sync.mjs",
+      "destination": "scripts/flow-docs-sync.mjs",
+      "role": "portable"
+    },
+    {
+      "source": "scripts/flow-playbook-sync.mjs",
+      "destination": "scripts/flow-playbook-sync.mjs",
+      "role": "portable"
+    },
+    {
+      "source": "scripts/flow-pr.mjs",
+      "destination": "scripts/flow-pr.mjs",
+      "role": "portable"
+    },
+    {
+      "source": "scripts/flow-refactor.mjs",
+      "destination": "scripts/flow-refactor.mjs",
+      "role": "portable"
+    },
+    {
+      "source": "scripts/flow-ui.mjs",
+      "destination": "scripts/flow-ui.mjs",
+      "role": "portable"
+    },
+    {
+      "source": "scripts/lib/detect-tooling.mjs",
+      "destination": "scripts/lib/detect-tooling.mjs",
+      "role": "portable"
+    },
+    {
+      "source": "scripts/lib/dotnet-format.mjs",
+      "destination": "scripts/lib/dotnet-format.mjs",
+      "role": "portable"
+    },
+    {
+      "source": "scripts/lib/flow-audit-cache.mjs",
+      "destination": "scripts/lib/flow-audit-cache.mjs",
+      "role": "portable"
+    },
+    {
+      "source": "scripts/lib/flow-audit-output.mjs",
+      "destination": "scripts/lib/flow-audit-output.mjs",
+      "role": "portable"
+    },
+    {
+      "source": "scripts/lib/flow-pr-contracts.mjs",
+      "destination": "scripts/lib/flow-pr-contracts.mjs",
+      "role": "portable"
+    },
+    {
+      "source": "scripts/lib/flow-pr-drafting.mjs",
+      "destination": "scripts/lib/flow-pr-drafting.mjs",
+      "role": "portable"
+    },
+    {
+      "source": "scripts/lib/flow-pr-executor.mjs",
+      "destination": "scripts/lib/flow-pr-executor.mjs",
+      "role": "portable"
+    },
+    {
+      "source": "scripts/lib/flow-pr-inspection.mjs",
+      "destination": "scripts/lib/flow-pr-inspection.mjs",
+      "role": "portable"
+    },
+    {
+      "source": "scripts/lib/helpers.mjs",
+      "destination": "scripts/lib/helpers.mjs",
+      "role": "portable"
+    },
+    {
+      "source": "scripts/lib/process-control.mjs",
+      "destination": "scripts/lib/process-control.mjs",
+      "role": "portable"
+    },
+    {
+      "source": "scripts/lib/scope.mjs",
+      "destination": "scripts/lib/scope.mjs",
+      "role": "portable"
+    },
+    {
+      "source": "skills/flow-audit/**",
+      "destination": "skills/flow-audit/**",
+      "role": "portable"
+    },
+    {
+      "source": "skills/flow-branch/**",
+      "destination": "skills/flow-branch/**",
+      "role": "portable"
+    },
+    {
+      "source": "skills/flow-build/**",
+      "destination": "skills/flow-build/**",
+      "role": "portable"
+    },
+    {
+      "source": "skills/flow-commit/**",
+      "destination": "skills/flow-commit/**",
+      "role": "portable"
+    },
+    {
+      "source": "skills/flow-debt/**",
+      "destination": "skills/flow-debt/**",
+      "role": "portable"
+    },
+    {
+      "source": "skills/flow-docs-sync/**",
+      "destination": "skills/flow-docs-sync/**",
+      "role": "portable"
+    },
+    {
+      "source": "skills/flow-playbook-sync/**",
+      "destination": "skills/flow-playbook-sync/**",
+      "role": "portable"
+    },
+    {
+      "source": "skills/flow-pr/**",
+      "destination": "skills/flow-pr/**",
+      "role": "portable"
+    },
+    {
+      "source": "skills/flow-refactor/**",
+      "destination": "skills/flow-refactor/**",
+      "role": "portable"
+    },
+    {
+      "source": "skills/flow-request/**",
+      "destination": "skills/flow-request/**",
+      "role": "portable"
+    },
+    {
+      "source": "skills/flow-ui/**",
+      "destination": "skills/flow-ui/**",
+      "role": "portable"
+    },
+    {
+      "source": "skills/ui-design-system/**",
+      "destination": "skills/ui-design-system/**",
+      "role": "portable"
+    }
+  ],
+  "protectedScopes": [
+    "cache/**",
+    "credentials/**",
+    "node_modules/**",
+    "opencode.json",
+    "opencode.jsonc",
+    "package.json",
+    "plugins/**",
+    "providers/**",
+    "sessions/**"
+  ],
+  "excludedScopes": [
+    "cache/**",
+    "credentials/**",
+    "node_modules/**",
+    "opencode.json",
+    "opencode.jsonc",
+    "package.json",
+    "plugins/**",
+    "providers/**",
+    "sessions/**"
+  ]
+}

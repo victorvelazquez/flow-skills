@@ -6,6 +6,13 @@ Format: [Conventional Commits](https://www.conventionalcommits.org/) — `feat`,
 
 ---
 
+## Unreleased
+
+### Changed
+
+- Multihost migration: Pi package resources are the primary Flow Skills experience; OpenCode remains supported through its native adapter.
+- Published the retained/replaced/removed migration matrix for all prior Flow commands and skills. `flow-auto-deliver`, `flow-figma`, and end-user `flow-skills-sync` are removed; no release, installation, deployment, or host-tree replacement is implied by this documentation.
+
 ## [0.3.1] — 2026-03-30
 
 ### Changed

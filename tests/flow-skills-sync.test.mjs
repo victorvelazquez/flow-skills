@@ -9,199 +9,58 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const wrapper = path.join(root, "scripts", "flow-skills.mjs");
 
-function harness() {
-  const parent = fs.mkdtempSync(path.join(os.tmpdir(), "flow-skills-wrapper-"));
-  const repo = path.join(parent, "repo override");
-  const live = path.join(parent, "live override");
-  const unrelated = path.join(parent, "unrelated cwd");
-  const capture = path.join(parent, "captured.json");
-  fs.mkdirSync(path.join(repo, "tools"), { recursive: true });
-  fs.mkdirSync(live);
-  fs.mkdirSync(unrelated);
-  fs.writeFileSync(path.join(repo, "tools", "flow-assets.mjs"), [
-    'import fs from "node:fs";',
-    'fs.writeFileSync(process.env.FLOW_CAPTURE, JSON.stringify(process.argv.slice(2)));',
-    'if (process.env.FLOW_ENGINE_ERROR) { process.stderr.write(process.env.FLOW_ENGINE_ERROR); process.exit(3); }',
-    'process.stdout.write(JSON.stringify({ ok: true, args: process.argv.slice(2) }) + "\\n");',
-  ].join("\n"));
-  return { parent, repo, live, unrelated, capture };
-}
-
-function run(args, fixture, overrides = {}) {
+function run(args = []) {
   return spawnSync(process.execPath, [wrapper, ...args], {
-    cwd: fixture.unrelated,
+    cwd: fs.mkdtempSync(path.join(os.tmpdir(), "flow-skills-retired-")),
     encoding: "utf8",
     env: {
       ...process.env,
-      FLOW_SKILLS_REPO: fixture.repo,
-      FLOW_SKILLS_OPENCODE_DIR: fixture.live,
-      FLOW_CAPTURE: fixture.capture,
-      ...overrides,
+      FLOW_SKILLS_REPO: path.join(root, "does-not-need-to-exist"),
+      FLOW_SKILLS_OPENCODE_DIR: path.join(root, "does-not-need-to-exist"),
     },
   });
 }
 
-test("wrapper works from arbitrary cwd with environment path overrides", () => {
-  const fixture = harness();
-  const result = run(["--status"], fixture);
-
-  assert.equal(result.status, 0, result.stderr);
-  assert.deepEqual(JSON.parse(fs.readFileSync(fixture.capture, "utf8")), [
-    "--status",
-    "--source",
-    fixture.live,
-  ]);
-});
-
-test("raw wrapper remains strict for zero arguments", () => {
-  const fixture = harness();
-  const result = run([], fixture);
-
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /Usage:/);
-  assert.equal(fs.existsSync(fixture.capture), false);
-});
-
-test("wrapper forwards snapshot arguments and metadata byte-for-byte", () => {
-  const fixture = harness();
-  const args = [
-    "--snapshot",
-    "--apply",
-    "--expected-plan-id",
-    "abc 123",
-    "--captured-at",
-    "2026-07-23T12:34:56.789Z",
-    "--opencode-version",
-    "OpenCode version with spaces",
-    "--gentle-ai-version",
-    "Gentle AI version with spaces",
-  ];
-  const result = run(args, fixture);
-
-  assert.equal(result.status, 0, result.stderr);
-  assert.deepEqual(JSON.parse(fs.readFileSync(fixture.capture, "utf8")), [
-    "--snapshot",
-    "--source",
-    fixture.live,
-    ...args.slice(1),
-  ]);
-});
-
-test("wrapper reports clear missing repository and source blockers", () => {
-  const fixture = harness();
-  const missingRepo = run(["--status"], fixture, { FLOW_SKILLS_REPO: path.join(fixture.repo, "missing") });
-  assert.notEqual(missingRepo.status, 0);
-  assert.match(missingRepo.stderr, /Flow skills repository not found/);
-
-  const missingSource = run(["--status"], fixture, { FLOW_SKILLS_OPENCODE_DIR: path.join(fixture.live, "missing") });
-  assert.notEqual(missingSource.status, 0);
-  assert.match(missingSource.stderr, /OpenCode source directory not found/);
-});
-
-test("wrapper rejects unsupported and mutation-prone legacy arguments", () => {
-  const fixture = harness();
-  for (const argument of ["--auto", "--context", "--run-export", "--update", "--source", "--verify"]) {
-    const result = run([argument], fixture);
-    assert.notEqual(result.status, 0, argument);
-    assert.match(result.stderr, /Unsupported argument|Usage/);
-  }
-  const source = fs.readFileSync(wrapper, "utf8");
-  assert.doesNotMatch(source, /git\s+(?:fetch|pull|commit|push)|install\.mjs|run-export/i);
-});
-
-test("restore preview forwards literal refs without mutation or shell evaluation", () => {
-  for (const ref of ["feature/history", "v1.2.3", "a".repeat(40), "HEAD;touch should-not-exist"]) {
-    const fixture = harness();
-    const liveBefore = fs.readdirSync(fixture.live);
-    const result = run(["restore", ref], fixture);
-    assert.equal(result.status, 0, result.stderr);
-    assert.deepEqual(JSON.parse(fs.readFileSync(fixture.capture, "utf8")), [
-      "--restore", "--ref", ref, "--destination", fixture.live, "--dry-run",
-    ]);
-    assert.deepEqual(fs.readdirSync(fixture.live), liveBefore);
-    assert.equal(fs.existsSync(path.join(fixture.parent, "should-not-exist")), false);
+test("the legacy Flow Skills Sync wrapper rejects every entry without reading a host", () => {
+  for (const args of [[], ["--snapshot", "--dry-run"], ["restore", "HEAD"]]) {
+    const result = run(args);
+    assert.notEqual(result.status, 0, args.join(" "));
+    assert.match(result.stderr, /retired|reconcile/i);
+    assert.doesNotMatch(
+      result.stderr,
+      /source directory not found|repository not found/i,
+    );
   }
 });
 
-test("restore apply forwards exact authority IDs and surfaces engine blockers", () => {
-  const fixture = harness();
-  const args = ["restore", "release ref", "--apply", "--expected-target-commit", "commit value", "--expected-plan-id", "plan value"];
-  const result = run(args, fixture);
-  assert.equal(result.status, 0, result.stderr);
-  assert.deepEqual(JSON.parse(fs.readFileSync(fixture.capture, "utf8")), [
-    "--restore", "--ref", "release ref", "--destination", fixture.live, "--apply",
-    "--expected-target-commit", "commit value", "--expected-plan-id", "plan value",
-  ]);
-  const stale = run(args, fixture, { FLOW_ENGINE_ERROR: "Stale restore plan ID" });
-  assert.equal(stale.status, 3); assert.match(stale.stderr, /Stale restore plan ID/);
+test("Flow Skills Sync has no end-user skill or command surface", () => {
+  assert.equal(
+    fs.existsSync(path.join(root, "skills", "flow-skills-sync", "SKILL.md")),
+    false,
+  );
+  assert.equal(
+    fs.existsSync(path.join(root, "commands", "flow-skills-sync.md")),
+    false,
+  );
+
+  const migration = fs.readFileSync(
+    path.join(root, "docs", "multihost-migration.md"),
+    "utf8",
+  );
+  assert.match(migration, /`flow-skills-sync`[^\n]*Removed/i);
+  assert.match(migration, /tools\/flow-assets\.mjs --reconcile/i);
+  assert.match(
+    migration,
+    /--host opencode --source <absolute-path> --dry-run/i,
+  );
 });
 
-test("restore rejects missing refs, incomplete authority, preview IDs, and unsupported flags", () => {
-  const fixture = harness();
-  for (const args of [
-    ["restore"], ["restore", "HEAD", "--apply"],
-    ["restore", "HEAD", "--apply", "--expected-target-commit", "commit"],
-    ["restore", "HEAD", "--expected-plan-id", "plan"], ["restore", "HEAD", "--dry-run"],
-    ["restore", "HEAD", "--backup-root", "elsewhere"],
-  ]) {
-    const result = run(args, fixture); assert.notEqual(result.status, 0, args.join(" "));
-    assert.match(result.stderr, /restore|Unsupported|Usage/i);
-  }
-});
+test("the retired wrapper does not imply approval or host mutation", () => {
+  const contract = fs.readFileSync(wrapper, "utf8");
 
-test("bare slash command uses a non-mutating snapshot comparison before unchanged argument forwarding", () => {
-  const skill = fs.readFileSync(path.join(root, "skills", "flow-skills-sync", "SKILL.md"), "utf8");
-  const command = fs.readFileSync(path.join(root, "commands", "flow-skills-sync.md"), "utf8");
-
-  const emptyBranch = command.search(/empty or whitespace-only/i);
-  const forwarding = command.indexOf("node ~/.config/opencode/scripts/flow-skills.mjs $ARGUMENTS");
-  assert.ok(emptyBranch >= 0 && emptyBranch < forwarding);
-  assert.match(command, /do not invoke the wrapper without arguments/i);
-  assert.match(command, /first and only initial command.*--snapshot --dry-run/i);
-  assert.match(command, /non-empty[\s\S]*forward it unchanged/i);
-  const guided = skill.slice(skill.indexOf("## Guided No-Argument Workflow"), skill.indexOf("## Decision Gates")); assert.match(guided, /read-only comparison preview[\s\S]*--snapshot --dry-run/i); assert.doesNotMatch(guided, /--status/i); assert.match(guided, /Reuse the already-generated exact snapshot preview and `planId`; do not invoke a second preview/i);
-  assert.match(skill, /add: 0[\s\S]*change: 0[\s\S]*delete: 0[\s\S]*synchronized[\s\S]*stop/i);
-  const fixture = harness(), transaction = path.join(fixture.live, ".flow-skills", "transactions", "transaction"), marker = path.join(transaction, "journal.json"); fs.mkdirSync(transaction, { recursive: true }); fs.writeFileSync(marker, "immutable incomplete transaction bytes"); const before = fs.readFileSync(marker), result = run(["--snapshot", "--dry-run"], fixture, { FLOW_SKILLS_REPO: root }); assert.equal(result.status, 0, result.stderr); assert.deepEqual(fs.readFileSync(marker), before);
-});
-
-test("guided drift asks one three-way direction question and choices launch previews only", () => {
-  const skill = fs.readFileSync(path.join(root, "skills", "flow-skills-sync", "SKILL.md"), "utf8");
-
-  assert.match(skill, /question` tool once to ask for exactly one action choice/i);
-  assert.match(skill, /Snapshot live OpenCode into the repository/);
-  assert.match(skill, /Restore repository HEAD into live OpenCode/);
-  assert.match(skill, /Cancel/);
-  assert.match(skill, /do not infer its direction/i);
-  assert.match(skill, /selected action never authorizes apply/i);
-  assert.match(skill, /--snapshot --dry-run/);
-  assert.match(skill, /restore HEAD/);
-  assert.match(skill, /live OpenCode -> Git mirror/);
-  assert.match(skill, /repository `HEAD` -> live OpenCode/);
-  assert.match(skill, /repository freshness is user-controlled/i);
-  assert.match(skill, /Cancel Choice[\s\S]*Run no additional command/i);
-});
-
-test("guided apply remains confirmation-bound to exact preview identities", () => {
-  const skill = fs.readFileSync(path.join(root, "skills", "flow-skills-sync", "SKILL.md"), "utf8");
-
-  assert.match(skill, /explicit confirmation bound to that exact `planId`/i);
-  assert.match(skill, /--snapshot --apply --expected-plan-id <planId>/i);
-  assert.match(skill, /--expected-plan-id[= ]+<?planId>?/i);
-  assert.match(skill, /exact.*planId/i);
-  assert.match(skill, /restore <ref>/);
-  assert.match(skill, /initial.*preview|first.*preview/i);
-  assert.match(skill, /explicit confirmation/i);
-  assert.match(skill, /target.*commit.*planId|planId.*target.*commit/is);
-  assert.match(skill, /stale.*preview/i);
-  assert.match(skill, /backup.*restart/i);
-});
-
-test("guided contract introduces no Git publication, repository update, or config mutation command", () => {
-  const skill = fs.readFileSync(path.join(root, "skills", "flow-skills-sync", "SKILL.md"), "utf8");
-  const command = fs.readFileSync(path.join(root, "commands", "flow-skills-sync.md"), "utf8");
-  const contract = `${skill}\n${command}`;
-
-  assert.doesNotMatch(contract, /git\s+(?:fetch|pull|checkout|reset|commit|push)|\/flow-(?:commit|pr)/i);
-  assert.doesNotMatch(contract, /(?:write|edit|update|modify)\s+`?opencode\.json/i);
-  assert.match(command, /Working directory:/);
+  assert.doesNotMatch(
+    contract,
+    /--apply|--approve|git\s+(?:commit|push)|pi install/i,
+  );
+  assert.match(contract, /retired|reconcile/i);
 });

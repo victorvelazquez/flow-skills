@@ -8,23 +8,12 @@ trigger: /flow-build command
 
 Trigger: user runs `/flow-build`
 
-Script path:
+Runtime resource: `../../scripts/flow-build.mjs`, resolved relative to this `SKILL.md` by the active host adapter. Store the resolved path as `$SCRIPT`.
 
-```
-node -e "const os=require('os'),path=require('path');console.log(path.join(os.homedir(),'.config','opencode','scripts','flow-build.mjs'))"
-```
-
-Store result as `$SCRIPT`. Phases dir:
-
-```
-node -e "const os=require('os'),path=require('path');console.log(path.join(os.homedir(),'.config','opencode','skills','flow-build','phases'))"
-```
-
-Store result as `$PHASES`.
+Phase resources: `phases/`, resolved relative to this `SKILL.md`. Store the resolved directory as `$PHASES`.
 
 > **Note**: The `phases/` directory contains static phase template files. Playbook variants
-> (`phase-N-playbook.md`) are used when `STANDARDS = playbook`. They are installed by
-> `node install.mjs` and will be present at `$PHASES` after installation.
+> (`phase-N-playbook.md`) are used when `STANDARDS = playbook` and are packaged with this skill.
 
 ---
 
@@ -39,6 +28,7 @@ Parse JSON: `{ projectType, framework, language, cacheExists, isExistingProject,
 Store `PROJECT_TYPE` = `projectType`.
 
 Also detect if a playbook exists in the project:
+
 - Check for `playbook/` directory or `.agent/playbook/` in the project root
 - Check for `backend-stack.md`, `frontend-stack.md`, `api-contract.md` in any `playbook/` folder
 - Store `PLAYBOOK_DETECTED` = `true` / `false`
@@ -61,12 +51,14 @@ Existing docs: [existingDocs.found]/[existingDocs.total]
 ### Project Type block
 
 **If `projectType != unknown`** — show as confirmation:
+
 ```
 Project Type: [framework] / [language] ✅ (detectado)
 ¿Es correcto? (S/N)
 ```
 
 **If `projectType == unknown`** — ask:
+
 ```
 Project Type: no detectado — ¿cuál es?
   A) Backend (API)
@@ -108,11 +100,13 @@ Standards:
 ### Phase 0 block
 
 **If `isExistingProject == true`**:
+
 ```
 Phase 0 (análisis del proyecto existente): ¿Correr? (S/N)
 ```
 
 **If `isExistingProject == false`**:
+
 ```
 Phase 0: NO aplica — proyecto nuevo
 ```

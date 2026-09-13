@@ -8,13 +8,7 @@ trigger: /flow-playbook-sync command, or invoked automatically by flow-pr on com
 
 Trigger: user runs `/flow-playbook-sync [--init] [--reset] [--dry-run]`
 
-Script path:
-
-```bash
-node -e "const os=require('os'),path=require('path');console.log(path.join(os.homedir(),'.config','opencode','scripts','flow-playbook-sync.mjs'))"
-```
-
-Store as `$SCRIPT`.
+Runtime resource: `../../scripts/flow-playbook-sync.mjs`, resolved relative to this `SKILL.md` by the active host adapter. Store the resolved path as `$SCRIPT`.
 
 ## Default Behavior
 

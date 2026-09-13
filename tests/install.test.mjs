@@ -1,57 +1,104 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const installer = path.join(root, "install.mjs");
+const workspace = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+);
+const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
-function git(args, label) {
-  const result = spawnSync("git", args, { cwd: root, encoding: "utf8" });
-  assert.equal(result.status, 0, [
-    `Failed to read ${label} from Git.`,
-    result.error?.message,
-    result.stderr,
-  ].filter(Boolean).join("\n"));
-  return result.stdout;
+function git(cwd, args) {
+  return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
 }
 
-const committedHead = git(["rev-parse", "HEAD"], "committed HEAD").trim();
-const committedLock = (() => {
-  const bytes = git(["show", "HEAD:flow-assets.lock.json"], "flow-assets.lock.json at committed HEAD");
-  try { return JSON.parse(bytes); }
-  catch (error) { assert.fail(`Committed HEAD flow-assets.lock.json is invalid JSON: ${error.message}`); }
-})();
-const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
+function copyFixtureFile(repo, relative) {
+  const source = path.join(workspace, ...relative.split("/"));
+  const destination = path.join(repo, ...relative.split("/"));
+  fs.mkdirSync(path.dirname(destination), { recursive: true });
+  fs.cpSync(source, destination, { recursive: true });
+}
+
+function fixtureRepository() {
+  const parent = fs.mkdtempSync(
+    path.join(os.tmpdir(), "flow-skills-installer-"),
+  );
+  const repo = path.join(parent, "repo");
+  fs.mkdirSync(repo);
+  const generation = JSON.parse(
+    fs.readFileSync(path.join(workspace, "flow-generation.lock.json"), "utf8"),
+  );
+  const required = new Set([
+    ".gitattributes",
+    "install.mjs",
+    "package.json",
+    "flow-generation.lock.json",
+    "hosts/pi/flow-assets.json",
+    "hosts/pi/flow-assets.lock.json",
+    "hosts/opencode/flow-assets.json",
+    "hosts/opencode/flow-assets.lock.json",
+    ...generation.sources.map(({ source }) => source),
+  ]);
+  for (const relative of required) copyFixtureFile(repo, relative);
+  fs.cpSync(path.join(workspace, "tools"), path.join(repo, "tools"), {
+    recursive: true,
+  });
+  git(repo, ["init", "-q", "-b", "main"]);
+  git(repo, ["config", "core.autocrlf", "false"]);
+  git(repo, ["config", "user.email", "test@example.test"]);
+  git(repo, ["config", "user.name", "Test"]);
+  git(repo, ["add", "."]);
+  git(repo, ["commit", "-qm", "fixture"]);
+  return {
+    repo,
+    installer: path.join(repo, "install.mjs"),
+    commit: git(repo, ["rev-parse", "HEAD"]),
+    lock: JSON.parse(
+      fs.readFileSync(
+        path.join(repo, "hosts/opencode/flow-assets.lock.json"),
+        "utf8",
+      ),
+    ),
+  };
+}
 
 function destination() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "flow-skills-bootstrap-"));
 }
 
-function seedConfig(target, overrides = {}) {
+function seedConfig(target) {
   const config = {
     $schema: "https://opencode.ai/config.json",
-    agent: { "gentle-orchestrator": {
-      model: "openai/test-model",
-      tools: { task: false, read: true },
-      permission: { question: "allow", task: { "*": "deny" } },
-    } },
-    permission: { bash: "ask" },
+    agent: { "gentle-orchestrator": { model: "openai/test-model" } },
     provider: { custom: { token: "must-not-leak" } },
-    ...overrides,
   };
   const bytes = ` ${JSON.stringify(config)}\r\n`;
   fs.writeFileSync(path.join(target, "opencode.json"), bytes);
   return bytes;
 }
 
-function run(args, target, options = {}) {
-  return spawnSync(process.execPath, [installer, ...args], {
-    cwd: options.cwd || root,
+function snapshot(root) {
+  const files = {};
+  const visit = (directory) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const absolute = path.join(directory, entry.name);
+      const relative = path.relative(root, absolute).split(path.sep).join("/");
+      if (entry.isDirectory()) visit(absolute);
+      else files[relative] = digest(fs.readFileSync(absolute));
+    }
+  };
+  visit(root);
+  return files;
+}
+
+function run(fixture, args, target, options = {}) {
+  return spawnSync(process.execPath, [fixture.installer, ...args], {
+    cwd: options.cwd || fixture.repo,
     encoding: "utf8",
     env: { ...process.env, FLOW_SKILLS_OPENCODE_DIR: target, ...options.env },
   });
@@ -62,131 +109,180 @@ function json(result) {
   return JSON.parse(result.stdout);
 }
 
-function preview(target, args = []) {
-  return json(run(args, target));
+function preview(fixture, target, args = []) {
+  return json(run(fixture, args, target));
 }
 
-function apply(target, plan, args = []) {
-  return run(["--apply", "--expected-target-commit", plan.target.commit, "--expected-plan-id", plan.planId, ...args], target);
+function apply(fixture, target, plan, args = []) {
+  return run(
+    fixture,
+    [
+      "--apply",
+      "--expected-target-commit",
+      plan.target.commit,
+      "--expected-plan-id",
+      plan.planId,
+      ...args,
+    ],
+    target,
+  );
 }
 
-function snapshot(target) {
-  const files = {};
-  const visit = (directory) => {
-    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-      const absolute = path.join(directory, entry.name);
-      const relative = path.relative(target, absolute).split(path.sep).join("/");
-      if (entry.isDirectory()) visit(absolute);
-      else files[relative] = digest(fs.readFileSync(absolute));
-    }
-  };
-  visit(target);
-  return files;
-}
-
-test("no-argument preview and --dry-run are read-only and do not recover transactions", () => {
-  const target = destination(); seedConfig(target);
+test("no-argument OpenCode HEAD preview and --dry-run are read-only", () => {
+  const fixture = fixtureRepository();
+  const target = destination();
+  seedConfig(target);
   const before = snapshot(target);
-  const first = preview(target), alias = preview(target, ["--dry-run"]);
+  const first = preview(fixture, target);
+  const alias = preview(fixture, target, ["--dry-run"]);
   assert.equal(first.mode, "preview");
+  assert.equal(first.host, "opencode");
+  assert.equal(first.requestedRef, "HEAD");
+  assert.equal(first.target.commit, fixture.commit);
   assert.equal(first.stateChanged, false);
   assert.equal(first.planId, alias.planId);
   assert.deepEqual(snapshot(target), before);
 
-  const transaction = path.join(target, ".flow-skills", "transactions", "transaction");
+  const transaction = path.join(
+    target,
+    ".flow-skills",
+    "transactions",
+    "opencode-deploy",
+    "transaction",
+  );
   fs.mkdirSync(transaction, { recursive: true });
   fs.writeFileSync(path.join(transaction, "journal.json"), "evidence");
-  const blockedBefore = snapshot(target), blocked = run([], target);
+  const blockedBefore = snapshot(target);
+  const blocked = run(fixture, [], target);
   assert.equal(blocked.status, 1);
-  assert.match(blocked.stderr, /incomplete.*\/flow-skills-sync restore/i);
+  assert.match(blocked.stderr, /incomplete OpenCode deployment transaction/i);
   assert.deepEqual(snapshot(target), blockedBefore);
 });
 
-test("empty destination previews and installs every committed HEAD asset without OpenCode configuration", () => {
+test("installer deploys only the committed OpenCode generation and preserves host configuration", () => {
+  const fixture = fixtureRepository();
   const target = destination();
-  const plan = preview(target);
-  assert.equal(plan.target.commit, committedHead);
-  assert.deepEqual(plan.counts, { add: committedLock.totals.count, change: 0, delete: 0 });
-  assert.deepEqual(plan.totals, committedLock.totals);
+  const configBytes = seedConfig(target);
+  const plan = preview(fixture, target);
+  assert.deepEqual(plan.counts, {
+    add: fixture.lock.totals.count,
+    change: 0,
+    delete: 0,
+  });
   assert.equal(plan.applySupported, true);
   assert.match(plan.applyCommand, new RegExp(plan.planId));
   assert.match(plan.applyCommand, new RegExp(plan.target.commit));
+  assert.match(plan.applyCommand, /--host opencode/);
+  assert.doesNotMatch(
+    JSON.stringify(plan),
+    /gentle-orchestrator|must-not-leak/,
+  );
 
-  const result = json(apply(target, plan));
+  const result = json(apply(fixture, target, plan));
+  assert.equal(result.host, "opencode");
   assert.equal(result.verified, true);
   assert.deepEqual(result.counts, plan.counts);
-  assert.deepEqual(result.totals, committedLock.totals);
   assert.equal(result.configChanged, false);
-  assert.equal(result.gitChanged, false);
-  assert.equal(result.restartRequired, true);
-  assert.equal(fs.existsSync(path.join(target, "opencode.json")), false);
-  for (const entry of committedLock.files) {
-    const installed = path.join(target, ...entry.path.split("/"));
-    assert.equal(fs.existsSync(installed), true, entry.path);
-    assert.equal(digest(fs.readFileSync(installed)), entry.sha256, entry.path);
+  assert.equal(
+    fs.readFileSync(path.join(target, "opencode.json"), "utf8"),
+    configBytes,
+  );
+  for (const entry of fixture.lock.records) {
+    const installed = path.join(target, ...entry.destination.split("/"));
+    assert.equal(fs.existsSync(installed), true, entry.destination);
+    assert.equal(
+      digest(fs.readFileSync(installed)),
+      entry.sha256,
+      entry.destination,
+    );
   }
 });
 
-test("apply requires both accepted IDs and rejects target or destination drift before backup", () => {
-  const target = destination(); seedConfig(target);
+test("apply requires exact target and plan identities and rejects destination drift before backup", () => {
+  const fixture = fixtureRepository();
+  const target = destination();
+  seedConfig(target);
   for (const args of [
     ["--apply"],
     ["--apply", "--expected-target-commit", "a".repeat(40)],
     ["--apply", "--expected-plan-id", "b".repeat(64)],
   ]) {
-    const result = run(args, target);
-    assert.equal(result.status, 1);
+    const result = run(fixture, args, target);
+    assert.equal(result.status, 1, args.join(" "));
     assert.match(result.stderr, /requires both/i);
   }
 
-  const plan = preview(target), before = snapshot(target);
-  const moved = run(["--apply", "--expected-target-commit", "0".repeat(40), "--expected-plan-id", plan.planId], target);
-  assert.equal(moved.status, 1); assert.match(moved.stderr, /target commit changed/i);
+  const plan = preview(fixture, target);
+  const before = snapshot(target);
+  const moved = run(
+    fixture,
+    [
+      "--apply",
+      "--expected-target-commit",
+      "0".repeat(40),
+      "--expected-plan-id",
+      plan.planId,
+    ],
+    target,
+  );
+  assert.equal(moved.status, 1);
+  assert.match(moved.stderr, /target commit changed/i);
   assert.deepEqual(snapshot(target), before);
 
-  fs.mkdirSync(path.join(target, "scripts"));
-  fs.writeFileSync(path.join(target, "scripts", "flow-drift.mjs"), "drift\n");
-  const drifted = snapshot(target), stale = apply(target, plan);
-  assert.equal(stale.status, 1); assert.match(stale.stderr, /stale restore plan ID/i);
+  json(apply(fixture, target, plan));
+  const accepted = preview(fixture, target);
+  const managed = fixture.lock.records[0].destination;
+  const managedPath = path.join(target, ...managed.split("/"));
+  fs.writeFileSync(managedPath, "drift\n");
+  const drifted = snapshot(target);
+  const stale = apply(fixture, target, accepted);
+  assert.equal(stale.status, 1);
+  assert.match(stale.stderr, /stale OpenCode deployment plan ID/i);
   assert.deepEqual(snapshot(target), drifted);
-  assert.equal(fs.existsSync(path.join(target, ".flow-skills", "backups")), false);
 });
 
-test("existing managed assets receive a persistent verified backup and unrelated files survive", () => {
-  const target = destination(); seedConfig(target);
-  const managed = committedLock.files[0].path, managedPath = path.join(target, ...managed.split("/"));
-  fs.mkdirSync(path.dirname(managedPath), { recursive: true }); fs.writeFileSync(managedPath, "previous bytes\n");
-  const unrelated = path.join(target, "scripts", "personal-tool.mjs");
-  fs.mkdirSync(path.dirname(unrelated), { recursive: true }); fs.writeFileSync(unrelated, "personal\n");
-  const plan = preview(target), result = json(apply(target, plan));
-  assert.equal(result.counts.change, 1);
-  assert.equal(fs.readFileSync(path.join(result.backup.path, "files", ...managed.split("/")), "utf8"), "previous bytes\n");
-  const metadata = JSON.parse(fs.readFileSync(path.join(result.backup.path, "backup.json"), "utf8"));
-  assert.equal(metadata.planId, plan.planId);
-  assert.equal(metadata.targetCommit, plan.target.commit);
-  assert.equal(fs.readFileSync(unrelated, "utf8"), "personal\n");
+test("--host pi fails with Pi package guidance without reading or writing host configuration", () => {
+  const fixture = fixtureRepository();
+  const target = destination();
+  const configBytes = seedConfig(target);
+  const before = snapshot(target);
+  const result = run(fixture, ["--host", "pi"], target);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /Pi.*package.*pi install/i);
+  assert.deepEqual(snapshot(target), before);
+  assert.equal(
+    fs.readFileSync(path.join(target, "opencode.json"), "utf8"),
+    configBytes,
+  );
 });
 
-test("Gentle AI configuration is neither required nor mutated", () => {
-  const target = destination(), configBytes = seedConfig(target), plan = preview(target);
-  assert.equal(plan.applySupported, true);
-  assert.equal("configuration" in plan, false);
-  assert.doesNotMatch(JSON.stringify(plan), /gentle-orchestrator|flow-pr-agent|must-not-leak|provider|test-model/);
-
-  const result = json(apply(target, plan));
-  assert.equal(result.verified, true);
-  assert.equal(result.configChanged, false);
-  assert.equal(fs.readFileSync(path.join(target, "opencode.json"), "utf8"), configBytes);
+test("destination precedence and arbitrary working directories are supported", () => {
+  const fixture = fixtureRepository();
+  const envTarget = destination();
+  const cliTarget = destination();
+  const cwd = destination();
+  seedConfig(envTarget);
+  seedConfig(cliTarget);
+  const fromEnv = preview(fixture, envTarget);
+  const fromCli = json(
+    run(fixture, ["--destination", cliTarget], envTarget, { cwd }),
+  );
+  assert.equal(fromEnv.destination, path.resolve(envTarget));
+  assert.equal(fromCli.destination, path.resolve(cliTarget));
+  assert.equal(fromCli.target.commit, fromEnv.target.commit);
 });
 
 test("legacy, unknown, duplicate, missing-value, and conflicting arguments fail closed", () => {
-  const target = destination(); seedConfig(target);
+  const fixture = fixtureRepository();
+  const target = destination();
+  seedConfig(target);
   const cases = [
     [["--export"], /flow-skills-sync snapshot/i],
     [["--uninstall"], /no longer provided/i],
     [["--update"], /pull the repository explicitly/i],
     [["--ref", "HEAD"], /flow-skills-sync restore/i],
     [["--wat"], /unsupported argument/i],
+    [["--host", "other"], /only supports.*opencode/i],
     [["--destination"], /missing value/i],
     [["--destination", target, "--destination", target], /duplicate argument/i],
     [["--apply", "--dry-run"], /conflicts/i],
@@ -194,27 +290,23 @@ test("legacy, unknown, duplicate, missing-value, and conflicting arguments fail 
     [["--expected-plan-id", "id"], /only with --apply/i],
   ];
   for (const [args, expected] of cases) {
-    const before = snapshot(target), result = run(args, target);
+    const before = snapshot(target);
+    const result = run(fixture, args, target);
     assert.equal(result.status, 1, args.join(" "));
     assert.match(result.stderr, expected);
     assert.deepEqual(snapshot(target), before);
   }
 });
 
-test("destination precedence and arbitrary working directories are supported", () => {
-  const envTarget = destination(), cliTarget = destination(), cwd = destination();
-  seedConfig(envTarget); seedConfig(cliTarget);
-  const fromEnv = preview(envTarget);
-  const fromCli = json(run(["--destination", cliTarget], envTarget, { cwd }));
-  assert.equal(fromEnv.destination, path.resolve(envTarget));
-  assert.equal(fromCli.destination, path.resolve(cliTarget));
-  assert.equal(fromCli.target.commit, fromEnv.target.commit);
-});
-
-test("--help is read-only", () => {
-  const target = destination(); seedConfig(target);
-  const before = snapshot(target), result = run(["--help"], target, { cwd: destination() });
+test("--help identifies the OpenCode-only compatibility boundary and remains read-only", () => {
+  const fixture = fixtureRepository();
+  const target = destination();
+  seedConfig(target);
+  const before = snapshot(target);
+  const result = run(fixture, ["--help"], target, { cwd: destination() });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Preview is the default/);
+  assert.match(result.stdout, /Host: opencode/i);
+  assert.match(result.stdout, /pi install/i);
   assert.deepEqual(snapshot(target), before);
 });

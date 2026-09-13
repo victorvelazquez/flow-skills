@@ -8,13 +8,7 @@ trigger: /flow-audit command
 
 Trigger: user runs `/flow-audit`
 
-Script path:
-
-```bash
-node -e "const os=require('os'),path=require('path');console.log(path.join(os.homedir(),'.config','opencode','scripts','flow-audit.mjs'))"
-```
-
-Store result as `$SCRIPT`.
+Runtime resource: `../../scripts/flow-audit.mjs`, resolved relative to this `SKILL.md` by the active host adapter. Store the resolved path as `$SCRIPT`.
 
 ## Default Behavior
 

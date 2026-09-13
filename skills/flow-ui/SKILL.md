@@ -28,19 +28,23 @@ This means users do NOT need to write `--auto` for normal usage, and they do NOT
 This skill is the FINAL UI gate before commit for frontend/interface work.
 
 It validates:
+
 - alignment with `docs/ui-guide.md` when present
 - alignment with `docs/ui-review-checklist.md` when present
 - baseline UI rules when project UI docs do not exist yet
 - consistency of screens, components, states, interaction patterns, accessibility, and responsive behavior
 
 It does NOT replace:
+
 - `/flow-refactor` for code smells, extraction, SRP, and design-system drift at code-structure level
 - `/flow-audit` for lint, typecheck, tests, correctness, security, performance, and general maintainability
 
 ## Non-overlap contract
 
 ### NEVER do work that belongs to `/flow-audit`
+
 Do NOT:
+
 - run lint
 - run tests
 - run typecheck
@@ -48,7 +52,9 @@ Do NOT:
 - audit backend correctness/security/performance
 
 ### NEVER do work that belongs to `/flow-refactor`
+
 Do NOT:
+
 - perform generic smell hunting
 - focus on hook extraction or SRP unless it directly breaks a UI pattern
 - produce broad maintainability review unrelated to interface behavior or consistency
@@ -57,11 +63,7 @@ If such issues are detected, mention them briefly and route them to the proper c
 
 ## Script path
 
-Resolve `$SCRIPT`:
-
-```bash
-node -e "const os=require('os'),path=require('path');console.log(path.join(os.homedir(),'.config','opencode','scripts','flow-ui.mjs'))"
-```
+Resolve `$SCRIPT` from the package-relative runtime resource `../../scripts/flow-ui.mjs`, relative to this `SKILL.md`.
 
 ## Default behavior
 
@@ -75,16 +77,19 @@ This skill is hybrid.
 ## Primary commands
 
 ### Full automated context
+
 ```bash
 node "$SCRIPT" --auto
 ```
 
 ### Safe preview
+
 ```bash
 node "$SCRIPT" --auto --dry-run
 ```
 
 ### Optional scoping
+
 ```bash
 node "$SCRIPT" --auto --scope apps/frontend/src/features/clients
 node "$SCRIPT" --auto --scope apps/frontend/src/features/clients/ClientForm.tsx
@@ -103,9 +108,11 @@ node "$SCRIPT" --auto --working-tree
 ## Validation modes
 
 ### 1. Project mode
+
 Use when `docs/ui-guide.md` exists.
 
 Source of truth:
+
 1. `docs/ui-guide.md`
 2. `docs/ui-review-checklist.md` if present
 3. baseline fallback only as secondary support
@@ -113,9 +120,11 @@ Source of truth:
 This is the strictest mode.
 
 ### 2. Baseline mode
+
 Use when `docs/ui-guide.md` does not exist.
 
 Validate only against:
+
 - global baseline rules in this skill
 - project-visible internal consistency
 - `docs/ui-review-checklist.md` if it exists without a guide
@@ -123,7 +132,9 @@ Validate only against:
 You MUST explicitly say that this is a baseline/global validation and not a project-specific UI authority.
 
 ### 3. Bootstrap mode
+
 Use when:
+
 - no `docs/ui-guide.md` exists
 - frontend UI work is significant enough that the project should define one
 
@@ -132,6 +143,7 @@ In addition to baseline validation, recommend creating `docs/ui-guide.md` and id
 ## What to read
 
 Read only files relevant to UI scope:
+
 - changed `.tsx`, `.jsx`, `.css`, `.scss`
 - changed feature/page/screen files
 - shared components touched by those changes
@@ -143,18 +155,22 @@ Avoid broad repo exploration outside UI scope.
 ## What to validate
 
 ### Layout and hierarchy
+
 - page structure is clear
 - spacing is consistent
 - primary and secondary actions are visually distinct
 - sections are grouped coherently
 
 ### Canonical component usage
+
 - shared components are reused where appropriate
 - no unnecessary new variant is introduced
 - existing UI patterns are respected
 
 ### Required states
+
 Check whether applicable states exist:
+
 - loading
 - empty
 - error
@@ -163,27 +179,32 @@ Check whether applicable states exist:
 - restricted/no-permission
 
 ### Forms
+
 - visible labels
 - clear validation
 - logical grouping
 - no placeholder-as-label misuse
 
 ### Data display
+
 - table/list hierarchy is clear
 - row actions are predictable
 - empty/search/filter behavior is consistent
 
 ### Accessibility
+
 - focus visibility
 - keyboard usability in critical flows
 - labels and semantics
 - no color-only meaning
 
 ### Responsive behavior
+
 - layout remains usable at supported widths
 - content does not overlap or become unusable
 
 ### Consistency with guide
+
 - the implementation matches the project guide if present
 - deviations are identified one by one, not generalized
 
@@ -211,6 +232,7 @@ Every finding must be classified as exactly one of:
 - `guide-update-candidate`
 
 ### Meaning
+
 - `fix-to-template`: implementation should be corrected to match the guide/pattern
 - `documented-exception`: deviation may stay, but must be explicitly documented
 - `guide-update-candidate`: the new pattern looks valid and reusable, and the guide may need a targeted update

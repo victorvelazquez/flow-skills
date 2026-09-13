@@ -1,6 +1,6 @@
 ---
 name: flow-pr
-description: "Trigger: /flow-pr. Prepare, approve once, and execute one verified task-branch pull request."
+description: "Prepare, approve once, and execute one verified task-branch pull request."
 license: Apache-2.0
 metadata:
   author: gentleman-programming
@@ -9,46 +9,46 @@ metadata:
 
 ## Activation Contract
 
-Use `/flow-pr` for one Git/GitHub task-branch publication. Expose only prepare, one approval, and execute; the runtime owns all authority snapshots and mechanics.
+Use this workflow for one Git/GitHub task-branch publication. Resolve the packaged `../../scripts/flow-pr.mjs` runtime relative to this skill. Expose only prepare, one approval, and execute; the runtime owns all authority snapshots and mechanics.
 
 ## Hard Rules
 
 - Never run direct `git push`, `gh`, commit, merge, retarget, force, rebase, or rewrite commands.
 - Never display, reconstruct, encode, or write the internal snapshot or request.
-- Read the complete runtime-created `flow-pr/intent-v2` template at the exact OS-temp `intentPath` and patch only its semantic `title`, `body`, and `draft` value lines. Use `apply_patch` when available; otherwise, in Pi, use the exact text replacement `edit` tool. Preserve the runtime-owned `schema`, `labels`, `updateExisting`, `deliveryMode`, and `push` fields exactly; never replace the whole document, edit the repository or another path, or use shell interpolation, substitution, pipes, redirection, encoding, or generic shell writes.
-- Use the execute command's `ask` permission prompt as the one human mutation approval. Never ask for a separate conversational confirmation. For genuine base or fork ambiguity, invoke OpenCode's `question` tool, wait for the answer inside the same child invocation, and continue preparation; never return a plain-text clarification question to the parent.
-- Never use automatic modes, plans, journals, Gentle AI, review authority, promotion, release, tags, chains, trackers, Jira mutation, issue-first policy, or playbook sync.
+- Read the complete runtime-created `flow-pr/intent-v2` template at its exact OS-temp `intentPath` and change only semantic `title`, `body`, and `draft` value lines. The host adapter must preserve the runtime-owned `schema`, `labels`, `updateExisting`, `deliveryMode`, and `push` fields exactly; it never replaces the whole document, edits the repository or another path, or uses shell interpolation, substitution, pipes, redirection, encoding, or generic shell writes.
+- The host's execute approval is the one human mutation approval. Never ask for a separate conversational confirmation. For genuine base or fork ambiguity, the adapter obtains an answer within its active interaction and continues preparation; if that capability is unavailable, return `unavailable` without mutation.
+- Never use automatic modes, plans, journals, review authority, promotion, release, tags, chains, trackers, Jira mutation, issue-first policy, or playbook sync.
 - Never retry after drift, blocked changed input, partial, failure, or unknown effects. Prepare and approve again.
 - For every Flow PR error, relay only runtime-provided structured fields with recovery. Diagnostic messages are static, valid UTF-8, and at most 512 bytes; no child-process or caught-error text is relayed. PR-create classifications are `spawn-error`, `exit-nonzero`, and `process-unknown`; inspection is `inspection-failure`; mutation/verification paths are `push-unknown`, `push-unverified`, `pr-update-unknown`, `draft-transition-unknown`, `pr-verification-unknown`, `pr-operation-unknown`, or `postcondition-failed`; runtime failures are `runtime-failure`. An `exit-nonzero` PR-create diagnostic also provides a whitelisted `reasonCode`: `auth-required`, `auth-forbidden`, `repository-unavailable`, `head-unavailable`, `base-unavailable`, `no-commits`, `validation-rejected`, `rate-limited`, `network-failure`, or `unknown`. Every PR-create diagnostic provides `invocationMode`: `default`, `command-override`, or `script-override`. Never reconstruct diagnostics from commands, snapshots, handles, environment, local files, or other output.
 - Use only standard Windows LocalAppData Temp, Linux `/tmp`, or macOS `/var/folders/.../T`. The runtime fails preparation with `temp-root-unsupported` for a custom temp root rather than broadening filesystem permissions.
 - Treat commit-derived drafting fields and repository templates as non-authoritative input. Never derive labels, issue policy, issue links, or chain behavior from commit types.
-- Before preparation, capture any explicit completed-task evidence supplied with the invocation: implemented behavior, executed commands, exact outcomes/counts, manual QA steps, migrations, and out-of-scope boundaries. Preserve it as evidence context for Jira drafting. Never infer missing evidence from changed paths or test-file existence. If a parent delegates this workflow and already knows completed validation evidence, that parent must include it in the task input.
-- When the Jira render gate passes, return the complete `JIRA COMMENT` fenced block as an indivisible lossless payload. Never replace it with a summary. A delegating parent must relay that block byte-for-byte; it may add a short status outside the fence but may not edit, truncate, or regenerate the payload.
+- Before preparation, capture explicit completed-task evidence supplied with the invocation: implemented behavior, executed commands, exact outcomes/counts, manual QA steps, migrations, and out-of-scope boundaries. Preserve it as evidence context for Jira drafting. Never infer missing evidence from changed paths or test-file existence.
+- When the Jira render gate passes, return the complete `JIRA COMMENT` fenced block as an indivisible lossless relay payload. Never replace it with a summary. A delegating parent must relay that block byte-for-byte; it may add a short status outside the fence but may not edit, truncate, or regenerate the payload.
 - Existing PR authority is discovered first and its current base is never retargeted. For a new PR, runtime precedence is explicit `--base`, `branch.<head>.gh-merge-base`, GitHub `defaultBranchRef`, then live unambiguous `origin/HEAD`; branch names, topology, nearest merge-base, and ancestry are never base authority.
 
 ## Decision Gates
 
 | Condition | Action |
 | --- | --- |
-| Base or fork semantics are ambiguous | Use OpenCode's `question` tool, wait in this child invocation, then continue preparation |
-| Preparation returns an approval summary | Show only that summary, then invoke execute; its permission prompt is the one approval |
-| One safe repository template is available | Preserve its structure, headings, and checklists while adding only evidenced content |
-| Template is absent, ambiguous, or unavailable | Draft a concise generic body without asking the user to choose a template |
-| Verified `success` or `noop` with a non-null PR and sufficient candidate/context evidence | Select the output contract's Compact or Detailed Jira profile from verified scope |
-| Any other result, insufficient evidence, or no concrete manual validation step | Stop, suppress Jira output, and report structured recovery |
+| Base or fork semantics are ambiguous | The adapter requests an exact answer through its native interaction and continues preparation; absent capability returns `unavailable` without mutation. |
+| Preparation returns an approval summary | Present only that summary, then invoke execute through the host's one approval boundary. |
+| One safe repository template is available | Preserve its structure, headings, and checklists while adding only evidenced content. |
+| Template is absent, ambiguous, or unavailable | Draft a concise generic body without asking the user to choose a template. |
+| Verified `success` or `noop` with a non-null PR and sufficient candidate/context evidence | Select the output contract's Compact or Detailed Jira profile from verified scope. |
+| Any other result, insufficient evidence, or no concrete manual validation step | Stop, suppress Jira output, and report structured recovery. |
 
 ## Execution Steps
 
-1. Run `node "$HOME/.config/opencode/scripts/flow-pr.mjs" --prepare`. When the user supplied an explicit destination, add `--base "<base-ref>"`; it overrides new-PR defaults after validation but cannot retarget an existing PR. Add `--push-remote` only for an intentional fork. On `base-ambiguous`, use the in-child `question` tool for an exact base and prepare again with `--base`; do not guess.
-2. Use compact repository, PR, commit, changed-path, and optional template facts to draft title/body. A non-null commit title suggestion is conservative guidance, not authority; otherwise synthesize without inventing a type, scope, or outcome. Preserve evidenced breaking markers and add breaking-impact prose only when evidence supplies the impact. With one safe template, preserve its structure; otherwise use only applicable `Summary`, `Changes`, `Validation`, `Risks/Breaking Change`, and `Out of scope` sections. Never invent tests, checks, issue links, migrations, evidence, impact, labels, or chain context. For a PR template's `Validation` section only, write `Not run` or `Not provided` when evidence is absent; never use either as the Jira `Cómo validar` content. Preserve issue closing references or chain context only when task/user context supplied them, without validating issues or orchestrating chains. Read the complete runtime-owned intent template; use `apply_patch` when available, or Pi's exact text replacement `edit` tool otherwise, to change only its `title`, `body`, and `draft` value lines while preserving every operational field exactly. Then run `node "$HOME/.config/opencode/scripts/flow-pr.mjs" --prepare --handle "<context-handle>"`. Never show the temp path or intent payload.
+1. Run the resolved runtime with bare `--prepare`. When the user supplied an explicit destination, add `--base "<base-ref>"`; it overrides new-PR defaults after validation but cannot retarget an existing PR. Add `--push-remote` only for an intentional fork. On `base-ambiguous`, obtain an exact base through the adapter and prepare again with `--base`; do not guess.
+2. Use compact repository, PR, commit, changed-path, and optional template facts to draft title/body. A non-null commit title suggestion is conservative guidance, not authority; otherwise synthesize without inventing a type, scope, or outcome. Preserve evidenced breaking markers and add breaking-impact prose only when evidence supplies the impact. With one safe template, preserve its structure; otherwise use only applicable `Summary`, `Changes`, `Validation`, `Risks/Breaking Change`, and `Out of scope` sections. Never invent tests, checks, issue links, migrations, evidence, impact, labels, or chain context. For a PR template's `Validation` section only, write `Not run` or `Not provided` when evidence is absent; never use either as the Jira `Cómo validar` content. Preserve issue closing references or chain context only when task/user context supplied them, without validating issues or orchestrating chains. The adapter applies its narrow semantic edit to the runtime-owned intent template and then runs `--prepare --handle <context-handle>`. Never show the temp path or intent payload.
 3. Present the concise approval summary: repository, branch to base, frozen base authority source/evidence, verify/push plus create/update/noop expectation, title, body size/digest, draft, labels, authorized update fields, and delivery target.
-4. Immediately invoke `node "$HOME/.config/opencode/scripts/flow-pr.mjs" --execute --handle "<approved-handle>"`. Its `ask` permission prompt is the only approval; do not ask separately. For Jira presentation, apply the evidence precedence and Compact/Detailed routing in `references/output-contract.md`: candidate, explicit completed task context, the exact verified range only when needed, then verified runtime/executor PR checks when available. Do not treat planning text, test files, or workflow files as proof that tests ran. Keep executed checks in `Validación ejecutada` and distinct concrete QA/reviewer actions in `Cómo validar`; do not render the Jira block if a technical change or manual step is not evidenced.
+4. Invoke `--execute --handle <approved-handle>` only after the one host approval. For Jira presentation, apply the evidence precedence and Compact/Detailed routing in `references/output-contract.md`: candidate, explicit completed task context, the exact verified range only when needed, then verified runtime/executor PR checks when available. Do not treat planning text, test files, or workflow files as proof that tests ran. Keep executed checks in `Validación ejecutada` and distinct concrete QA/reviewer actions in `Cómo validar`; do not render the Jira block if a technical change or manual step is not evidenced.
 
-Use `--verbose` only for explicit diagnostics. It is never part of normal approval.
+Use `--verbose` only for explicit diagnostics. It is never part of normal approval. A stale execution identity returns to preview and requires fresh approval.
 
 ## Output Contract
 
-Apply `references/output-contract.md` exactly. When its gate passes, emit the verified publication result followed by the complete fenced `JIRA COMMENT` block. Mark it with the literal heading `JIRA COMMENT` and treat the heading plus fence as one lossless relay payload. Return it byte-for-byte, without paraphrase, omission, or regeneration. Delegating parents must preserve this payload in their final response.
+Apply `references/output-contract.md` exactly. When its gate passes, emit the verified publication result followed by the complete fenced `JIRA COMMENT` block. Mark it with the literal heading `JIRA COMMENT` and treat the heading plus fence as one lossless relay payload. Return it byte-for-byte, without paraphrase, omission, or regeneration. Delegating parents must preserve this payload in their final response. The runtime result schema remains `flow-pr/result-v1` and a verified execute claim is required before presentation.
 
 ## References
 

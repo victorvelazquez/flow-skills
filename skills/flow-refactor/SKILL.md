@@ -24,13 +24,10 @@ metadata:
 
 ## Step 1 — Resolve scope
 
-Resolve `$SCRIPT`:
-```bash
-node -e "const os=require('os'),path=require('path');console.log(path.join(os.homedir(),'.config','opencode','scripts','flow-refactor.mjs'))"
-```
+Resolve `$SCRIPT` from the package-relative runtime resource `../../scripts/flow-refactor.mjs`, relative to this `SKILL.md`.
 
 | Invocation | Script call |
-|---|---|
+| --- | --- |
 | `/flow-refactor` | `node "$SCRIPT" --scope` |
 | `/flow-refactor --since` | `node "$SCRIPT" --since` (the script auto-detects `origin/development`, `origin/develop`, `origin/main`, or `origin/master`) |
 | `/flow-refactor --since <branch>` | `node "$SCRIPT" --since <branch>` |
@@ -46,7 +43,7 @@ The script is **scope/context only**. It must not run lint, tests, build, format
 From the file list, determine stack(s). A single run can be **mixed** (e.g., PR touching frontend + backend):
 
 | Signal | Stack |
-|---|---|
+| --- | --- |
 | `.tsx` / `.jsx` or React import | **React** |
 | `.ts` + `@nestjs/*` import | **NestJS** |
 | `.cs` / `.csproj` | **.NET** |
@@ -171,23 +168,27 @@ Use this as a senior review matrix. The goal is not style nitpicking; it is to i
 ### React frontend
 
 **SRP & size**
+
 - Component > 100 lines with mixed UI + logic → `Extract Custom Hook`
 - Component fetches data (`useQuery`/`useMutation`) AND renders complex JSX → split: container fetches, presentational renders
 - `useEffect` with wrong/missing deps → fix dep array
 
 **Extraction & reuse**
+
 - JSX block > 30 lines inline in render → `Extract Component`
 - Same JSX structure in 2+ files → `Extract Component`; if cross-feature → place in `src/components/`
 - Component in `features/X/components/` usable by multiple features → move to `src/components/`
 - Component receives > 5 props → evaluate split or `children`/composition
 
 **Composition**
+
 - Layout wrapper hard-codes children → accept `children` prop
 - Boolean prop controls completely different render (`isModal`, `isEditing`) → split into separate components
 - Repeated slot pattern (icon + label + action) across 3+ components → extract as compound component
 - Props drilled > 2 levels → use context or Zustand slice
 
 **MUI / design system**
+
 - Hardcoded hex in `sx` / `style` (e.g., `'#0761E9'`) → theme token (`primary.main`, `text.secondary`, …)
 - `style={{}}` prop → convert to `sx`
 - Magic `px` value in `sx` spacing (e.g., `mt: '24px'`) → theme multiple (`mt: 3`)
@@ -284,6 +285,7 @@ When the Tecnomyl profile is active, apply the stricter Tecnomyl-specific rules 
 ### Mode: --module (deep)
 
 Same as Quick plus:
+
 - **Resumen por archivo** (1 línea de salud por archivo) before the findings table
 - No cap on findings
 - Correcciones: include 🔴 AND 🟡
