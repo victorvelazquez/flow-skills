@@ -278,7 +278,7 @@ export function ownedDestinationPaths(lock) {
     assertExactPortablePath(destination);
   }
   assertSortedUnique([...destinations].sort(), "Owned destination paths");
-  return destinations;
+  return [...destinations].sort();
 }
 
 export function validateOpenCodeAdapterMappings(manifest, registry) {
@@ -304,7 +304,7 @@ export function validateOpenCodeAdapterMappings(manifest, registry) {
       )
     )
       throw new Error(
-        "OpenCode mapped destination must remain under commands/, agents/, skills/, or scripts/.",
+        "OpenCode mapped destination must remain under commands/, agents/, skills/, scripts/, or the two approved core debt modules.",
         {
           cause: error,
         },

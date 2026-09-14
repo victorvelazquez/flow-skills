@@ -1,17 +1,17 @@
 {
   "$schema": "flow-generation-lock/v2",
-  "generationId": "6fbbb5aee820cd96bf6c94e7128854925799302a6020c6546bdeca98dddb418b",
+  "generationId": "aa033c5e95980477e68980ab118a9cb587b36abaada89ad2a5c2325c8bddd0c0",
   "package": {
-    "sha256": "1cedf6e798f25db48f68b28dc64bcd88e9ac9058480e3ec2ac07db9bb0b8961b"
+    "sha256": "1a72873ebdcac47b95d5c293227169fcf3d8711306a775df50ce55d2c27e1dcd"
   },
   "hosts": [
     {
       "host": "opencode",
-      "sha256": "586d318a0e1ec533697262a8769f660469baadd9ff854ee6b3b766c52a39dc39"
+      "sha256": "7438fe3e9edfbac8b2c081389b2780bce24c497613c310da2b1af23ab4f93e93"
     },
     {
       "host": "pi",
-      "sha256": "e9ebcc27ea4b9d1452df50d1fc21bbb2db40a603b293571cf9140d9bf9e78aef"
+      "sha256": "86f3fad027030c758301c5f3fe13b7f44530082602ed6c15dacb126b90122591"
     }
   ],
   "sources": [
@@ -19,6 +19,20 @@
       "source": "README.md",
       "sha256": "777c9deeae2d35d12792ad6d001e8161901a85d487e0c5d6ab45ead88880e330",
       "bytes": 3493,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "core/flow-debt-backlog.mjs",
+      "sha256": "3f1f816ccb23c496976a8b8c7953f0bbd9c1933c2062e32a5bba30335dd414fe",
+      "bytes": 3022,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "core/flow-debt-contract.mjs",
+      "sha256": "f81fc4003a98c7bca2de1e59440fa9687837de098d6a65e4808012e501907c01",
+      "bytes": 5207,
       "mode": "100644",
       "executable": false
     },
@@ -136,15 +150,15 @@
     },
     {
       "source": "hosts/pi/flow-assets.json",
-      "sha256": "0984d87e7d7cf5bdccbb3335e2acbf87baf1cc1a49270805174260403ce717f6",
-      "bytes": 1755,
+      "sha256": "1560effbd6fca9a1b42350efa9188dc846cf5a46603ba05fd5316bbcde37a781",
+      "bytes": 1824,
       "mode": "100644",
       "executable": false
     },
     {
       "source": "package.json",
-      "sha256": "5aacda198653bdad24d4e1e94763af7750f975c90c40fad000faa3870dbe2231",
-      "bytes": 2055,
+      "sha256": "742a2d343aea991776049ba945c48e0401597d99e2d9a6ded6f962ad00763df2",
+      "bytes": 2049,
       "mode": "100644",
       "executable": false
     },

@@ -33,6 +33,8 @@
   },
   "files": [
     "README.md",
+    "core/flow-debt-backlog.mjs",
+    "core/flow-debt-contract.mjs",
     "docs/multihost-migration.md",
     "flow-generation.lock.json",
     "hosts/pi/flow-assets.json",

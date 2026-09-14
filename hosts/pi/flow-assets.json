@@ -26,6 +26,8 @@
   },
   "sourceSelectors": [
     "README.md",
+    "core/flow-debt-backlog.mjs",
+    "core/flow-debt-contract.mjs",
     "docs/multihost-migration.md",
     "hosts/pi/flow-assets.json",
     "package.json",
