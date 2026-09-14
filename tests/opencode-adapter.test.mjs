@@ -189,6 +189,14 @@ test("OpenCode managed mappings include each adapter's portable skills, runtime 
     manifest.sourceSelectors.filter((source) => source.startsWith("core/")),
     portableDebtCore,
   );
+  assert.deepEqual(
+    portable.find(({ source }) => source === "scripts/lib/flow-debt-store.mjs"),
+    {
+      source: "scripts/lib/flow-debt-store.mjs",
+      destination: "scripts/lib/flow-debt-store.mjs",
+      role: "portable",
+    },
+  );
 
   for (const skill of readJson("package.json").pi.skills) {
     assert.deepEqual(

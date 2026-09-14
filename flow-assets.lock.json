@@ -1,17 +1,16 @@
 {
   "$schema": "flow-assets-lock/v1",
-  "capturedAt": "2026-04-01T00:00:00.000Z",
   "source": {
     "kind": "opencode-user-config",
     "opencodeVersion": "repository-local",
     "gentleAiVersion": "repository-local"
   },
   "manifest": {
-    "sha256": "9b2d9d93a615f4d2175dfb344c37073c428faeda6958e4badd429c4f295b82dc"
+    "sha256": "bccd38f0f8c508ff0f17f0bc18c180116f2279a1834635944b46b93a762635c4"
   },
   "totals": {
-    "bytes": 653116,
-    "count": 51
+    "bytes": 656925,
+    "count": 52
   },
   "files": [
     {
@@ -109,6 +108,13 @@
       "path": "scripts/lib/flow-audit-output.mjs",
       "sha256": "76876ed4c52b3686c0083954e82a1f80086d17b49f42796164ebb1d65f818145",
       "bytes": 1153,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "path": "scripts/lib/flow-debt-store.mjs",
+      "sha256": "9d49e232feedc6be93b79c20e774aa5f1c05bb01c06c57b848a71ea8e2f597e2",
+      "bytes": 3809,
       "mode": "100644",
       "executable": false
     },

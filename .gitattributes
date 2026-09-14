@@ -13,6 +13,7 @@ scripts/lib/detect-tooling.mjs -text
 scripts/lib/dotnet-format.mjs -text
 scripts/lib/flow-audit-cache.mjs -text
 scripts/lib/flow-audit-output.mjs -text
+scripts/lib/flow-debt-store.mjs -text
 scripts/lib/flow-pr-contracts.mjs -text
 scripts/lib/flow-pr-drafting.mjs -text
 scripts/lib/flow-pr-executor.mjs -text
