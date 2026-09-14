@@ -2,6 +2,16 @@
 
 Each host adapter presents a workflow from `core/workflows.json` without changing its shared outcome, safety posture, or runtime contract. This document defines stages, not a universal permission API.
 
+## Neutral vocabulary and boundaries
+
+- **Analysis result** is a non-mutating account of what the workflow examined and concluded within its declared scope.
+- **Finding** is a scoped, referenceable conclusion from an analysis result.
+- **Evidence** is scoped, referenceable support for a finding. Findings and evidence communicate their confidence and limitations.
+- **Proposal** is a non-mutating suggested next action. Analysis and proposals are non-mutating and never approval.
+- **Mutation result** is the verified outcome of an executed mutation, including its scope, status, and any limitations.
+
+Mutation requires host-native approval and revalidation of workflow-owned immutable input before execution. Adapters own interaction and presentation. Shared Flow does not prescribe universal permission APIs, approval tokens, review transactions, host commands, workflow taxonomies, storage models, or serialized schemas.
+
 ## Required stages
 
 1. **Discover** a workflow only when the registry and the host manifest both claim support.

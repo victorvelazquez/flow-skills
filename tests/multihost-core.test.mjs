@@ -24,6 +24,61 @@ const expectedIds = [
 const supportedHosts = new Set(["opencode", "pi"]);
 const forbiddenCoreTokens =
   /\$ARGUMENTS|~\/.config\/opencode|\bapply_patch\b|\bquestion tool\b/i;
+const activeProductRoots = [
+  "skills",
+  "scripts",
+  "hosts/opencode/commands",
+  "hosts/opencode/agents",
+];
+const activeProductFiles = [
+  "README.md",
+  "package.json",
+  "flow-assets.json",
+  "core/workflows.json",
+  "core/host-adapter-contract.md",
+  "docs/multihost-migration.md",
+  "hosts/opencode/flow-assets.json",
+  "hosts/pi/flow-assets.json",
+];
+const prohibitedImplementationFamilies = [
+  ["gentle-ai", /gentle-ai/i, "gentle-ai adapter"],
+  ["gentle_ai", /gentle_ai/i, "gentle_ai adapter"],
+  ["gentleAi*", /gentleAi\w*/i, "gentleAiAdapter"],
+  ["gentle-pi", /gentle-pi/i, "gentle-pi adapter"],
+  ["gentle_pi", /gentle_pi/i, "gentle_pi adapter"],
+  ["gentlePi*", /gentlePi\w*/i, "gentlePiAdapter"],
+  ["@gentle-ai", /@gentle-ai/i, "@gentle-ai/provider"],
+  ["@gentle-pi", /@gentle-pi/i, "@gentle-pi/provider"],
+  [
+    "gentle_review capture names",
+    /gentle_review(?:_capture(?:_group)?)?/i,
+    "gentle_review_capture_group",
+  ],
+  ["GENTLE_AI_*", /GENTLE_AI_\w*/i, "GENTLE_AI_TOKEN"],
+  [
+    "gentle-ai.review-integration",
+    /gentle-ai\.review-integration/i,
+    "gentle-ai.review-integration",
+  ],
+  ["rdd-mode", /rdd-mode/i, "rdd-mode"],
+];
+
+function productFilesIn(directory) {
+  const absoluteDirectory = path.join(root, directory);
+  return fs
+    .readdirSync(absoluteDirectory, { withFileTypes: true })
+    .flatMap((entry) => {
+      const relativePath = path.posix.join(directory, entry.name);
+      return entry.isDirectory()
+        ? productFilesIn(relativePath)
+        : [relativePath];
+    });
+}
+
+function assertNoGentleImplementationDependency(source, label = "source") {
+  for (const [family, pattern] of prohibitedImplementationFamilies)
+    assert.doesNotMatch(source, pattern, `${label} contains ${family}`);
+}
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -190,4 +245,65 @@ test("PR shared contract owns workflow outcomes without host interaction impleme
   assert.match(source, /prepare, one approval, and execute/i);
   assert.match(source, /immutable|stale/i);
   assert.match(source, /lossless relay payload/i);
+});
+
+test("host adapter contract defines portable analysis and mutation boundaries", () => {
+  const contract = read("core/host-adapter-contract.md");
+
+  assert.match(contract, /## Neutral vocabulary and boundaries/i);
+  for (const term of [
+    "Analysis result",
+    "Finding",
+    "Evidence",
+    "Proposal",
+    "Mutation result",
+  ])
+    assert.match(contract, new RegExp(`\\*\\*${term}\\*\\*`, "i"));
+  assert.match(contract, /\*\*Finding\*\*.*scoped.*referenceable/i);
+  assert.match(contract, /\*\*Evidence\*\*.*scoped.*referenceable/i);
+  assert.match(contract, /confidence.*limitations/i);
+  assert.match(
+    contract,
+    /analysis and proposals?.*non-mutating.*never approval/i,
+  );
+  assert.match(
+    contract,
+    /mutation.*host-native approval.*revalidat.*workflow-owned immutable input/i,
+  );
+  assert.match(contract, /adapters own interaction and presentation/i);
+  assert.match(
+    contract,
+    /does not prescribe.*permission APIs.*approval tokens.*review transactions.*host commands.*workflow taxonomies.*storage models.*serialized schemas/i,
+  );
+});
+
+test("active Flow product surfaces contain no Gentle implementation dependencies", () => {
+  const files = [
+    ...activeProductFiles,
+    ...activeProductRoots.flatMap(productFilesIn),
+  ].sort();
+
+  assert.deepEqual(
+    files.filter((file) => /(?:lock|test|openspec|CHANGELOG)/i.test(file)),
+    [],
+  );
+  for (const file of files)
+    assertNoGentleImplementationDependency(read(file), file);
+});
+
+test("neutrality guard rejects every prohibited family but permits generic Flow vocabulary", () => {
+  for (const [family, pattern, fixture] of prohibitedImplementationFamilies) {
+    assert.match(fixture, pattern, `${family} fixture`);
+    assert.throws(
+      () => assertNoGentleImplementationDependency(fixture),
+      assert.AssertionError,
+      family,
+    );
+  }
+
+  assert.doesNotThrow(() =>
+    assertNoGentleImplementationDependency(
+      "Flow records authority, review, evidence, receipts, and lineage when the domain requires them.",
+    ),
+  );
 });
