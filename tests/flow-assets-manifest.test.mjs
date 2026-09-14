@@ -114,6 +114,9 @@ test("manifest and lock define a deterministic, complete, safe mirror", () => {
 
   assert.ok(manifest.liveMirrored.libraries.length > 0);
   assert.ok(
+    manifest.liveMirrored.libraries.includes("scripts/lib/flow-debt-store.mjs"),
+  );
+  assert.ok(
     manifest.liveMirrored.libraries.every(
       (entry) => entry.startsWith("scripts/lib/") && !entry.includes("*"),
     ),

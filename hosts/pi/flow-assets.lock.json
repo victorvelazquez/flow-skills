@@ -4,9 +4,9 @@
   "distribution": {
     "kind": "package-resources"
   },
-  "generationId": "83e234cd1db1fde53855f686c2726d178db3352fadac1db8fb9178f5b0de877c",
+  "generationId": "38018ea41cc99db19d2f4c867603efc520b3f1d6326feeba5fb645295e986bea",
   "manifest": {
-    "sha256": "86f3fad027030c758301c5f3fe13b7f44530082602ed6c15dacb126b90122591"
+    "sha256": "063ac1e9a80848a017082254d9d16e37328b75b7e30d6afeeee6047ca2869477"
   },
   "records": [
     {
@@ -39,15 +39,15 @@
     },
     {
       "source": "hosts/pi/flow-assets.json",
-      "sha256": "1560effbd6fca9a1b42350efa9188dc846cf5a46603ba05fd5316bbcde37a781",
-      "bytes": 1824,
+      "sha256": "1a9894b2c725ede7956458b47711fe22a931a2f3dd729a206364575cf81f1b99",
+      "bytes": 1863,
       "mode": "100644",
       "executable": false
     },
     {
       "source": "package.json",
-      "sha256": "742a2d343aea991776049ba945c48e0401597d99e2d9a6ded6f962ad00763df2",
-      "bytes": 2049,
+      "sha256": "507d503f772f83d2c21210850e48b1b18f4ba98ee544c8a185a98cccccd30b5e",
+      "bytes": 2088,
       "mode": "100644",
       "executable": false
     },
@@ -139,6 +139,13 @@
       "source": "scripts/lib/flow-audit-output.mjs",
       "sha256": "76876ed4c52b3686c0083954e82a1f80086d17b49f42796164ebb1d65f818145",
       "bytes": 1153,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "scripts/lib/flow-debt-store.mjs",
+      "sha256": "9d49e232feedc6be93b79c20e774aa5f1c05bb01c06c57b848a71ea8e2f597e2",
+      "bytes": 3809,
       "mode": "100644",
       "executable": false
     },
@@ -403,8 +410,8 @@
     }
   ],
   "totals": {
-    "bytes": 673241,
-    "count": 56
+    "bytes": 677128,
+    "count": 57
   },
-  "hostIdentity": "073c39258429059ba33bacba204c464875c53b0083b06363ad5527ba04518a56"
+  "hostIdentity": "49f3b719ac488a15c86269cd9f773a1f4d3991773fdff2bc24f5bc1608b8ad13"
 }

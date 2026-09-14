@@ -4,9 +4,9 @@
   "distribution": {
     "kind": "managed-deployment"
   },
-  "generationId": "83e234cd1db1fde53855f686c2726d178db3352fadac1db8fb9178f5b0de877c",
+  "generationId": "38018ea41cc99db19d2f4c867603efc520b3f1d6326feeba5fb645295e986bea",
   "manifest": {
-    "sha256": "7438fe3e9edfbac8b2c081389b2780bce24c497613c310da2b1af23ab4f93e93"
+    "sha256": "22d71815b9b91d5c2671818464cb7f6e69b26155dc13262ab7caa5a4d1074765"
   },
   "records": [
     {
@@ -246,6 +246,14 @@
       "destination": "scripts/lib/flow-audit-output.mjs",
       "sha256": "76876ed4c52b3686c0083954e82a1f80086d17b49f42796164ebb1d65f818145",
       "bytes": 1153,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "scripts/lib/flow-debt-store.mjs",
+      "destination": "scripts/lib/flow-debt-store.mjs",
+      "sha256": "9d49e232feedc6be93b79c20e774aa5f1c05bb01c06c57b848a71ea8e2f597e2",
+      "bytes": 3809,
       "mode": "100644",
       "executable": false
     },
@@ -547,8 +555,8 @@
     }
   ],
   "totals": {
-    "bytes": 685317,
-    "count": 67
+    "bytes": 689126,
+    "count": 68
   },
-  "hostIdentity": "e0e7de1f602fda4b1c2ebf4a53d52f1c7f4fdbb9ae4245ee2c35ecc4f155250a"
+  "hostIdentity": "0369903699806fb04aae2bb7839d3a55b4c9ea531e474e991840ee431beaf405"
 }
