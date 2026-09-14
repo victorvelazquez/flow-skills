@@ -107,7 +107,7 @@ id: YYYYMMDD-short-kebab-title
 title: Short human title
 status: pending
 priority: normal|high|critical
-source_command: /flow-refactor|/flow-audit|/flow-auto-deliver|manual
+source_command: /flow-refactor|/flow-audit|manual
 date: YYYY-MM-DD
 project: <project name>
 profile: <profile or none>

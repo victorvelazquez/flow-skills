@@ -46,7 +46,49 @@ function snapshot(root) {
   return result;
 }
 
-function fixture() {
+function writeHistoricalV1Generation(repo) {
+  const manifest = {
+    $schema: "flow-assets/v1",
+    excluded: [],
+    liveMirrored: {
+      libraries: [],
+      patterns: [{ path: "commands/flow-a.md" }],
+    },
+    repoOwned: [],
+  };
+  const manifestBytes = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`);
+  const assetBytes = Buffer.from("target\n");
+  write(repo, "flow-assets.json", manifestBytes);
+  write(repo, "commands/flow-a.md", assetBytes);
+  write(
+    repo,
+    "flow-assets.lock.json",
+    `${JSON.stringify(
+      {
+        $schema: "flow-assets-lock/v1",
+        capturedAt: "fixture",
+        source: { kind: "opencode-user-config" },
+        manifest: {
+          sha256: createHash("sha256").update(manifestBytes).digest("hex"),
+        },
+        totals: { bytes: assetBytes.length, count: 1 },
+        files: [
+          {
+            path: "commands/flow-a.md",
+            sha256: createHash("sha256").update(assetBytes).digest("hex"),
+            bytes: assetBytes.length,
+            mode: "100644",
+            executable: false,
+          },
+        ],
+      },
+      null,
+      2,
+    )}\n`,
+  );
+}
+
+function fixture({ generation = "v2" } = {}) {
   const parent = fs.mkdtempSync(path.join(os.tmpdir(), "flow-assets-deploy-"));
   const repo = path.join(parent, "repo");
   const destination = path.join(parent, "destination");
@@ -71,6 +113,17 @@ function fixture() {
       2,
     )}\n`,
   );
+  if (generation === "v1") {
+    writeHistoricalV1Generation(repo);
+    git(repo, ["add", "."]);
+    git(repo, ["commit", "-qm", "historical v1 fixture"]);
+    return {
+      parent,
+      repo,
+      destination,
+      commit: git(repo, ["rev-parse", "HEAD"]),
+    };
+  }
   write(
     repo,
     "hosts/pi/flow-assets.json",
@@ -488,7 +541,7 @@ test("relocated OpenCode text sources are canonical and Git-protected", () => {
 });
 
 test("OpenCode deploy treats refs as literal Git argv and historical v1 generations use the restore fallback", () => {
-  const item = fixture();
+  const item = fixture({ generation: "v1" });
   const marker = path.join(item.parent, "executed");
   assert.throws(
     () =>
@@ -505,7 +558,7 @@ test("OpenCode deploy treats refs as literal Git argv and historical v1 generati
       buildOpenCodeDeployPlan({
         requestedRef: "HEAD",
         destinationRoot: item.destination,
-        repoRoot: workspace,
+        repoRoot: item.repo,
       }),
     /v1|restore fallback|historical/i,
   );

@@ -1,3 +1,5 @@
+README.md -text
+docs/multihost-migration.md -text
 agents/flow-*.md -text
 commands/flow-*.md -text
 hosts/opencode/agents/flow-*.md -text
@@ -19,6 +21,7 @@ scripts/lib/scope.mjs -text
 flow-assets.json -text
 flow-assets.lock.json -text
 flow-generation.lock.json -text
+package.json -text
 hosts/opencode/flow-assets.json -text
 hosts/opencode/flow-assets.lock.json -text
 hosts/pi/flow-assets.json -text

@@ -148,7 +148,7 @@ Use this as a senior review matrix. The goal is not style nitpicking; it is to i
 ### Durable Debt Artifact Policy
 
 - Existing debt that should become a future or priority task should be captured as a project-local `.flow/debt` task artifact when the active command has write authorization.
-- `/flow-refactor` is read-only, so output a `Debt Task Draft` block that `/flow-auto-deliver` or `/flow-debt` can persist, unless this skill is explicitly running inside a write-capable authorized loop.
+- `/flow-refactor` is read-only, so output a `Debt Task Draft` block that `/flow-debt` can persist, unless this skill is explicitly running inside a write-capable authorized loop.
 - Do not hide existing debt. Keep it visible, but separate it from current-diff blockers.
 
 ### Universal (all stacks)

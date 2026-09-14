@@ -709,6 +709,17 @@ test("Flow records branch provenance only at its supported creation boundary", (
   assert.match(branch, /Flow Commit owns/);
 });
 
+test("active debt and review guidance exclude retired Flow Auto Deliver referrals", () => {
+  const debt = read("skills/flow-debt/SKILL.md");
+  const refactor = read("skills/flow-refactor/SKILL.md");
+  const reviewAgent = read("hosts/opencode/agents/flow-review-agent.md");
+
+  assert.doesNotMatch(debt, /source_command:[^\n]*flow-auto-deliver/i);
+  assert.match(refactor, /`\/flow-debt` can persist/i);
+  assert.doesNotMatch(refactor, /\/flow-auto-deliver/i);
+  assert.doesNotMatch(reviewAgent, /flow-auto-deliver/i);
+});
+
 test("flow-commit agent has no edit or external-directory exceptions", () => {
   const agent = read("hosts/opencode/agents/flow-git-agent.md");
   const edit = permissionRules(agent, "edit");
