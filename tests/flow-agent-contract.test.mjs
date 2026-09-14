@@ -709,13 +709,67 @@ test("Flow records branch provenance only at its supported creation boundary", (
   assert.match(branch, /Flow Commit owns/);
 });
 
-test("active debt and review guidance exclude retired Flow Auto Deliver referrals", () => {
+test("flow-debt remains a host-neutral, preview-only deferred-finding contract", () => {
   const debt = read("skills/flow-debt/SKILL.md");
+  const adapter = read("hosts/opencode/commands/flow-debt.md");
   const refactor = read("skills/flow-refactor/SKILL.md");
   const reviewAgent = read("hosts/opencode/agents/flow-review-agent.md");
+  const activeDebt = `${debt}\n${adapter}`;
 
-  assert.doesNotMatch(debt, /source_command:[^\n]*flow-auto-deliver/i);
-  assert.match(refactor, /`\/flow-debt` can persist/i);
+  assert.match(
+    debt,
+    /Current availability: contract preparation pending runtime registration\./,
+  );
+  assert.match(debt, /`list` and `show`.*`create-preview`/);
+  assert.match(adapter, /collect intent and present a non-executable preview/i);
+  assert.match(
+    activeDebt,
+    /apply, execute, done, and archive are unavailable/i,
+  );
+  assert.match(activeDebt, /do not claim a path or command/i);
+  assert.match(
+    activeDebt,
+    /do not mutate source code, persist data, claim implementation authority/i,
+  );
+  assert.match(activeDebt, /(?:must not|do not).*scrape conversation context/i);
+  assert.match(activeDebt, /use hardcoded project profiles or routes/i);
+
+  const drafts = [debt, refactor].map((source) =>
+    JSON.parse(source.match(/```json\n([\s\S]*?)\n```/)?.[1] || "{}"),
+  );
+  for (const draft of drafts) {
+    assert.equal(draft.schema, "flow-debt-draft/v1");
+    assert.equal(
+      Object.keys(draft).sort().join(","),
+      "acceptanceCriteria,evidence,priority,problem,producer,schema,scope,severity,title,verification",
+    );
+    assert.equal(
+      Object.keys(draft.producer).sort().join(","),
+      "kind,reference",
+    );
+    for (const evidence of draft.evidence)
+      assert.equal(Object.keys(evidence).sort().join(","), "reference,summary");
+  }
+
+  for (const legacyClaim of [
+    /\.flow\/debt|index\.md|pending\/<id>|done\/<id>|Tecnomyl|Gentle/i,
+    /^### `(?:create|apply|archive|done)/im,
+    /^- `(?:create|apply|archive|done)(?:\s+<id>|\s+--all-safe)?`:/im,
+    /This command authorizes writing|Create one pending task|move.*pending.*done/i,
+  ])
+    assert.doesNotMatch(activeDebt, legacyClaim);
+  assert.match(
+    refactor,
+    /emit exactly one neutral `flow-debt-draft\/v1` document/i,
+  );
+  assert.match(
+    refactor,
+    /does not invoke flow-debt, persist the document, or mutate storage/i,
+  );
+  assert.doesNotMatch(
+    refactor,
+    /Debt Task Drafts \(if any\)|`\/flow-debt` can persist|write-capable authorized loop/i,
+  );
   assert.doesNotMatch(refactor, /\/flow-auto-deliver/i);
   assert.doesNotMatch(reviewAgent, /flow-auto-deliver/i);
 });

@@ -1,6 +1,6 @@
 {
   "$schema": "flow-generation-lock/v2",
-  "generationId": "aa033c5e95980477e68980ab118a9cb587b36abaada89ad2a5c2325c8bddd0c0",
+  "generationId": "83e234cd1db1fde53855f686c2726d178db3352fadac1db8fb9178f5b0de877c",
   "package": {
     "sha256": "1a72873ebdcac47b95d5c293227169fcf3d8711306a775df50ce55d2c27e1dcd"
   },
@@ -101,8 +101,8 @@
     },
     {
       "source": "hosts/opencode/commands/flow-debt.md",
-      "sha256": "3b781e605df6e13d25ec0cba46b2d71f3fb51a78bd63a116f9b40744a7107e89",
-      "bytes": 1869,
+      "sha256": "3bb39c6278ae81c9d1122314bc0bfa333aa413532597342bc2da7806effb0511",
+      "bytes": 737,
       "mode": "100644",
       "executable": false
     },
@@ -451,8 +451,8 @@
     },
     {
       "source": "skills/flow-debt/SKILL.md",
-      "sha256": "61ea1b0dce268eca12487c318625481d2f5f7c6bf4b003ade47a8903bd7131ca",
-      "bytes": 7323,
+      "sha256": "3d9139366397479bedd2d74bde1971bc3031c129ed8a3a296607c86ccfd88ccd",
+      "bytes": 1659,
       "mode": "100644",
       "executable": false
     },
@@ -486,8 +486,8 @@
     },
     {
       "source": "skills/flow-refactor/SKILL.md",
-      "sha256": "c217a5fa76255cc732bd2953875b9e94ee153fb318fcb70fea840a6faeed7f90",
-      "bytes": 16896,
+      "sha256": "0d0c38856cac6d6040c5d9fc8e365f69754a3cffe62bf1b18a2fe72daeafb2f1",
+      "bytes": 16914,
       "mode": "100644",
       "executable": false
     },
