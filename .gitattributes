@@ -2,6 +2,8 @@ README.md -text
 docs/multihost-migration.md -text
 agents/flow-*.md -text
 commands/flow-*.md -text
+core/flow-debt-backlog.mjs -text
+core/flow-debt-contract.mjs -text
 hosts/opencode/agents/flow-*.md -text
 hosts/opencode/commands/flow-*.md -text
 scripts/flow-*.mjs -text

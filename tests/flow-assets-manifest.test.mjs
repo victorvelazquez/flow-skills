@@ -200,6 +200,8 @@ test("manifest and lock define a deterministic, complete, safe mirror", () => {
     .filter(Boolean);
   const expectedAttributes = [
     "README.md",
+    "core/flow-debt-backlog.mjs",
+    "core/flow-debt-contract.mjs",
     "docs/multihost-migration.md",
     "flow-assets.json",
     "flow-assets.lock.json",

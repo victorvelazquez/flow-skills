@@ -16,6 +16,10 @@ const expectedRuntimes = registry.workflows
   .map(({ runtime }) => runtime)
   .filter(Boolean)
   .sort();
+const requiredDebtCore = [
+  "core/flow-debt-backlog.mjs",
+  "core/flow-debt-contract.mjs",
+];
 const requiredLibraries = [
   "scripts/lib/detect-tooling.mjs",
   "scripts/lib/dotnet-format.mjs",
@@ -31,6 +35,7 @@ const requiredLibraries = [
 ];
 const requiredPackageFiles = [
   "README.md",
+  ...requiredDebtCore,
   "docs/multihost-migration.md",
   "flow-generation.lock.json",
   "hosts/pi/flow-assets.json",
@@ -102,6 +107,10 @@ test("Pi package metadata declares only the explicit v1 skill resources", () => 
   assert.ok(packageJson.keywords.includes("pi-package"));
   assert.deepEqual(packageJson.pi.skills, expectedSkills);
   assert.deepEqual(packageJson.files, requiredPackageFiles);
+  assert.deepEqual(
+    packageJson.files.filter((entry) => entry.startsWith("core/")),
+    requiredDebtCore,
+  );
 
   const manifest = readJson("hosts/pi/flow-assets.json");
   assert.equal(manifest.$schema, "flow-host-assets/v2");
@@ -144,6 +153,11 @@ test("packed Pi discovery is complete and independent of OpenCode assets", () =>
       `missing packaged runtime: ${workflow.runtime}`,
     );
   }
+  for (const coreModule of requiredDebtCore)
+    assert.ok(
+      fs.existsSync(path.join(packageRoot, ...coreModule.split("/"))),
+      `missing packaged portable debt core module: ${coreModule}`,
+    );
   assert.equal(fs.existsSync(path.join(packageRoot, "commands")), false);
   assert.equal(fs.existsSync(path.join(packageRoot, "agents")), false);
 });

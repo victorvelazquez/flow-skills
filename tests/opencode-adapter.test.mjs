@@ -13,6 +13,10 @@ const readJson = (file) => JSON.parse(read(file));
 const exists = (file) => fs.existsSync(path.join(root, ...file.split("/")));
 const opencodeCommand = (name) => `hosts/opencode/commands/${name}.md`;
 const opencodeAgent = (name) => `hosts/opencode/agents/${name}.md`;
+const portableDebtCore = [
+  "core/flow-debt-backlog.mjs",
+  "core/flow-debt-contract.mjs",
+];
 
 const readOnlyWorkflows = [
   "flow-audit",
@@ -104,7 +108,7 @@ test("OpenCode content adapters map repository sources to unchanged command dest
   assert.deepEqual(manifest.excludedScopes, manifest.protectedScopes);
 });
 
-test("OpenCode adapter mapping rejects unsupported workflows and destinations outside commands", () => {
+test("OpenCode adapter mapping rejects unsupported workflows and destinations outside approved host scopes", () => {
   const manifest = readJson("hosts/opencode/flow-assets.json");
   const registry = readJson("core/workflows.json");
 
@@ -135,6 +139,20 @@ test("OpenCode adapter mapping rejects unsupported workflows and destinations ou
     () => validateOpenCodeAdapterMappings(legacyRootSource, registry),
     /mapped destination must remain/i,
   );
+
+  const arbitraryCore = structuredClone(manifest);
+  const coreMapping = arbitraryCore.mappings.find(
+    ({ source }) => source === "core/flow-debt-contract.mjs",
+  );
+  coreMapping.source = "core/flow-debt-unapproved.mjs";
+  coreMapping.destination = "core/flow-debt-unapproved.mjs";
+  arbitraryCore.sourceSelectors[
+    arbitraryCore.sourceSelectors.indexOf("core/flow-debt-contract.mjs")
+  ] = "core/flow-debt-unapproved.mjs";
+  assert.throws(
+    () => validateOpenCodeAdapterMappings(arbitraryCore, registry),
+    /approved core debt modules/i,
+  );
 });
 
 test("OpenCode Git and GitHub adapters return unavailable instead of inferring missing approval", () => {
@@ -155,9 +173,22 @@ test("OpenCode Git and GitHub adapters return unavailable instead of inferring m
     assert.match(read(opencodeAgent(agent)), expected);
 });
 
-test("OpenCode managed mappings include each adapter's portable skills and runtime dependencies", () => {
+test("OpenCode managed mappings include each adapter's portable skills, runtime dependencies, and debt core modules", () => {
   const manifest = readJson("hosts/opencode/flow-assets.json");
   const portable = manifest.mappings.filter(({ role }) => role === "portable");
+
+  assert.deepEqual(
+    portable.filter(({ source }) => source.startsWith("core/")),
+    portableDebtCore.map((source) => ({
+      source,
+      destination: source,
+      role: "portable",
+    })),
+  );
+  assert.deepEqual(
+    manifest.sourceSelectors.filter((source) => source.startsWith("core/")),
+    portableDebtCore,
+  );
 
   for (const skill of readJson("package.json").pi.skills) {
     assert.deepEqual(

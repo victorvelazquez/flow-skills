@@ -4,6 +4,10 @@ import path from "node:path";
 const FORBIDDEN_FIELD = /(?:captured|timestamp|token|secret|credential)/i;
 const FORBIDDEN_VALUE =
   /(?:[A-Za-z]:\\|^\/|\/Users\/|credentials|token|secret)/i;
+const PORTABLE_CORE_MODULES = new Set([
+  "core/flow-debt-backlog.mjs",
+  "core/flow-debt-contract.mjs",
+]);
 
 export function sha256(value) {
   return crypto.createHash("sha256").update(value).digest("hex");
@@ -175,7 +179,9 @@ function validateOpenCodeManifest(manifest) {
       ((mapping.source.startsWith("skills/") &&
         mapping.source.endsWith("/**")) ||
         (mapping.source.startsWith("scripts/") &&
-          !mapping.source.includes("*")));
+          !mapping.source.includes("*")) ||
+        PORTABLE_CORE_MODULES.has(mapping.source));
+
     if (!validCommand && !validAgent && !validPortable)
       throw new Error(
         "OpenCode mapping destination is outside host ownership.",

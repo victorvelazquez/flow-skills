@@ -24,6 +24,8 @@
     "presentation": "result-relay"
   },
   "sourceSelectors": [
+    "core/flow-debt-backlog.mjs",
+    "core/flow-debt-contract.mjs",
     "hosts/opencode/agents/flow-branch-agent.md",
     "hosts/opencode/agents/flow-git-agent.md",
     "hosts/opencode/agents/flow-pr-agent.md",
@@ -73,6 +75,16 @@
     "skills/ui-design-system/**"
   ],
   "mappings": [
+    {
+      "source": "core/flow-debt-backlog.mjs",
+      "destination": "core/flow-debt-backlog.mjs",
+      "role": "portable"
+    },
+    {
+      "source": "core/flow-debt-contract.mjs",
+      "destination": "core/flow-debt-contract.mjs",
+      "role": "portable"
+    },
     {
       "source": "hosts/opencode/agents/flow-branch-agent.md",
       "destination": "agents/flow-branch-agent.md",

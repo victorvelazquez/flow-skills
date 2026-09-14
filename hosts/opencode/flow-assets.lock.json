@@ -4,11 +4,27 @@
   "distribution": {
     "kind": "managed-deployment"
   },
-  "generationId": "6fbbb5aee820cd96bf6c94e7128854925799302a6020c6546bdeca98dddb418b",
+  "generationId": "aa033c5e95980477e68980ab118a9cb587b36abaada89ad2a5c2325c8bddd0c0",
   "manifest": {
-    "sha256": "586d318a0e1ec533697262a8769f660469baadd9ff854ee6b3b766c52a39dc39"
+    "sha256": "7438fe3e9edfbac8b2c081389b2780bce24c497613c310da2b1af23ab4f93e93"
   },
   "records": [
+    {
+      "source": "core/flow-debt-backlog.mjs",
+      "destination": "core/flow-debt-backlog.mjs",
+      "sha256": "3f1f816ccb23c496976a8b8c7953f0bbd9c1933c2062e32a5bba30335dd414fe",
+      "bytes": 3022,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "core/flow-debt-contract.mjs",
+      "destination": "core/flow-debt-contract.mjs",
+      "sha256": "f81fc4003a98c7bca2de1e59440fa9687837de098d6a65e4808012e501907c01",
+      "bytes": 5207,
+      "mode": "100644",
+      "executable": false
+    },
     {
       "source": "hosts/opencode/agents/flow-branch-agent.md",
       "destination": "agents/flow-branch-agent.md",
@@ -531,8 +547,8 @@
     }
   ],
   "totals": {
-    "bytes": 683866,
-    "count": 65
+    "bytes": 692095,
+    "count": 67
   },
-  "hostIdentity": "89d2e65580f132a8870682dceac941bb88733959a5f9d45d9a8f649403657164"
+  "hostIdentity": "714cb46c25b160c799910dd7f70d5c3560aa5f311e879dca904aa64592dd6ce4"
 }

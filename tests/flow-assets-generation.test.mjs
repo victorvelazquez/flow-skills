@@ -98,12 +98,33 @@ test("dual-host provenance shares one generation while retaining exact host owne
   );
   assert.deepEqual(
     ownedDestinationPaths(opencodeLock),
-    opencodeLock.records.map(({ destination }) => destination),
+    [...opencodeLock.records].map(({ destination }) => destination).sort(),
   );
   assert.equal(
     verifyProvenance(root).generationId,
     result.generationLock.generationId,
   );
+});
+
+test("destination ownership follows canonical destinations, not source ordering", () => {
+  const lock = {
+    host: "opencode",
+    records: [
+      {
+        source: "core/flow-debt-contract.mjs",
+        destination: "core/flow-debt-contract.mjs",
+      },
+      {
+        source: "hosts/opencode/agents/flow-git-agent.md",
+        destination: "agents/flow-git-agent.md",
+      },
+    ],
+  };
+
+  assert.deepEqual(ownedDestinationPaths(lock), [
+    "agents/flow-git-agent.md",
+    "core/flow-debt-contract.mjs",
+  ]);
 });
 
 test("v2 locks reject cross-host destinations, tampering, and wildcard ownership", () => {
