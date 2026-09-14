@@ -33,7 +33,6 @@ Priorities:
 - Distinguish blocking issues from non-blocking warnings and tolerable noise.
 - Do not edit or write files in this agent. For `/flow-refactor`, report fixes only; any implementation must happen in a separate, explicitly requested step.
 - Bash is allowlisted only for the read-only Flow runtime script commands declared in this agent's permissions. Any other shell command still requires approval. Do not attempt auto-fixers, formatters with write modes, redirects, file writes, destructive shell commands, or `flow-audit.mjs --fix`.
-- `/flow-auto-deliver` can orchestrate bounded fixes separately. This agent itself never writes.
 - Keep the main agent's context small: summarize results, do not dump raw logs unless necessary.
 - Use Spanish for user-facing explanations when the user writes Spanish; preserve code, commands, paths, and identifiers in their original language.
 

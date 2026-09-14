@@ -4,7 +4,7 @@
   "distribution": {
     "kind": "managed-deployment"
   },
-  "generationId": "e0a270d9191a67e5fe285f79109369c383f05dac4ddf1bad73a5c2403ec79502",
+  "generationId": "6fbbb5aee820cd96bf6c94e7128854925799302a6020c6546bdeca98dddb418b",
   "manifest": {
     "sha256": "586d318a0e1ec533697262a8769f660469baadd9ff854ee6b3b766c52a39dc39"
   },
@@ -36,8 +36,8 @@
     {
       "source": "hosts/opencode/agents/flow-review-agent.md",
       "destination": "agents/flow-review-agent.md",
-      "sha256": "4d9064def8b948423b30aa1f02e10288fa8cbc66cbb9e01c9d14147145fca320",
-      "bytes": 2525,
+      "sha256": "bd85019aac19a419d8ea4f03671e80ca4eebb1fc1a6bdaffcef4dad38d947d76",
+      "bytes": 2428,
       "mode": "100644",
       "executable": false
     },
@@ -460,8 +460,8 @@
     {
       "source": "skills/flow-debt/SKILL.md",
       "destination": "skills/flow-debt/SKILL.md",
-      "sha256": "e9b388fb2a147021a27a8dc96ba6f182b7aa2c5d681d185eae3737860a79f698",
-      "bytes": 7342,
+      "sha256": "61ea1b0dce268eca12487c318625481d2f5f7c6bf4b003ade47a8903bd7131ca",
+      "bytes": 7323,
       "mode": "100644",
       "executable": false
     },
@@ -500,8 +500,8 @@
     {
       "source": "skills/flow-refactor/SKILL.md",
       "destination": "skills/flow-refactor/SKILL.md",
-      "sha256": "c0f242af29f1ab755e70c137b39a7c4b33c63b03e9865e5e3d5c03c3dff4f36c",
-      "bytes": 16920,
+      "sha256": "c217a5fa76255cc732bd2953875b9e94ee153fb318fcb70fea840a6faeed7f90",
+      "bytes": 16896,
       "mode": "100644",
       "executable": false
     },
@@ -531,8 +531,8 @@
     }
   ],
   "totals": {
-    "bytes": 684006,
+    "bytes": 683866,
     "count": 65
   },
-  "hostIdentity": "f0aa2fc35241b0a2cd482b1970d3501cb5994e68b488c805c9583513716816ab"
+  "hostIdentity": "89d2e65580f132a8870682dceac941bb88733959a5f9d45d9a8f649403657164"
 }

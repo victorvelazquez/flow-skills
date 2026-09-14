@@ -10,7 +10,7 @@
     "sha256": "9b2d9d93a615f4d2175dfb344c37073c428faeda6958e4badd429c4f295b82dc"
   },
   "totals": {
-    "bytes": 658805,
+    "bytes": 658762,
     "count": 51
   },
   "files": [
@@ -310,8 +310,8 @@
     },
     {
       "path": "skills/flow-debt/SKILL.md",
-      "sha256": "e9b388fb2a147021a27a8dc96ba6f182b7aa2c5d681d185eae3737860a79f698",
-      "bytes": 7342,
+      "sha256": "61ea1b0dce268eca12487c318625481d2f5f7c6bf4b003ade47a8903bd7131ca",
+      "bytes": 7323,
       "mode": "100644",
       "executable": false
     },
@@ -345,8 +345,8 @@
     },
     {
       "path": "skills/flow-refactor/SKILL.md",
-      "sha256": "c0f242af29f1ab755e70c137b39a7c4b33c63b03e9865e5e3d5c03c3dff4f36c",
-      "bytes": 16920,
+      "sha256": "c217a5fa76255cc732bd2953875b9e94ee153fb318fcb70fea840a6faeed7f90",
+      "bytes": 16896,
       "mode": "100644",
       "executable": false
     },

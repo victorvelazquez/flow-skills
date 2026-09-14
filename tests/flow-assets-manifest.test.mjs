@@ -199,6 +199,8 @@ test("manifest and lock define a deterministic, complete, safe mirror", () => {
     .split(/\r?\n/)
     .filter(Boolean);
   const expectedAttributes = [
+    "README.md",
+    "docs/multihost-migration.md",
     "flow-assets.json",
     "flow-assets.lock.json",
     "flow-generation.lock.json",
@@ -208,6 +210,7 @@ test("manifest and lock define a deterministic, complete, safe mirror", () => {
     "hosts/opencode/flow-assets.lock.json",
     "hosts/pi/flow-assets.json",
     "hosts/pi/flow-assets.lock.json",
+    "package.json",
     ...manifest.liveMirrored.patterns.map((entry) => entry.path),
     ...manifest.liveMirrored.libraries,
   ]

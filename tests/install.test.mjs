@@ -277,10 +277,16 @@ test("legacy, unknown, duplicate, missing-value, and conflicting arguments fail 
   const target = destination();
   seedConfig(target);
   const cases = [
-    [["--export"], /flow-skills-sync snapshot/i],
+    [
+      ["--export"],
+      /work from the repository.*node install\.mjs.*--host opencode/i,
+    ],
     [["--uninstall"], /no longer provided/i],
     [["--update"], /pull the repository explicitly/i],
-    [["--ref", "HEAD"], /flow-skills-sync restore/i],
+    [
+      ["--ref", "HEAD"],
+      /work from the repository.*node install\.mjs.*--host opencode/i,
+    ],
     [["--wat"], /unsupported argument/i],
     [["--host", "other"], /only supports.*opencode/i],
     [["--destination"], /missing value/i],
@@ -294,6 +300,8 @@ test("legacy, unknown, duplicate, missing-value, and conflicting arguments fail 
     const result = run(fixture, args, target);
     assert.equal(result.status, 1, args.join(" "));
     assert.match(result.stderr, expected);
+    if (["--export", "--ref"].includes(args[0]))
+      assert.doesNotMatch(result.stderr, /flow-skills-sync/i);
     assert.deepEqual(snapshot(target), before);
   }
 });

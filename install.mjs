@@ -25,13 +25,13 @@ Pi users: ${PI_GUIDANCE}`;
 function parseArgs(args) {
   const legacy = {
     "--export":
-      "Use /flow-skills-sync snapshot to mirror live Flow assets into the repository.",
+      "Work from the repository and run `node install.mjs --host opencode` to preview the committed OpenCode generation.",
     "--uninstall":
       "Uninstall is no longer provided; manage Flow assets explicitly in your OpenCode directory.",
     "--update":
       "Pull the repository explicitly, then preview this bootstrap again.",
     "--ref":
-      "Historical targets are not supported here; use /flow-skills-sync restore <ref>.",
+      "Historical targets are not supported here. Work from the repository and run `node install.mjs --host opencode` to preview the committed OpenCode generation.",
   };
   for (const argument of args)
     if (legacy[argument])
