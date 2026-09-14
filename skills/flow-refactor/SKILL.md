@@ -145,10 +145,10 @@ Use this as a senior review matrix. The goal is not style nitpicking; it is to i
 - **Existing compromising debt** (meaning it raises maintenance or delivery risk but is not an immediate incident) → `Create priority future task`.
 - **Existing critical/immediate risk** → `Stop and ask before continuing`.
 
-### Durable Debt Artifact Policy
+### Deferred Finding Draft Policy
 
-- Existing debt that should become a future or priority task should be captured as a project-local `.flow/debt` task artifact when the active command has write authorization.
-- `/flow-refactor` is read-only, so output a `Debt Task Draft` block that `/flow-debt` can persist, unless this skill is explicitly running inside a write-capable authorized loop.
+- Existing debt that should become a future or priority task may emit exactly one neutral `flow-debt-draft/v1` document per finding.
+- `/flow-refactor` does not invoke flow-debt, persist the document, or mutate storage. The document remains output only.
 - Do not hide existing debt. Keep it visible, but separate it from current-diff blockers.
 
 ### Universal (all stacks)
@@ -254,32 +254,50 @@ When the Tecnomyl profile is active, apply the stricter Tecnomyl-specific rules 
 - Create priority future task: [existing compromising debt]
 - Stop and ask: [existing critical/immediate risks]
 
-## Debt Task Drafts (if any)
-- id: <suggested-id>
-  title: <short title>
-  priority: normal|high|critical
-  source command: /flow-refactor
-  origin: existing|new-deferred
-  severity: low|medium|high|critical
-  risk: <why this matters>
-  recommended action: Create future task|Create priority future task|Stop and ask before continuing
-  scope: <files/modules>
-  files: [<path>]
-  acceptance criteria: [<observable done condition>]
-  verification: [<suggested read-only checks>]
-  notes: <context>
+## Deferred Finding Drafts (if any)
+
+Emit each deferred finding as exactly this neutral document shape:
+
+```json
+{
+  "schema": "flow-debt-draft/v1",
+  "title": "<short-title>",
+  "problem": "<why-this-matters>",
+  "priority": "p2",
+  "severity": "medium",
+  "scope": ["<relative-path>"],
+  "acceptanceCriteria": ["<observable-done-condition>"],
+  "verification": ["<suggested-read-only-check>"],
+  "producer": {
+    "kind": "flow-refactor",
+    "reference": "<audit-reference>"
+  },
+  "evidence": [
+    {
+      "reference": "<evidence-reference>",
+      "summary": "<evidence-summary>"
+    }
+  ]
+}
+```
 
 [Si React en scope y hay candidatos:]
+
 ## Extracción de componentes
+
 | Componente | Archivo actual | Destino sugerido | Motivo |
 |------------|---------------|-----------------|--------|
 
 [Solo si hay hallazgos 🔴:]
+
 ## Correcciones críticas
+
 [before/after mínimo, solo lo relevante]
 
 ## Veredicto
+
 ¿Listo para PR? Sí / No — una oración.
+
 ```
 
 ### Mode: --module (deep)
@@ -301,7 +319,7 @@ Same as Quick plus:
 - NEVER invent findings — only report what is present
 - NEVER edit code in this command. If fixes are needed, recommend a separate implementation step.
 - Always distinguish new/changed-code findings from existing-code observations when the scope includes both.
-- Use the required sections: `Estado`, `Hallazgos que bloquean (new/changed)`, `Observaciones de deuda existente`, `Acciones recomendadas`, `Debt Task Drafts (if any)`, `Veredicto`. Omit a section only when it truly has no content, except `Estado` and `Veredicto`.
+- Use the required sections: `Estado`, `Hallazgos que bloquean (new/changed)`, `Observaciones de deuda existente`, `Acciones recomendadas`, `Deferred Finding Drafts (if any)`, `Veredicto`. Omit a section only when it truly has no content, except `Estado` and `Veredicto`.
 - Current-diff blockers must not be buried as debt. Existing debt must not block the current change unless it is an immediate critical risk.
 - If a file is clean, say so explicitly
 - Max 15 rows in quick mode table — group minors if needed
