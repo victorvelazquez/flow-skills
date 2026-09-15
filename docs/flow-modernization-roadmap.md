@@ -75,6 +75,7 @@ The following integration evidence is limited to the clean local `main` history 
 | T2.5a | [#41](https://github.com/victorvelazquez/flow-skills/pull/41) | `integrated/current-main` | Added pure pending/done/archived lifecycle helpers and refreshed locks. |
 | T2.5b | [#43](https://github.com/victorvelazquez/flow-skills/pull/43) | `complete` | Added the atomic writer module; merge commit `11a1fc0` is on current `main`. |
 | T2.5c | [#44](https://github.com/victorvelazquez/flow-skills/pull/44) | `complete` | Added self-contained preparation handles; merge commit `1045a5a` from `feat/flow-debt-preparation-ttl` is on current `main`. |
+| T2.5d | [#45](https://github.com/victorvelazquez/flow-skills/pull/45) | `complete` | Added host-approved execution and recovery; merge commit `a8083eb` is on current `main`. |
 
 ## Current Flow Debt state
 
@@ -118,7 +119,7 @@ T3 and T4 may be reordered only through an explicit roadmap amendment with the r
 
 ### T2.5d — Public execute/recovery with host-native approval
 
-- **Status:** `verified awaiting merge` (`size:exception`: 1,009 additions + 163 deletions = 1,172 changed lines; declared before review. Correction validation passed; merge evidence remains required for `complete`.)
+- **Status:** `complete` (`size:exception`: 1,009 additions + 163 deletions = 1,172 changed lines; declared before review. Correction validation passed.)
 - **Dependencies:** T2.5c complete on current `main`.
 - **Objective:** Add public execution and recovery around prepared transitions, gated by explicit host-native approval.
 - **Scope:** Execute/recovery routes; stale and replay transitions; Pi/OpenCode adapters; adapter registry and manifests; locks; focused integration tests.
@@ -126,8 +127,8 @@ T3 and T4 may be reordered only through an explicit roadmap amendment with the r
 - **Acceptance:** Execution accepts only a current, bound preparation; stale and replay attempts have explicit safe transitions; approval is requested and represented by the host adapter, not portable core; recovery is bounded and observable; adapter registration/manifests are packaged consistently.
 - **Verification:** Strict-TDD unit and adapter tests for approve/decline, stale/replay, lock contention, successful execute, and recovery; independent verifier exercises packaged adapters and reports unavailable host capability as a skip.
 - **Review boundary:** Execution/recovery plus required adapters, registry, manifests, locks, and tests. This is likely over 400 changed lines; declare an explicit `size:exception` before review or split only at a coherent independently safe boundary.
-- **Completion:** `status: verified awaiting merge`; branch: `feat/flow-debt-host-native-execution`; commit: —; PR: —; verification: corrected shared read/validate/compute/write lock and root asset/lock packaging; focused execution/CLI/adapter/package suite (55/55), full suite (334 passed; 7 Windows capability skips), Pi/OpenCode provenance verifies, `npm pack --dry-run`, and `git diff --check` passed. No merge evidence yet.
-- **Next allowed task:** T2.5e, only after merge evidence updates this card.
+- **Completion:** `status: complete`; branch: `feat/flow-debt-host-native-execution`; commit: `a8083eb`; PR: [#45](https://github.com/victorvelazquez/flow-skills/pull/45); verification: corrected shared read/validate/compute/write lock and root asset/lock packaging; focused execution/CLI/adapter/package suite (55/55), full suite (334 passed; 7 Windows capability skips), Pi/OpenCode provenance verifies, `npm pack --dry-run`, and `git diff --check` passed; merge commit observed on current `main`.
+- **Next allowed task:** T2.5e.
 
 ### T2.5e — Independent mutation verification
 
