@@ -9,7 +9,7 @@
     "sha256": "bccd38f0f8c508ff0f17f0bc18c180116f2279a1834635944b46b93a762635c4"
   },
   "totals": {
-    "bytes": 663313,
+    "bytes": 663374,
     "count": 53
   },
   "files": [
@@ -323,8 +323,8 @@
     },
     {
       "path": "skills/flow-debt/SKILL.md",
-      "sha256": "3d9139366397479bedd2d74bde1971bc3031c129ed8a3a296607c86ccfd88ccd",
-      "bytes": 1659,
+      "sha256": "4bdec65c6e7c44c704583446cd111443d6c138cc91a7b4cd7642764df3ca596b",
+      "bytes": 1720,
       "mode": "100644",
       "executable": false
     },

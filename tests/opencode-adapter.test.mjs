@@ -108,6 +108,20 @@ test("OpenCode content adapters map repository sources to unchanged command dest
   assert.deepEqual(manifest.excludedScopes, manifest.protectedScopes);
 });
 
+test("OpenCode maps the flow-debt runtime once as a portable same-path resource", () => {
+  const manifest = readJson("hosts/opencode/flow-assets.json");
+  const runtime = "scripts/flow-debt.mjs";
+
+  assert.deepEqual(
+    manifest.sourceSelectors.filter((entry) => entry === runtime),
+    [runtime],
+  );
+  assert.deepEqual(
+    manifest.mappings.filter(({ source }) => source === runtime),
+    [{ source: runtime, destination: runtime, role: "portable" }],
+  );
+});
+
 test("OpenCode adapter mapping rejects unsupported workflows and destinations outside approved host scopes", () => {
   const manifest = readJson("hosts/opencode/flow-assets.json");
   const registry = readJson("core/workflows.json");
@@ -152,6 +166,37 @@ test("OpenCode adapter mapping rejects unsupported workflows and destinations ou
   assert.throws(
     () => validateOpenCodeAdapterMappings(arbitraryCore, registry),
     /approved core debt modules/i,
+  );
+
+  const duplicateRuntime = structuredClone(manifest);
+  duplicateRuntime.mappings.push(
+    structuredClone(
+      duplicateRuntime.mappings.find(
+        ({ source }) => source === "scripts/flow-debt.mjs",
+      ),
+    ),
+  );
+  assert.throws(
+    () => validateOpenCodeAdapterMappings(duplicateRuntime, registry),
+    /destination must remain/i,
+  );
+
+  const wrongRole = structuredClone(manifest);
+  wrongRole.mappings.find(
+    ({ source }) => source === "scripts/flow-debt.mjs",
+  ).role = "agent";
+  assert.throws(
+    () => validateOpenCodeAdapterMappings(wrongRole, registry),
+    /destination must remain/i,
+  );
+
+  const wrongDestination = structuredClone(manifest);
+  wrongDestination.mappings.find(
+    ({ source }) => source === "scripts/flow-debt.mjs",
+  ).destination = "commands/flow-debt.mjs";
+  assert.throws(
+    () => validateOpenCodeAdapterMappings(wrongDestination, registry),
+    /destination must remain/i,
   );
 });
 
