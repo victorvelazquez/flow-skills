@@ -45,6 +45,7 @@
     "scripts/flow-branch.mjs",
     "scripts/flow-build.mjs",
     "scripts/flow-commit.mjs",
+    "scripts/flow-debt.mjs",
     "scripts/flow-docs-sync.mjs",
     "scripts/flow-playbook-sync.mjs",
     "scripts/flow-pr.mjs",
@@ -190,6 +191,11 @@
     {
       "source": "scripts/flow-commit.mjs",
       "destination": "scripts/flow-commit.mjs",
+      "role": "portable"
+    },
+    {
+      "source": "scripts/flow-debt.mjs",
+      "destination": "scripts/flow-debt.mjs",
       "role": "portable"
     },
     {

@@ -41,7 +41,7 @@
       "id": "flow-debt",
       "contract": "skills/flow-debt/SKILL.md",
       "resources": ["skills/flow-debt"],
-      "runtime": null,
+      "runtime": "scripts/flow-debt.mjs",
       "outcome": "project-local debt lifecycle guidance",
       "mutation": "approval-required",
       "hosts": { "opencode": "supported", "pi": "supported" }

@@ -9,16 +9,16 @@ metadata:
 
 # flow-debt
 
-Current availability: contract preparation pending runtime registration.
-
 ## Contract
 
 `flow-debt` is a host-neutral, read-only contract for deferred findings. Its only allowed intents are `list`, `show`, and `create-preview`.
 
-- `list` and `show` only describe the request; `create-preview` shows non-executable, caller-supplied `flow-debt-draft/v1` documents.
+In Pi, resolve `../../scripts/flow-debt.mjs` relative to this `SKILL.md`, then invoke it with explicit caller arguments as data. Do not derive the runtime path from the project working directory.
+
+- `list` and `show` read existing canonical debt records; `create-preview` validates caller-supplied `flow-debt-draft/v1` documents and returns a non-executable preview.
 - Accept only explicit caller input. Do not infer findings, scrape conversation context, or claim access to prior requests.
-- Apply, execute, done, and archive are unavailable; runtime registration is pending, so do not claim a path or command.
-- Do not mutate source code, persist data, claim implementation authority, interact with the filesystem, or use hardcoded project profiles or routes.
+- Apply, execute, done, and archive are unavailable.
+- Do not mutate source code, persist data, claim implementation authority, or use hardcoded project profiles or routes.
 
 ## Neutral draft document
 

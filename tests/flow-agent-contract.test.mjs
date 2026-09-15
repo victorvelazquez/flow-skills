@@ -718,15 +718,23 @@ test("flow-debt remains a host-neutral, preview-only deferred-finding contract",
 
   assert.match(
     debt,
-    /Current availability: contract preparation pending runtime registration\./,
+    /In Pi, resolve `\.\.\/\.\.\/scripts\/flow-debt\.mjs` relative to this `SKILL\.md`/,
   );
+  assert.match(debt, /invoke it with explicit caller arguments as data/i);
   assert.match(debt, /`list` and `show`.*`create-preview`/);
-  assert.match(adapter, /collect intent and present a non-executable preview/i);
+  assert.match(
+    adapter,
+    /node\s+~\/\.config\/opencode\/scripts\/flow-debt\.mjs/,
+  );
+  assert.match(adapter, /forward `\$ARGUMENTS` as data/i);
+  assert.match(
+    adapter,
+    /never .*interpolat.*emulate filesystem access directly/i,
+  );
   assert.match(
     activeDebt,
     /apply, execute, done, and archive are unavailable/i,
   );
-  assert.match(activeDebt, /do not claim a path or command/i);
   assert.match(
     activeDebt,
     /do not mutate source code, persist data, claim implementation authority/i,

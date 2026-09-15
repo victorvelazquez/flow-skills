@@ -35,6 +35,7 @@
     "scripts/flow-branch.mjs",
     "scripts/flow-build.mjs",
     "scripts/flow-commit.mjs",
+    "scripts/flow-debt.mjs",
     "scripts/flow-docs-sync.mjs",
     "scripts/flow-playbook-sync.mjs",
     "scripts/flow-pr.mjs",

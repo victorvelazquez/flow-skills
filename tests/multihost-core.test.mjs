@@ -156,6 +156,20 @@ test("portable workflow registry is complete, sorted, resource-backed, and host-
   }
 });
 
+test("flow-debt registry publishes its existing runtime without changing its contract", () => {
+  const debt = readRegistry().workflows.find(({ id }) => id === "flow-debt");
+
+  assert.deepEqual(debt, {
+    id: "flow-debt",
+    contract: "skills/flow-debt/SKILL.md",
+    resources: ["skills/flow-debt"],
+    runtime: "scripts/flow-debt.mjs",
+    outcome: "project-local debt lifecycle guidance",
+    mutation: "approval-required",
+    hosts: { opencode: "supported", pi: "supported" },
+  });
+});
+
 test("registry validation rejects duplicate or unsorted IDs, missing resources, and undeclared adapter claims", () => {
   const registry = readRegistry();
 

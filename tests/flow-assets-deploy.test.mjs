@@ -46,6 +46,43 @@ function snapshot(root) {
   return result;
 }
 
+function debtRepository(parent) {
+  const repository = path.join(parent, "debt-repository");
+  fs.mkdirSync(repository);
+  git(repository, ["init", "-q"]);
+  const nested = path.join(repository, "nested", "cwd");
+  fs.mkdirSync(nested, { recursive: true });
+  return { repository, nested };
+}
+
+function debtDraft() {
+  return {
+    schema: "flow-debt-draft/v1",
+    title: "Deployed runtime preview",
+    problem: "A deployed runtime needs direct evidence.",
+    priority: "p1",
+    severity: "high",
+    scope: ["scripts/flow-debt.mjs"],
+    acceptanceCriteria: ["Emit canonical preview candidates."],
+    verification: ["node --test tests/flow-assets-deploy.test.mjs"],
+    producer: { kind: "audit", reference: "deployed-runtime" },
+    evidence: [
+      { reference: "test:deployment", summary: "Direct execution is stable." },
+    ],
+  };
+}
+
+function runDebt(runtime, cwd, args) {
+  const result = spawnSync(process.execPath, [runtime, ...args], {
+    cwd,
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stderr, "");
+  assert.match(result.stdout, /^\{.*\}\n$/s);
+  return JSON.parse(result.stdout);
+}
+
 function writeHistoricalV1Generation(repo) {
   const manifest = {
     $schema: "flow-assets/v1",
@@ -514,6 +551,44 @@ test("v2 committed OpenCode generation survives core.autocrlf=true before previe
   });
   assert.equal(plan.target.generationId, item.generation.generationId);
   assert.equal(plan.counts.add, plan.target.totals.count);
+});
+
+test("deployed OpenCode flow-debt executes from a nested repository cwd without writes", () => {
+  const item = committedWorkspaceGeneration();
+  const plan = buildOpenCodeDeployPlan({
+    requestedRef: "HEAD",
+    destinationRoot: item.destination,
+    repoRoot: item.repo,
+  });
+  apply(item, plan);
+  const runtime = path.join(item.destination, "scripts", "flow-debt.mjs");
+  const debt = debtRepository(path.dirname(item.repo));
+  const before = snapshot(debt.repository);
+
+  const listed = runDebt(runtime, debt.nested, ["list"]);
+  const preview = runDebt(runtime, debt.nested, [
+    "create-preview",
+    "--draft-json",
+    JSON.stringify(debtDraft()),
+  ]);
+
+  assert.deepEqual(listed, {
+    schema: "flow-debt-cli/v1",
+    ok: true,
+    operation: "list",
+    repository: { id: listed.repository.id },
+    availability: "absent",
+    status: "pending",
+    totalCount: 0,
+    selectedCount: 0,
+    items: [],
+  });
+  assert.equal(preview.schema, "flow-debt-cli/v1");
+  assert.equal(preview.ok, true);
+  assert.equal(preview.operation, "create-preview");
+  assert.equal(preview.executable, false);
+  assert.equal(preview.candidates.length, 1);
+  assert.deepEqual(snapshot(debt.repository), before);
 });
 
 test("relocated OpenCode text sources are canonical and Git-protected", () => {

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -87,6 +88,60 @@ function packedFixture(packageJson) {
   return packageRoot;
 }
 
+function debtRepository() {
+  const repository = fs.mkdtempSync(path.join(os.tmpdir(), "flow-pi-debt-"));
+  const initialized = spawnSync("git", ["init", "-q"], {
+    cwd: repository,
+    encoding: "utf8",
+  });
+  assert.equal(initialized.status, 0, initialized.stderr);
+  const nested = path.join(repository, "nested", "cwd");
+  fs.mkdirSync(nested, { recursive: true });
+  return { repository, nested };
+}
+
+function debtDraft() {
+  return {
+    schema: "flow-debt-draft/v1",
+    title: "Published runtime preview",
+    problem: "A published runtime needs direct evidence.",
+    priority: "p1",
+    severity: "high",
+    scope: ["scripts/flow-debt.mjs"],
+    acceptanceCriteria: ["Emit canonical preview candidates."],
+    verification: ["node --test tests/pi-package.test.mjs"],
+    producer: { kind: "audit", reference: "published-runtime" },
+    evidence: [
+      { reference: "test:publication", summary: "Direct execution is stable." },
+    ],
+  };
+}
+
+function snapshot(root) {
+  const files = {};
+  const visit = (directory) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const target = path.join(directory, entry.name);
+      const relative = path.relative(root, target).split(path.sep).join("/");
+      if (entry.isDirectory()) visit(target);
+      else files[relative] = fs.readFileSync(target);
+    }
+  };
+  visit(root);
+  return files;
+}
+
+function runDebt(runtime, cwd, args) {
+  const result = spawnSync(process.execPath, [runtime, ...args], {
+    cwd,
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stderr, "");
+  assert.match(result.stdout, /^\{.*\}\n$/s);
+  return JSON.parse(result.stdout);
+}
+
 function discoverPiSkills(packageRoot) {
   const packageJson = readJson("package.json", packageRoot);
   return packageJson.pi.skills.map((relative) => {
@@ -126,6 +181,65 @@ test("Pi package metadata declares only the explicit v1 skill resources", () => 
     JSON.stringify(manifest),
     /(?:[A-Za-z]:\\|\/Users\/|credentials|token|secret|opencode)/i,
   );
+});
+
+test("Pi publication includes the flow-debt runtime exactly once", () => {
+  const packageJson = readJson("package.json");
+  const manifest = readJson("hosts/pi/flow-assets.json");
+  const runtime = "scripts/flow-debt.mjs";
+
+  assert.deepEqual(
+    packageJson.files.filter((entry) => entry === runtime),
+    [runtime],
+  );
+  assert.deepEqual(
+    manifest.sourceSelectors.filter((entry) => entry === runtime),
+    [runtime],
+  );
+  assert.ok(
+    fs.existsSync(path.join(root, runtime)),
+    `missing runtime: ${runtime}`,
+  );
+});
+
+test("packed Pi flow-debt executes from a nested repository cwd without writes", () => {
+  const packageRoot = packedFixture(readJson("package.json"));
+  const runtime = path.resolve(
+    packageRoot,
+    "skills",
+    "flow-debt",
+    "..",
+    "..",
+    "scripts",
+    "flow-debt.mjs",
+  );
+  const debt = debtRepository();
+  const before = snapshot(debt.repository);
+
+  const listed = runDebt(runtime, debt.nested, ["list"]);
+  const preview = runDebt(runtime, debt.nested, [
+    "create-preview",
+    "--draft-json",
+    JSON.stringify(debtDraft()),
+  ]);
+
+  assert.deepEqual(listed, {
+    schema: "flow-debt-cli/v1",
+    ok: true,
+    operation: "list",
+    repository: { id: listed.repository.id },
+    availability: "absent",
+    status: "pending",
+    totalCount: 0,
+    selectedCount: 0,
+    items: [],
+  });
+  assert.equal(preview.schema, "flow-debt-cli/v1");
+  assert.equal(preview.ok, true);
+  assert.equal(preview.operation, "create-preview");
+  assert.equal(preview.executable, false);
+  assert.equal(preview.candidates.length, 1);
+  assert.deepEqual(snapshot(debt.repository), before);
 });
 
 test("packed Pi discovery is complete and independent of OpenCode assets", () => {
