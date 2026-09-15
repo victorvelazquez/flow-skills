@@ -9,8 +9,8 @@
     "sha256": "bccd38f0f8c508ff0f17f0bc18c180116f2279a1834635944b46b93a762635c4"
   },
   "totals": {
-    "bytes": 656925,
-    "count": 52
+    "bytes": 660555,
+    "count": 53
   },
   "files": [
     {
@@ -38,6 +38,13 @@
       "path": "scripts/flow-commit.mjs",
       "sha256": "132f3e04978c5aebe74f3163c0af068c1a79a6dbe736ff36d7493845b797ba6f",
       "bytes": 67896,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "path": "scripts/flow-debt.mjs",
+      "sha256": "bde55d5fa0db3aa7444b805ef38633b5e94bfa7990d86023605a963dd4ffc09b",
+      "bytes": 3630,
       "mode": "100644",
       "executable": false
     },
