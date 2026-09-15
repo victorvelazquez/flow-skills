@@ -74,6 +74,7 @@ The following integration evidence is limited to the clean local `main` history 
 | T2.4d | [#40](https://github.com/victorvelazquez/flow-skills/pull/40) | `integrated/current-main` | Published Flow Debt runtime across supported hosts. |
 | T2.5a | [#41](https://github.com/victorvelazquez/flow-skills/pull/41) | `integrated/current-main` | Added pure pending/done/archived lifecycle helpers and refreshed locks. |
 | T2.5b | [#43](https://github.com/victorvelazquez/flow-skills/pull/43) | `complete` | Added the atomic writer module; merge commit `11a1fc0` is on current `main`. |
+| T2.5c | [#44](https://github.com/victorvelazquez/flow-skills/pull/44) | `complete` | Added self-contained preparation handles; merge commit `1045a5a` from `feat/flow-debt-preparation-ttl` is on current `main`. |
 
 ## Current Flow Debt state
 
@@ -104,7 +105,7 @@ T3 and T4 may be reordered only through an explicit roadmap amendment with the r
 
 ### T2.5c — Preparation only
 
-- **Status:** `pending`
+- **Status:** `complete`
 - **Dependencies:** T2.5b complete on current `main`.
 - **Objective:** Create `create`, `done`, and `archive` preparation paths that return a self-contained integrity handle.
 - **Scope:** Bind every handle to repository identity, backlog identity, and input; enforce a 10-minute TTL; test deterministic valid, stale, and mismatched bindings.
@@ -112,12 +113,12 @@ T3 and T4 may be reordered only through an explicit roadmap amendment with the r
 - **Acceptance:** Each supported transition prepares without changing repository/backlog state; the handle is self-contained and integrity-protected; repository/backlog/input mismatch and expiry reject deterministically.
 - **Verification:** Strict-TDD tests for all three prepared transitions, binding mismatch, tamper/integrity failure, and TTL expiry; independent verifier confirms the operation is side-effect-free.
 - **Review boundary:** Preparation contract/core and tests only; <=400 changed lines or explicit `size:exception`.
-- **Completion:** `status: pending`; branch: —; commit: —; PR: —; verification: —.
-- **Next allowed task:** T2.5d, only after merge evidence updates this card.
+- **Completion:** `status: complete`; branch: `feat/flow-debt-preparation-ttl`; commit: `1045a5a`; PR: [#44](https://github.com/victorvelazquez/flow-skills/pull/44); verification: merge commit observed on current `main`.
+- **Next allowed task:** T2.5d.
 
 ### T2.5d — Public execute/recovery with host-native approval
 
-- **Status:** `pending` (likely `size:exception`)
+- **Status:** `verified awaiting merge` (`size:exception`: 1,009 additions + 163 deletions = 1,172 changed lines; declared before review. Correction validation passed; merge evidence remains required for `complete`.)
 - **Dependencies:** T2.5c complete on current `main`.
 - **Objective:** Add public execution and recovery around prepared transitions, gated by explicit host-native approval.
 - **Scope:** Execute/recovery routes; stale and replay transitions; Pi/OpenCode adapters; adapter registry and manifests; locks; focused integration tests.
@@ -125,7 +126,7 @@ T3 and T4 may be reordered only through an explicit roadmap amendment with the r
 - **Acceptance:** Execution accepts only a current, bound preparation; stale and replay attempts have explicit safe transitions; approval is requested and represented by the host adapter, not portable core; recovery is bounded and observable; adapter registration/manifests are packaged consistently.
 - **Verification:** Strict-TDD unit and adapter tests for approve/decline, stale/replay, lock contention, successful execute, and recovery; independent verifier exercises packaged adapters and reports unavailable host capability as a skip.
 - **Review boundary:** Execution/recovery plus required adapters, registry, manifests, locks, and tests. This is likely over 400 changed lines; declare an explicit `size:exception` before review or split only at a coherent independently safe boundary.
-- **Completion:** `status: pending`; branch: —; commit: —; PR: —; verification: —.
+- **Completion:** `status: verified awaiting merge`; branch: `feat/flow-debt-host-native-execution`; commit: —; PR: —; verification: corrected shared read/validate/compute/write lock and root asset/lock packaging; focused execution/CLI/adapter/package suite (55/55), full suite (334 passed; 7 Windows capability skips), Pi/OpenCode provenance verifies, `npm pack --dry-run`, and `git diff --check` passed. No merge evidence yet.
 - **Next allowed task:** T2.5e, only after merge evidence updates this card.
 
 ### T2.5e — Independent mutation verification

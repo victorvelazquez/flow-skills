@@ -28,6 +28,7 @@
     "core/flow-debt-contract.mjs",
     "core/flow-debt-preparation.mjs",
     "hosts/opencode/agents/flow-branch-agent.md",
+    "hosts/opencode/agents/flow-debt-agent.md",
     "hosts/opencode/agents/flow-git-agent.md",
     "hosts/opencode/agents/flow-pr-agent.md",
     "hosts/opencode/agents/flow-review-agent.md",
@@ -56,6 +57,7 @@
     "scripts/lib/dotnet-format.mjs",
     "scripts/lib/flow-audit-cache.mjs",
     "scripts/lib/flow-audit-output.mjs",
+    "scripts/lib/flow-debt-execution.mjs",
     "scripts/lib/flow-debt-store.mjs",
     "scripts/lib/flow-debt-writer.mjs",
     "scripts/lib/flow-pr-contracts.mjs",
@@ -97,6 +99,11 @@
     {
       "source": "hosts/opencode/agents/flow-branch-agent.md",
       "destination": "agents/flow-branch-agent.md",
+      "role": "agent"
+    },
+    {
+      "source": "hosts/opencode/agents/flow-debt-agent.md",
+      "destination": "agents/flow-debt-agent.md",
       "role": "agent"
     },
     {
@@ -248,6 +255,11 @@
     {
       "source": "scripts/lib/flow-audit-output.mjs",
       "destination": "scripts/lib/flow-audit-output.mjs",
+      "role": "portable"
+    },
+    {
+      "source": "scripts/lib/flow-debt-execution.mjs",
+      "destination": "scripts/lib/flow-debt-execution.mjs",
       "role": "portable"
     },
     {

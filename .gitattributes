@@ -4,6 +4,7 @@ agents/flow-*.md -text
 commands/flow-*.md -text
 core/flow-debt-backlog.mjs -text
 core/flow-debt-contract.mjs -text
+core/flow-debt-preparation.mjs -text
 hosts/opencode/agents/flow-*.md -text
 hosts/opencode/commands/flow-*.md -text
 scripts/flow-*.mjs -text
@@ -13,6 +14,7 @@ scripts/lib/detect-tooling.mjs -text
 scripts/lib/dotnet-format.mjs -text
 scripts/lib/flow-audit-cache.mjs -text
 scripts/lib/flow-audit-output.mjs -text
+scripts/lib/flow-debt-execution.mjs -text
 scripts/lib/flow-debt-store.mjs -text
 scripts/lib/flow-pr-contracts.mjs -text
 scripts/lib/flow-pr-drafting.mjs -text

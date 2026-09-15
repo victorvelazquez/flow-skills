@@ -4,9 +4,9 @@
   "distribution": {
     "kind": "managed-deployment"
   },
-  "generationId": "afde7dc17302757207bc1125678df21434640f8f09fc64163a6285d601c61f56",
+  "generationId": "278a346e7f92ff6fbf0963e4301cbd6f24bef0094a7880ab175ad8eda7348cdb",
   "manifest": {
-    "sha256": "f5d61fc8ec9aa1f4064dbb37d38f6c50ebe38c4ed0326e829085fec5bef2377a"
+    "sha256": "ac054f3acb30655503d3db873a31f247e1510964a27ce2dd0d4516dc61c08b98"
   },
   "records": [
     {
@@ -28,8 +28,8 @@
     {
       "source": "core/flow-debt-preparation.mjs",
       "destination": "core/flow-debt-preparation.mjs",
-      "sha256": "f0a1fe252ca27a8f258e9d99d8798b930b1938cbaa11e3fea5c51b5c16e43d52",
-      "bytes": 5718,
+      "sha256": "3ff275dc4fe0f05c40b370d89a640212c9968e8bd705251440a289f9f52b52d1",
+      "bytes": 5897,
       "mode": "100644",
       "executable": false
     },
@@ -38,6 +38,14 @@
       "destination": "agents/flow-branch-agent.md",
       "sha256": "b017524d153807e3c548d0285beb0a4cef73904644a020a7303cf60f3b6e7db3",
       "bytes": 1787,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "hosts/opencode/agents/flow-debt-agent.md",
+      "destination": "agents/flow-debt-agent.md",
+      "sha256": "5c736ac161af28944c25ac7d4744c19e82cc27127857edfc73215c56f4edf2bd",
+      "bytes": 2308,
       "mode": "100644",
       "executable": false
     },
@@ -100,8 +108,8 @@
     {
       "source": "hosts/opencode/commands/flow-debt.md",
       "destination": "commands/flow-debt.md",
-      "sha256": "63cd15486028347eddab3ed92803a0a9e053c2535d4843c511577e9b7fb372b8",
-      "bytes": 850,
+      "sha256": "f5134ea99b12f50ce415a9416dfc11a7518f55b46074aa62f0114464dadb68a3",
+      "bytes": 443,
       "mode": "100644",
       "executable": false
     },
@@ -188,8 +196,8 @@
     {
       "source": "scripts/flow-debt.mjs",
       "destination": "scripts/flow-debt.mjs",
-      "sha256": "bd02b36809272366c3b407ebecf271e8aafd65517dd6652d969126b154a43e04",
-      "bytes": 6388,
+      "sha256": "76b98e9fda99a5be3919dad02f807f63f8cb5092d846719a54260f49ef872b0b",
+      "bytes": 9344,
       "mode": "100644",
       "executable": false
     },
@@ -266,18 +274,26 @@
       "executable": false
     },
     {
+      "source": "scripts/lib/flow-debt-execution.mjs",
+      "destination": "scripts/lib/flow-debt-execution.mjs",
+      "sha256": "4035a760cf4eeb90b589b36a45fe7f7908bac0d3c401e878c03d0b5825da6e4c",
+      "bytes": 6399,
+      "mode": "100644",
+      "executable": false
+    },
+    {
       "source": "scripts/lib/flow-debt-store.mjs",
       "destination": "scripts/lib/flow-debt-store.mjs",
-      "sha256": "9d49e232feedc6be93b79c20e774aa5f1c05bb01c06c57b848a71ea8e2f597e2",
-      "bytes": 3809,
+      "sha256": "80831ca3029e92e466851ef081a09d136eaf052c131e2f07481c6eede700224a",
+      "bytes": 4000,
       "mode": "100644",
       "executable": false
     },
     {
       "source": "scripts/lib/flow-debt-writer.mjs",
       "destination": "scripts/lib/flow-debt-writer.mjs",
-      "sha256": "dc49d9bd3e4fd5778ae9e9b65c32696bd5535156d9a6655872a9b2a65bf87bb3",
-      "bytes": 3715,
+      "sha256": "62b3fd85c15a4d8ef8731322464efe20aaf7a68ba6d40727a637865302849355",
+      "bytes": 4621,
       "mode": "100644",
       "executable": false
     },
@@ -508,8 +524,8 @@
     {
       "source": "skills/flow-debt/SKILL.md",
       "destination": "skills/flow-debt/SKILL.md",
-      "sha256": "4bdec65c6e7c44c704583446cd111443d6c138cc91a7b4cd7642764df3ca596b",
-      "bytes": 1720,
+      "sha256": "6db401d75f92550bf883d364cf51590bce733afdec691da2524306716b163ce3",
+      "bytes": 2342,
       "mode": "100644",
       "executable": false
     },
@@ -579,8 +595,8 @@
     }
   ],
   "totals": {
-    "bytes": 706105,
-    "count": 71
+    "bytes": 719259,
+    "count": 73
   },
-  "hostIdentity": "a04bfcef06bfb0966f03a3f8697c2a3226da1031a03ce16680955292c269c4af"
+  "hostIdentity": "dd56d9d2a75af69b78250f29d1c5e348f79694eae0af9e8bed1d7298bbbecf00"
 }

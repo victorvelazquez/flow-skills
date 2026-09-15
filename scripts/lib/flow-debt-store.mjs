@@ -80,7 +80,7 @@ function readFile(target) {
   }
 }
 
-function legacyOrSafe(root, directory) {
+function legacyOrSafe(root, directory, { allowWriterLock = false } = {}) {
   const handle = fs.opendirSync(directory);
   try {
     let entries = 0;
@@ -97,7 +97,10 @@ function legacyOrSafe(root, directory) {
       } else if (entry.name.endsWith(".md")) {
         if (!stat.isFile()) throw new Error("unsafe");
         legacy = true;
-      } else if (entry.name === "backlog.json") {
+      } else if (
+        entry.name === "backlog.json" ||
+        (allowWriterLock && entry.name === "backlog.json.flow-debt-writer.lock")
+      ) {
         if (!stat.isFile()) throw new Error("unsafe");
       } else throw new Error("unsafe");
     }
@@ -107,7 +110,10 @@ function legacyOrSafe(root, directory) {
   }
 }
 
-export function readFlowDebtStore({ repositoryRoot } = {}) {
+export function readFlowDebtStore({
+  repositoryRoot,
+  allowWriterLock = false,
+} = {}) {
   try {
     if (typeof repositoryRoot !== "string" || !repositoryRoot)
       return result("unavailable");
@@ -118,7 +124,8 @@ export function readFlowDebtStore({ repositoryRoot } = {}) {
     if (!optional(root, flow, "directory")) return result("absent");
     const debt = path.join(flow, "debt");
     if (!optional(root, debt, "directory")) return result("absent");
-    if (legacyOrSafe(root, debt)) return result("legacy_store");
+    if (legacyOrSafe(root, debt, { allowWriterLock }))
+      return result("legacy_store");
     const backlogPath = path.join(debt, "backlog.json");
     if (!optional(root, backlogPath, "file")) return result("absent");
     const backlog = parseBacklog(readFile(backlogPath));
