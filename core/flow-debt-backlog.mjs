@@ -8,11 +8,18 @@ export const BACKLOG_SCHEMA = "flow-debt-backlog/v1";
 export const MAX_BACKLOG_ITEMS = 256;
 export const MAX_APPEND_DRAFTS = MAX_PREVIEW_DRAFTS;
 
-const statuses = new Set(["pending", "done"]);
+const statuses = new Set(["pending", "done", "archived"]);
+const canonicalItemId = /^debt-[a-z0-9]+(?:-[a-z0-9]+)*-[a-f0-9]{16}$/;
 
 function invalid() {
   throw Object.assign(new Error("invalid backlog"), {
     code: "invalid_backlog",
+  });
+}
+
+function notFound() {
+  throw Object.assign(new Error("debt item not found"), {
+    code: "not_found",
   });
 }
 
@@ -81,6 +88,40 @@ export function parseBacklog(text) {
 
 export function serializeBacklog(value) {
   return `${JSON.stringify(normalizeBacklog(value), null, 2)}\n`;
+}
+
+function transitionItem(backlog, id, from, to) {
+  const normalized = normalizeBacklog(backlog);
+  if (typeof id !== "string" || !canonicalItemId.test(id)) invalid();
+
+  const index = normalized.items.findIndex((entry) => entry.id === id);
+  if (index === -1) notFound();
+
+  const item = normalized.items[index];
+  if (item.status === to) {
+    return { backlog: normalized, changed: false, item };
+  }
+  if (item.status !== from) invalid();
+
+  const next = { ...item, status: to };
+  return {
+    backlog: {
+      schema: BACKLOG_SCHEMA,
+      items: normalized.items.map((entry, entryIndex) =>
+        entryIndex === index ? next : entry,
+      ),
+    },
+    changed: true,
+    item: next,
+  };
+}
+
+export function markDone(backlog, id) {
+  return transitionItem(backlog, id, "pending", "done");
+}
+
+export function archiveItem(backlog, id) {
+  return transitionItem(backlog, id, "done", "archived");
 }
 
 export function appendDrafts(backlog, values) {

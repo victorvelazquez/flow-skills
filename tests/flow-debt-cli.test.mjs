@@ -172,14 +172,15 @@ test("list defaults to pending and filters canonical available items by status",
   const root = repository();
   const pending = draft("Pending item");
   const done = draft("Done item", "done");
+  const archived = draft("Archived item", "archived");
   const later = draft("Later item");
-  backlog(root, [done, later, pending]);
+  backlog(root, [done, later, archived, pending]);
   const before = snapshot(root);
 
   for (const [args, status, items] of [
     [["list"], "pending", [later, pending]],
     [["list", "--status", "done"], "done", [done]],
-    [["list", "--status", "all"], "all", [done, later, pending]],
+    [["list", "--status", "all"], "all", [archived, done, later, pending]],
   ]) {
     const result = run(root, args);
     assert.equal(result.status, 0);
@@ -203,7 +204,7 @@ test("list defaults to pending and filters canonical available items by status",
     assert.equal(result.output.operation, "list");
     assert.equal(result.output.availability, "available");
     assert.equal(result.output.status, status);
-    assert.equal(result.output.totalCount, 3);
+    assert.equal(result.output.totalCount, 4);
     assert.equal(result.output.selectedCount, items.length);
     assert.match(result.output.repository.id, /^[a-f0-9]{64}$/);
   }

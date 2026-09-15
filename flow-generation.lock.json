@@ -1,6 +1,6 @@
 {
   "$schema": "flow-generation-lock/v2",
-  "generationId": "a3be8e4f341a13f0693cb6f9e410fb4ca144763ec4a457772e5a9779c63cb7e9",
+  "generationId": "7deabb5608b890cc5c54ab08a2327e9e330201601df0d5529405b2295451128b",
   "package": {
     "sha256": "697b31a3b46593d2f51f84c70fb2004a2ee149390e4c0ca17f9ac2dcea231cea"
   },
@@ -24,8 +24,8 @@
     },
     {
       "source": "core/flow-debt-backlog.mjs",
-      "sha256": "3f1f816ccb23c496976a8b8c7953f0bbd9c1933c2062e32a5bba30335dd414fe",
-      "bytes": 3022,
+      "sha256": "fe71129fb40d491801fec036b1e551a8c2d43de7a03f6d3be155b86d2e316620",
+      "bytes": 4006,
       "mode": "100644",
       "executable": false
     },
