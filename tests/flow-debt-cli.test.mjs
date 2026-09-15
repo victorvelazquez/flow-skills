@@ -7,7 +7,11 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { serializeBacklog } from "../core/flow-debt-backlog.mjs";
+import {
+  MAX_APPEND_DRAFTS,
+  MAX_BACKLOG_ITEMS,
+  serializeBacklog,
+} from "../core/flow-debt-backlog.mjs";
 import { DRAFT_SCHEMA, itemId } from "../core/flow-debt-contract.mjs";
 
 const cli = fileURLToPath(new URL("../scripts/flow-debt.mjs", import.meta.url));
@@ -25,6 +29,30 @@ function run(cwd, args) {
     cwd,
     encoding: "utf8",
   });
+  assert.equal(result.stderr, "");
+  assert.match(result.stdout, /^\{.*\}\n$/s);
+  return { ...result, output: JSON.parse(result.stdout) };
+}
+
+function runArgvFile(cwd, relative) {
+  const result = spawnSync(
+    process.execPath,
+    [
+      "--input-type=module",
+      "--eval",
+      'import fs from "node:fs"; process.argv = JSON.parse(fs.readFileSync(process.env.FLOW_DEBT_TEST_ARGS, "utf8")); await import(process.env.FLOW_DEBT_TEST_CLI);',
+    ],
+    {
+      cwd,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        FLOW_DEBT_TEST_ARGS: path.join(cwd, relative),
+        FLOW_DEBT_TEST_CLI: new URL("../scripts/flow-debt.mjs", import.meta.url)
+          .href,
+      },
+    },
+  );
   assert.equal(result.stderr, "");
   assert.match(result.stdout, /^\{.*\}\n$/s);
   return { ...result, output: JSON.parse(result.stdout) };
@@ -87,8 +115,26 @@ function assertError(result, code) {
       store_unavailable: "debt store unavailable",
       legacy_store: "legacy debt store",
       not_found: "debt item not found",
+      "draft-json-too-large": "draft JSON is too large",
+      "invalid-draft-json": "invalid draft JSON",
+      "duplicate-draft-json": "duplicate draft JSON",
+      "existing-draft": "draft already exists",
+      "backlog-full": "debt backlog is full",
     }[code],
   });
+}
+
+function assertRejectedStoreUnchanged(root, code, attempt) {
+  const before = snapshot(root);
+  assertError(attempt(), code);
+  assert.deepEqual(snapshot(root), before);
+}
+
+function assertPreviewIsReadOnly(output) {
+  assert.doesNotMatch(
+    JSON.stringify(output),
+    /"[^"]*(?:path|handle|authority|approval|execute|done|archive|write|mutation|effect|future[-_]?write|promise)[^"]*"\s*:/i,
+  );
 }
 
 test("strict syntax rejects commands, positional arguments, unknown, duplicate, and missing flags", () => {
@@ -247,7 +293,246 @@ test("unsafe stores and repository failures return JSON-only static errors", () 
   assertError(run(outside, ["list"]), "repository_unavailable");
 });
 
-test("source uses bounded argv-only git discovery, the debt store reader, and no mutation or runtime APIs", () => {
+test("create-preview validates input, binds canonical candidates, and never writes", () => {
+  const root = repository();
+  const single = draft("Done preview item").draft;
+  const batch = [draft("Second preview").draft, single];
+  const before = snapshot(root);
+  const first = run(root, [
+    "create-preview",
+    "--draft-json",
+    JSON.stringify(single),
+  ]);
+  const second = run(root, [
+    "create-preview",
+    "--draft-json",
+    JSON.stringify(batch),
+  ]);
+  const reordered = run(root, [
+    "create-preview",
+    "--draft-json",
+    JSON.stringify([...batch].reverse()),
+  ]);
+
+  for (const result of [first, second, reordered]) {
+    assert.equal(result.status, 0);
+    assert.equal(result.output.schema, schema);
+    assert.equal(result.output.ok, true);
+    assert.equal(result.output.operation, "create-preview");
+    assert.equal(result.output.executable, false);
+    assert.match(result.output.repository.id, /^[a-f0-9]{64}$/);
+    assert.deepEqual(Object.keys(result.output), [
+      "schema",
+      "ok",
+      "operation",
+      "executable",
+      "repository",
+      "availability",
+      "backlog",
+      "previewId",
+      "candidates",
+    ]);
+    assert.equal(result.output.availability, "absent");
+    assert.deepEqual(result.output.backlog, {
+      digest:
+        "6a529208da63f9d9d770dd2b2d374c78f9d4188c32be455d6b15db9adcf15473",
+      count: 0,
+    });
+    assertPreviewIsReadOnly(result.output);
+  }
+  assert.equal(first.output.candidates.length, 1);
+  assert.deepEqual(
+    second.output.candidates,
+    [...second.output.candidates].sort((left, right) =>
+      left.id.localeCompare(right.id),
+    ),
+  );
+  assert.equal(second.output.previewId, reordered.output.previewId);
+  assert.match(first.output.previewId, /^[a-f0-9]{64}$/);
+  const differentCandidate = run(root, [
+    "create-preview",
+    "--draft-json",
+    JSON.stringify(draft("Different candidate").draft),
+  ]);
+  assert.notEqual(first.output.previewId, differentCandidate.output.previewId);
+
+  const sameRepository = repository();
+  backlog(sameRepository, [draft("First canonical backlog")]);
+  const firstBacklogBefore = snapshot(sameRepository);
+  const firstBacklog = run(sameRepository, [
+    "create-preview",
+    "--draft-json",
+    JSON.stringify(single),
+  ]);
+  assert.deepEqual(snapshot(sameRepository), firstBacklogBefore);
+  backlog(sameRepository, [draft("Second canonical backlog")]);
+  const secondBacklogBefore = snapshot(sameRepository);
+  const secondBacklog = run(sameRepository, [
+    "create-preview",
+    "--draft-json",
+    JSON.stringify(single),
+  ]);
+  assert.deepEqual(snapshot(sameRepository), secondBacklogBefore);
+  assert.equal(
+    firstBacklog.output.repository.id,
+    secondBacklog.output.repository.id,
+  );
+  assert.equal(
+    firstBacklog.output.backlog.count,
+    secondBacklog.output.backlog.count,
+  );
+  assert.notEqual(
+    firstBacklog.output.backlog.digest,
+    secondBacklog.output.backlog.digest,
+  );
+  assert.notEqual(
+    firstBacklog.output.previewId,
+    secondBacklog.output.previewId,
+  );
+
+  const equivalentBacklog = [draft("Equivalent canonical backlog")];
+  const firstRepository = repository();
+  const secondRepository = repository();
+  backlog(firstRepository, equivalentBacklog);
+  backlog(secondRepository, equivalentBacklog);
+  const firstRepositoryPreview = run(firstRepository, [
+    "create-preview",
+    "--draft-json",
+    JSON.stringify(single),
+  ]);
+  const secondRepositoryPreview = run(secondRepository, [
+    "create-preview",
+    "--draft-json",
+    JSON.stringify(single),
+  ]);
+  assert.deepEqual(
+    firstRepositoryPreview.output.backlog,
+    secondRepositoryPreview.output.backlog,
+  );
+  assert.notEqual(
+    firstRepositoryPreview.output.repository.id,
+    secondRepositoryPreview.output.repository.id,
+  );
+  assert.notEqual(
+    firstRepositoryPreview.output.previewId,
+    secondRepositoryPreview.output.previewId,
+  );
+  assert.deepEqual(snapshot(root), before);
+});
+
+test("create-preview accepts an exact batch and rejects without writing", () => {
+  const root = repository();
+  const value = draft("Candidate").draft;
+  const normalizedDuplicate = { ...value, title: `  ${value.title}  ` };
+  const maxBatch = Array.from(
+    { length: MAX_APPEND_DRAFTS },
+    (_, index) => draft(`Batch candidate ${index}`).draft,
+  );
+  const maxBatchBefore = snapshot(root);
+  const maxBatchResult = run(root, [
+    "create-preview",
+    "--draft-json",
+    JSON.stringify(maxBatch),
+  ]);
+  assert.equal(maxBatchResult.status, 0);
+  assert.equal(maxBatchResult.output.candidates.length, MAX_APPEND_DRAFTS);
+  assert.deepEqual(snapshot(root), maxBatchBefore);
+
+  for (const args of [
+    ["create-preview"],
+    ["create-preview", "--draft-json"],
+    ["create-preview", "--draft-json", "{}", "extra"],
+    ["create-preview", "--unknown", JSON.stringify(value)],
+    [
+      "create-preview",
+      "--draft-json",
+      JSON.stringify(value),
+      "--draft-json",
+      JSON.stringify(value),
+    ],
+  ]) {
+    assertRejectedStoreUnchanged(root, "invalid_arguments", () =>
+      run(root, args),
+    );
+  }
+  for (const input of [
+    "{",
+    JSON.stringify({ schema: "flow-debt-draft/v2" }),
+    JSON.stringify({ drafts: [value] }),
+    "[]",
+    JSON.stringify(
+      Array.from(
+        { length: MAX_APPEND_DRAFTS + 1 },
+        (_, index) => draft(`Too many candidate ${index}`).draft,
+      ),
+    ),
+  ]) {
+    assertRejectedStoreUnchanged(root, "invalid-draft-json", () =>
+      run(root, ["create-preview", "--draft-json", input]),
+    );
+  }
+  assertRejectedStoreUnchanged(root, "duplicate-draft-json", () =>
+    run(root, [
+      "create-preview",
+      "--draft-json",
+      JSON.stringify([value, normalizedDuplicate]),
+    ]),
+  );
+
+  backlog(root, [draft("Candidate"), draft("Done candidate", "done")]);
+  assertRejectedStoreUnchanged(root, "existing-draft", () =>
+    run(root, ["create-preview", "--draft-json", JSON.stringify(value)]),
+  );
+  assertRejectedStoreUnchanged(root, "existing-draft", () =>
+    run(root, [
+      "create-preview",
+      "--draft-json",
+      JSON.stringify(draft("Done candidate").draft),
+    ]),
+  );
+
+  const full = repository();
+  backlog(
+    full,
+    Array.from({ length: MAX_BACKLOG_ITEMS }, (_, index) =>
+      draft(`Full candidate ${index}`),
+    ),
+  );
+  assertRejectedStoreUnchanged(full, "backlog-full", () =>
+    run(full, ["create-preview", "--draft-json", JSON.stringify(value)]),
+  );
+
+  const legacy = repository();
+  write(legacy, ".flow/debt/README.md", "legacy\n");
+  assertRejectedStoreUnchanged(legacy, "legacy_store", () =>
+    run(legacy, ["create-preview", "--draft-json", JSON.stringify(value)]),
+  );
+  const unsafe = repository();
+  write(unsafe, ".flow/debt/unknown", "unsafe\n");
+  assertRejectedStoreUnchanged(unsafe, "store_unavailable", () =>
+    run(unsafe, ["create-preview", "--draft-json", JSON.stringify(value)]),
+  );
+});
+
+test("create-preview bounds oversized raw UTF-8 JSON before parsing", () => {
+  const root = repository();
+  write(
+    root,
+    "argv.json",
+    JSON.stringify([
+      process.execPath,
+      cli,
+      "create-preview",
+      "--draft-json",
+      `"${"x".repeat(2 * 1024 * 1024)}"`,
+    ]),
+  );
+  assertRejectedStoreUnchanged(root, "draft-json-too-large", () =>
+    runArgvFile(root, "argv.json"),
+  );
+});
+
+test("source reuses core draft and backlog functions with bounded discovery", () => {
   const source = fs.readFileSync(cli, "utf8");
   assert.match(
     source,
@@ -258,6 +543,18 @@ test("source uses bounded argv-only git discovery, the debt store reader, and no
   assert.match(source, /maxBuffer:\s*8192/);
   assert.match(source, /GIT_OPTIONAL_LOCKS:\s*"0"/);
   assert.match(source, /readFlowDebtStore\(\{ repositoryRoot \}\)/);
+  assert.match(
+    source,
+    /MAX_APPEND_DRAFTS,\s*MAX_BACKLOG_ITEMS,\s*appendDrafts,\s*emptyBacklog/,
+  );
+  assert.match(source, /itemId, normalizeDraft/);
+  assert.match(source, /values\.map\(normalizeDraft\)/);
+  assert.match(source, /appendDrafts\(backlog, values\)/);
+  assert.match(source, /appendDrafts\(emptyBacklog\(\), values\)\.items/);
+  assert.doesNotMatch(
+    source,
+    /\bfunction\s+(?:normalizeDraft|appendDrafts|emptyBacklog)\b/,
+  );
   assert.doesNotMatch(source, /\.flow/);
   assert.doesNotMatch(
     source,

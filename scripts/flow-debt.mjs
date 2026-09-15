@@ -3,9 +3,17 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
+import {
+  MAX_APPEND_DRAFTS,
+  MAX_BACKLOG_ITEMS,
+  appendDrafts,
+  emptyBacklog,
+} from "../core/flow-debt-backlog.mjs";
+import { itemId, normalizeDraft } from "../core/flow-debt-contract.mjs";
 import { readFlowDebtStore } from "./lib/flow-debt-store.mjs";
 
 const SCHEMA = "flow-debt-cli/v1";
+const MAX_DRAFT_JSON_BYTES = 2 * 1024 * 1024;
 const ID = /^debt-[a-z0-9]+(?:-[a-z0-9]+)*-[a-f0-9]{16}$/;
 const messages = {
   invalid_arguments: "invalid arguments",
@@ -14,6 +22,11 @@ const messages = {
   store_unavailable: "debt store unavailable",
   legacy_store: "legacy debt store",
   not_found: "debt item not found",
+  "draft-json-too-large": "draft JSON is too large",
+  "invalid-draft-json": "invalid draft JSON",
+  "duplicate-draft-json": "duplicate draft JSON",
+  "existing-draft": "draft already exists",
+  "backlog-full": "debt backlog is full",
 };
 
 function fail(code) {
@@ -43,6 +56,15 @@ function parse(argv) {
     }
     if (!ID.test(argv[2])) fail("invalid_id");
     return { operation: "show", id: argv[2] };
+  }
+  if (
+    argv[0] === "create-preview" &&
+    argv.length === 3 &&
+    argv[1] === "--draft-json" &&
+    argv[2] &&
+    !argv[2].startsWith("--")
+  ) {
+    return { operation: "create-preview", draftJson: argv[2] };
   }
   fail("invalid_arguments");
 }
@@ -87,6 +109,70 @@ function store(repositoryRoot) {
   return value;
 }
 
+function drafts(value) {
+  if (Buffer.byteLength(value, "utf8") > MAX_DRAFT_JSON_BYTES) {
+    fail("draft-json-too-large");
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    fail("invalid-draft-json");
+  }
+  const values = Array.isArray(parsed) ? parsed : [parsed];
+  if (!values.length || values.length > MAX_APPEND_DRAFTS) {
+    fail("invalid-draft-json");
+  }
+  try {
+    return values.map(normalizeDraft);
+  } catch {
+    fail("invalid-draft-json");
+  }
+}
+
+function candidates(values, backlog) {
+  const serialized = values.map((entry) => JSON.stringify(entry));
+  const ids = values.map(itemId);
+  if (
+    new Set(serialized).size !== serialized.length ||
+    new Set(ids).size !== ids.length
+  ) {
+    fail("duplicate-draft-json");
+  }
+  if (backlog.items.length + values.length > MAX_BACKLOG_ITEMS) {
+    fail("backlog-full");
+  }
+  const current = new Set(
+    backlog.items.map((entry) => JSON.stringify(entry.draft)),
+  );
+  const currentIds = new Set(backlog.items.map((entry) => entry.id));
+  if (
+    serialized.some((entry) => current.has(entry)) ||
+    ids.some((entry) => currentIds.has(entry))
+  ) {
+    fail("existing-draft");
+  }
+  try {
+    appendDrafts(backlog, values);
+    return appendDrafts(emptyBacklog(), values).items;
+  } catch {
+    fail("invalid-draft-json");
+  }
+}
+
+function previewId(repository, digest, entries) {
+  return createHash("sha256")
+    .update(
+      JSON.stringify({
+        domain: "flow-debt-cli/create-preview/v1",
+        repository,
+        backlog: { digest },
+        candidates: entries,
+      }),
+    )
+    .digest("hex");
+}
+
 function response(command, repositoryRoot) {
   const repository = { id: repositoryId(repositoryRoot) };
   const value = store(repositoryRoot);
@@ -109,6 +195,20 @@ function response(command, repositoryRoot) {
     };
   }
   if (value.availability === "legacy_store") fail("legacy_store");
+  if (command.operation === "create-preview") {
+    const entries = candidates(drafts(command.draftJson), value.backlog);
+    return {
+      schema: SCHEMA,
+      ok: true,
+      operation: "create-preview",
+      executable: false,
+      repository,
+      availability: value.availability,
+      backlog: { digest: value.digest, count: value.count },
+      previewId: previewId(repository, value.digest, entries),
+      candidates: entries,
+    };
+  }
   const item = items.find((entry) => entry.id === command.id);
   if (!item) fail("not_found");
   return { schema: SCHEMA, ok: true, operation: "show", repository, item };

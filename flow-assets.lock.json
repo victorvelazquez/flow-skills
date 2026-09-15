@@ -9,7 +9,7 @@
     "sha256": "bccd38f0f8c508ff0f17f0bc18c180116f2279a1834635944b46b93a762635c4"
   },
   "totals": {
-    "bytes": 660555,
+    "bytes": 663313,
     "count": 53
   },
   "files": [
@@ -43,8 +43,8 @@
     },
     {
       "path": "scripts/flow-debt.mjs",
-      "sha256": "bde55d5fa0db3aa7444b805ef38633b5e94bfa7990d86023605a963dd4ffc09b",
-      "bytes": 3630,
+      "sha256": "bd02b36809272366c3b407ebecf271e8aafd65517dd6652d969126b154a43e04",
+      "bytes": 6388,
       "mode": "100644",
       "executable": false
     },
