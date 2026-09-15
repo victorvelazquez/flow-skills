@@ -1,28 +1,29 @@
 ---
 name: flow-debt
-description: Host-neutral read-only contract for deferred technical-debt finding previews. Trigger: flow-debt list, show, or create-preview.
+description: Host-neutral prepared execution contract for deferred technical-debt findings. Trigger: flow-debt list, show, create-preview, prepare, execute, or recover.
 license: Apache-2.0
 metadata:
   author: Victor Velazquez
-  version: "1.0"
+  version: "2.0"
 ---
 
 # flow-debt
 
 ## Contract
 
-`flow-debt` is a host-neutral, read-only contract for deferred findings. Its only allowed intents are `list`, `show`, and `create-preview`.
+`flow-debt` provides host-neutral debt discovery plus prepared `create`, `done`, and `archive` transitions. Resolve `../../scripts/flow-debt.mjs` relative to this `SKILL.md`; invoke it with explicit caller arguments as data, never from a project-relative runtime path.
 
-In Pi, resolve `../../scripts/flow-debt.mjs` relative to this `SKILL.md`, then invoke it with explicit caller arguments as data. Do not derive the runtime path from the project working directory.
-
-- `list` and `show` read existing canonical debt records; `create-preview` validates caller-supplied `flow-debt-draft/v1` documents and returns a non-executable preview.
-- Accept only explicit caller input. Do not infer findings, scrape conversation context, or claim access to prior requests.
-- Apply, execute, done, and archive are unavailable.
-- Do not mutate source code, persist data, claim implementation authority, or use hardcoded project profiles or routes.
+- `list`, `show`, and `create-preview` remain read-only.
+- `prepare-create --draft-json <json>`, `prepare-done --id <id>`, and `prepare-archive --id <id>` return an opaque self-contained preparation handle without writing.
+- `execute --handle <handle> --host-approval approved` applies only a current, integrity-protected preparation. A replay reports `already-applied`; a stale preparation reports `stale` without writing.
+- `recover --handle <handle>` is read-only and returns exactly `already-applied`, `safely-retryable`, or `unknown`. It never retries automatically.
+- A host adapter owns approval. The portable skill and runtime never prompt, infer consent, or treat conversation text as approval. The host must request one immediate native mutation approval before supplying `--host-approval approved`; on decline or unavailable approval, it must not invoke `execute`.
+- Treat handles as opaque. Do not edit, decode, log, or reconstruct them. Do not retry a stale or unknown result; prepare again only through fresh explicit input.
+- Do not mutate source code, claim implementation authority, use hardcoded project profiles or routes, install, deploy, reconcile, release, or invoke unrelated workflows.
 
 ## Neutral draft document
 
-A deferred finding is represented only as a `flow-debt-draft/v1` document. The exact document fields are:
+A create preparation accepts only a `flow-debt-draft/v1` document:
 
 ```json
 {
@@ -46,5 +47,3 @@ A deferred finding is represented only as a `flow-debt-draft/v1` document. The e
   ]
 }
 ```
-
-The document is a preview artifact only.

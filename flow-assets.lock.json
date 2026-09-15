@@ -6,11 +6,11 @@
     "gentleAiVersion": "repository-local"
   },
   "manifest": {
-    "sha256": "bccd38f0f8c508ff0f17f0bc18c180116f2279a1834635944b46b93a762635c4"
+    "sha256": "6593df36caf20f294bd1e521510dd978099e6b2d1e9ca66ce519deff3cb0cb9c"
   },
   "totals": {
-    "bytes": 663374,
-    "count": 53
+    "bytes": 673542,
+    "count": 54
   },
   "files": [
     {
@@ -43,8 +43,8 @@
     },
     {
       "path": "scripts/flow-debt.mjs",
-      "sha256": "bd02b36809272366c3b407ebecf271e8aafd65517dd6652d969126b154a43e04",
-      "bytes": 6388,
+      "sha256": "76b98e9fda99a5be3919dad02f807f63f8cb5092d846719a54260f49ef872b0b",
+      "bytes": 9344,
       "mode": "100644",
       "executable": false
     },
@@ -119,9 +119,16 @@
       "executable": false
     },
     {
+      "path": "scripts/lib/flow-debt-execution.mjs",
+      "sha256": "4035a760cf4eeb90b589b36a45fe7f7908bac0d3c401e878c03d0b5825da6e4c",
+      "bytes": 6399,
+      "mode": "100644",
+      "executable": false
+    },
+    {
       "path": "scripts/lib/flow-debt-store.mjs",
-      "sha256": "9d49e232feedc6be93b79c20e774aa5f1c05bb01c06c57b848a71ea8e2f597e2",
-      "bytes": 3809,
+      "sha256": "80831ca3029e92e466851ef081a09d136eaf052c131e2f07481c6eede700224a",
+      "bytes": 4000,
       "mode": "100644",
       "executable": false
     },
@@ -323,8 +330,8 @@
     },
     {
       "path": "skills/flow-debt/SKILL.md",
-      "sha256": "4bdec65c6e7c44c704583446cd111443d6c138cc91a7b4cd7642764df3ca596b",
-      "bytes": 1720,
+      "sha256": "6db401d75f92550bf883d364cf51590bce733afdec691da2524306716b163ce3",
+      "bytes": 2342,
       "mode": "100644",
       "executable": false
     },

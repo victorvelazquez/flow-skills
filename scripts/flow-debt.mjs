@@ -11,6 +11,11 @@ import {
 } from "../core/flow-debt-backlog.mjs";
 import { itemId, normalizeDraft } from "../core/flow-debt-contract.mjs";
 import { readFlowDebtStore } from "./lib/flow-debt-store.mjs";
+import {
+  executeFlowDebtPreparation,
+  prepareFlowDebtExecution,
+  recoverFlowDebtPreparation,
+} from "./lib/flow-debt-execution.mjs";
 
 const SCHEMA = "flow-debt-cli/v1";
 const MAX_DRAFT_JSON_BYTES = 2 * 1024 * 1024;
@@ -27,6 +32,12 @@ const messages = {
   "duplicate-draft-json": "duplicate draft JSON",
   "existing-draft": "draft already exists",
   "backlog-full": "debt backlog is full",
+  invalid_handle: "invalid preparation handle",
+  invalid_preparation: "invalid preparation",
+  integrity_mismatch: "preparation checksum does not match",
+  repository_mismatch: "repository does not match preparation",
+  input_mismatch: "input does not match preparation",
+  approval_required: "host approval is required",
 };
 
 function fail(code) {
@@ -66,6 +77,44 @@ function parse(argv) {
   ) {
     return { operation: "create-preview", draftJson: argv[2] };
   }
+  if (
+    argv[0] === "prepare-create" &&
+    argv.length === 3 &&
+    argv[1] === "--draft-json" &&
+    argv[2] &&
+    !argv[2].startsWith("--")
+  ) {
+    return { operation: "prepare", transition: "create", draftJson: argv[2] };
+  }
+  if (
+    ["prepare-done", "prepare-archive"].includes(argv[0]) &&
+    argv.length === 3 &&
+    argv[1] === "--id" &&
+    ID.test(argv[2])
+  ) {
+    return {
+      operation: "prepare",
+      transition: argv[0] === "prepare-done" ? "done" : "archive",
+      id: argv[2],
+    };
+  }
+  if (
+    argv[0] === "execute" &&
+    argv.length === 5 &&
+    argv[1] === "--handle" &&
+    argv[2] &&
+    argv[3] === "--host-approval" &&
+    argv[4] === "approved"
+  ) {
+    return { operation: "execute", handle: argv[2] };
+  }
+  if (
+    argv[0] === "recover" &&
+    argv.length === 3 &&
+    argv[1] === "--handle" &&
+    argv[2]
+  )
+    return { operation: "recover", handle: argv[2] };
   fail("invalid_arguments");
 }
 
@@ -160,6 +209,24 @@ function candidates(values, backlog) {
   }
 }
 
+function handle(value) {
+  if (typeof value !== "string" || !/^[A-Za-z0-9_-]+$/.test(value))
+    fail("invalid_handle");
+  try {
+    const bytes = Buffer.from(value, "base64url");
+    if (!bytes.length || bytes.toString("base64url") !== value)
+      fail("invalid_handle");
+    return JSON.parse(bytes.toString("utf8"));
+  } catch (error) {
+    if (error?.code) throw error;
+    fail("invalid_handle");
+  }
+}
+
+function encodedHandle(value) {
+  return Buffer.from(JSON.stringify(value), "utf8").toString("base64url");
+}
+
 function previewId(repository, digest, entries) {
   return createHash("sha256")
     .update(
@@ -195,6 +262,44 @@ function response(command, repositoryRoot) {
     };
   }
   if (value.availability === "legacy_store") fail("legacy_store");
+  if (command.operation === "prepare") {
+    const input =
+      command.transition === "create"
+        ? { drafts: drafts(command.draftJson) }
+        : { id: command.id };
+    return {
+      schema: SCHEMA,
+      ok: true,
+      operation: "prepare",
+      transition: command.transition,
+      preparation: encodedHandle(
+        prepareFlowDebtExecution({
+          repositoryRoot,
+          repositoryId: repository.id,
+          operation: command.transition,
+          input,
+        }),
+      ),
+    };
+  }
+  if (command.operation === "execute" || command.operation === "recover") {
+    const execute = command.operation === "execute";
+    const outcome = (
+      execute ? executeFlowDebtPreparation : recoverFlowDebtPreparation
+    )({
+      repositoryRoot,
+      repositoryId: repository.id,
+      handle: handle(command.handle),
+      ...(execute ? { approved: true } : {}),
+    });
+    return {
+      schema: SCHEMA,
+      ok: true,
+      operation: command.operation,
+      transition: outcome.operation,
+      status: outcome.status,
+    };
+  }
   if (command.operation === "create-preview") {
     const entries = candidates(drafts(command.draftJson), value.backlog);
     return {

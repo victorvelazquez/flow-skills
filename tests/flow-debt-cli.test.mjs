@@ -533,6 +533,76 @@ test("create-preview bounds oversized raw UTF-8 JSON before parsing", () => {
   );
 });
 
+test("public preparation, host-approved execution, and recovery keep opaque handles bounded", () => {
+  const root = repository();
+  const value = draft("Public execution").draft;
+  const prepared = run(root, [
+    "prepare-create",
+    "--draft-json",
+    JSON.stringify(value),
+  ]);
+  assert.equal(prepared.status, 0);
+  assert.deepEqual(Object.keys(prepared.output), [
+    "schema",
+    "ok",
+    "operation",
+    "transition",
+    "preparation",
+  ]);
+  assert.equal(prepared.output.operation, "prepare");
+  assert.equal(prepared.output.transition, "create");
+  assert.match(prepared.output.preparation, /^[A-Za-z0-9_-]+$/);
+  assert.equal(
+    fs.existsSync(path.join(root, ".flow", "debt", "backlog.json")),
+    false,
+  );
+
+  assertError(
+    run(root, ["execute", "--handle", prepared.output.preparation]),
+    "invalid_arguments",
+  );
+  const executed = run(root, [
+    "execute",
+    "--handle",
+    prepared.output.preparation,
+    "--host-approval",
+    "approved",
+  ]);
+  assert.deepEqual(executed.output, {
+    schema,
+    ok: true,
+    operation: "execute",
+    transition: "create",
+    status: "completed",
+  });
+  const replay = run(root, [
+    "execute",
+    "--handle",
+    prepared.output.preparation,
+    "--host-approval",
+    "approved",
+  ]);
+  assert.deepEqual(replay.output, {
+    schema,
+    ok: true,
+    operation: "execute",
+    transition: "create",
+    status: "already-applied",
+  });
+  const recovered = run(root, [
+    "recover",
+    "--handle",
+    prepared.output.preparation,
+  ]);
+  assert.deepEqual(recovered.output, {
+    schema,
+    ok: true,
+    operation: "recover",
+    transition: "create",
+    status: "already-applied",
+  });
+});
+
 test("source reuses core draft and backlog functions with bounded discovery", () => {
   const source = fs.readFileSync(cli, "utf8");
   assert.match(

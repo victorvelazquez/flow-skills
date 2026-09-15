@@ -52,35 +52,16 @@ function removeOwned(target) {
   }
 }
 
-/**
- * Atomically replace target with bytes and verify the exact resulting bytes.
- * Test seams observe bytes or rename paths but cannot replace writer operations.
- */
-export function writeAtomicFlowDebtFile(
-  { target, bytes },
-  { readFile, observeRename } = {},
-) {
-  const destination = checkedTarget(target);
+function writeLocked(destination, bytes, { readFile, observeRename } = {}) {
   const expected = checkedBytes(bytes);
   if (readFile !== undefined && typeof readFile !== "function")
     throw new Error("Flow debt writer readFile seam must be a function.");
   if (observeRename !== undefined && typeof observeRename !== "function")
     throw new Error("Flow debt writer observeRename seam must be a function.");
 
-  const lock = `${destination.target}${LOCK_SUFFIX}`;
-  let lockDescriptor;
-  try {
-    lockDescriptor = fs.openSync(lock, "wx", 0o600);
-  } catch (error) {
-    if (error?.code === "EEXIST")
-      throw new Error("Flow debt writer is already locked.");
-    throw error;
-  }
-
   let temporary;
   let temporaryOwned = false;
   try {
-    writeAll(lockDescriptor, Buffer.from(`${process.pid}\n`));
     temporary = path.join(
       destination.directory,
       `.${path.basename(destination.target)}${TEMPORARY_MARKER}${randomUUID()}.tmp`,
@@ -104,7 +85,55 @@ export function writeAtomicFlowDebtFile(
     return { target: destination.target, bytes: expected.length };
   } finally {
     if (temporaryOwned) removeOwned(temporary);
+  }
+}
+
+/**
+ * Hold the target's sibling lock across a bounded state read and atomic write.
+ * `onLocked` is a deterministic test seam and cannot alter lock ownership.
+ */
+export function withFlowDebtWriteLock(
+  { target },
+  operation,
+  { onLocked } = {},
+) {
+  const destination = checkedTarget(target);
+  if (typeof operation !== "function")
+    throw new Error("Flow debt writer operation must be a function.");
+  if (onLocked !== undefined && typeof onLocked !== "function")
+    throw new Error("Flow debt writer onLocked seam must be a function.");
+
+  const lock = `${destination.target}${LOCK_SUFFIX}`;
+  let lockDescriptor;
+  try {
+    lockDescriptor = fs.openSync(lock, "wx", 0o600);
+  } catch (error) {
+    if (error?.code === "EEXIST")
+      throw new Error("Flow debt writer is already locked.");
+    throw error;
+  }
+
+  try {
+    writeAll(lockDescriptor, Buffer.from(`${process.pid}\n`));
+    onLocked?.({ target: destination.target });
+    return operation({
+      target: destination.target,
+      write: (bytes, options) => writeLocked(destination, bytes, options),
+    });
+  } finally {
     fs.closeSync(lockDescriptor);
     removeOwned(lock);
   }
+}
+
+/**
+ * Atomically replace target with bytes and verify the exact resulting bytes.
+ * Test seams observe bytes or rename paths but cannot replace writer operations.
+ */
+export function writeAtomicFlowDebtFile({ target, bytes }, options = {}) {
+  return withFlowDebtWriteLock(
+    { target },
+    ({ write }) => write(bytes, options),
+    { onLocked: options.onLocked },
+  );
 }

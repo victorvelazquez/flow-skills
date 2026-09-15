@@ -27,6 +27,7 @@ const requiredLibraries = [
   "scripts/lib/dotnet-format.mjs",
   "scripts/lib/flow-audit-cache.mjs",
   "scripts/lib/flow-audit-output.mjs",
+  "scripts/lib/flow-debt-execution.mjs",
   "scripts/lib/flow-debt-store.mjs",
   "scripts/lib/flow-debt-writer.mjs",
   "scripts/lib/flow-pr-contracts.mjs",

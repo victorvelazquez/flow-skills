@@ -236,6 +236,16 @@ test("OpenCode managed mappings include each adapter's portable skills, runtime 
     portableDebtCore,
   );
   assert.deepEqual(
+    portable.find(
+      ({ source }) => source === "scripts/lib/flow-debt-execution.mjs",
+    ),
+    {
+      source: "scripts/lib/flow-debt-execution.mjs",
+      destination: "scripts/lib/flow-debt-execution.mjs",
+      role: "portable",
+    },
+  );
+  assert.deepEqual(
     portable.find(({ source }) => source === "scripts/lib/flow-debt-store.mjs"),
     {
       source: "scripts/lib/flow-debt-store.mjs",
@@ -314,6 +324,7 @@ test("OpenCode Git and GitHub adapter mappings preserve destinations and native 
   const commandWorkflows = ["flow-branch", "flow-commit", "flow-pr"];
   const agents = [
     "flow-branch-agent",
+    "flow-debt-agent",
     "flow-git-agent",
     "flow-pr-agent",
     "flow-review-agent",
