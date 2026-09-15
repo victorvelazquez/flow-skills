@@ -7,7 +7,9 @@ import {
   MAX_APPEND_DRAFTS,
   MAX_BACKLOG_ITEMS,
   appendDrafts,
+  archiveItem,
   emptyBacklog,
+  markDone,
   normalizeBacklog,
   parseBacklog,
   serializeBacklog,
@@ -72,6 +74,14 @@ test("requires exact backlog, item, status, and draft shapes", () => {
       items: [{ ...item(), draft: draft({ schema: "v2" }) }],
     },
     { schema: BACKLOG_SCHEMA, items: [item(draft(), "ignored")] },
+    {
+      schema: BACKLOG_SCHEMA,
+      items: [{ ...item(draft(), "archived"), id: "debt-spoofed" }],
+    },
+    {
+      schema: BACKLOG_SCHEMA,
+      items: [{ ...item(draft(), "archived"), draft: draft({ schema: "v2" }) }],
+    },
   ]) {
     rejectsBacklog(() => normalizeBacklog(value));
   }
@@ -115,6 +125,76 @@ test("normalizes nested drafts and canonically orders items by ID", () => {
     [itemId(alpha), itemId(beta)].sort(),
   );
   assert.equal(normalized.items[0].draft.title, "Alpha debt");
+});
+
+test("parses and serializes archived items byte-stably", () => {
+  const source = {
+    schema: BACKLOG_SCHEMA,
+    items: [item(draft({ title: "Archived debt" }), "archived")],
+  };
+  const first = serializeBacklog(source);
+
+  assert.equal(parseBacklog(first).items[0].status, "archived");
+  assert.equal(serializeBacklog(parseBacklog(first)), first);
+});
+
+test("transitions pending to done and done to archived without mutating input", () => {
+  const alpha = item(draft({ title: "Alpha debt" }));
+  const beta = item(draft({ title: "Beta debt" }), "done");
+  const source = { schema: BACKLOG_SCHEMA, items: [beta, alpha] };
+  const before = JSON.stringify(source);
+
+  const completed = markDone(source, alpha.id);
+  assert.equal(JSON.stringify(source), before);
+  assert.equal(completed.changed, true);
+  assert.deepEqual(completed.item, { ...alpha, status: "done" });
+  assert.deepEqual(
+    completed.backlog.items.map((entry) => entry.id),
+    [alpha.id, beta.id].sort(),
+  );
+
+  const archived = archiveItem(completed.backlog, alpha.id);
+  assert.equal(archived.changed, true);
+  assert.deepEqual(archived.item, { ...alpha, status: "archived" });
+  assert.equal(
+    archived.backlog.items.find((entry) => entry.id === alpha.id).status,
+    "archived",
+  );
+});
+
+test("returns deterministic no-ops for repeated lifecycle transitions", () => {
+  const done = item(draft({ title: "Done debt" }), "done");
+  const archived = item(draft({ title: "Archived debt" }), "archived");
+
+  for (const [transition, source, expected] of [
+    [markDone, done, done],
+    [archiveItem, archived, archived],
+  ]) {
+    const result = transition(
+      { schema: BACKLOG_SCHEMA, items: [source] },
+      source.id,
+    );
+    assert.equal(result.changed, false);
+    assert.deepEqual(result.item, expected);
+    assert.deepEqual(result.backlog, {
+      schema: BACKLOG_SCHEMA,
+      items: [expected],
+    });
+  }
+});
+
+test("fails closed for invalid lifecycle transitions and distinguishes missing IDs", () => {
+  const pending = item();
+  const archived = item(draft({ title: "Archived debt" }), "archived");
+  const backlog = { schema: BACKLOG_SCHEMA, items: [pending, archived] };
+
+  rejectsBacklog(() => archiveItem(backlog, pending.id));
+  rejectsBacklog(() => markDone(backlog, archived.id));
+  rejectsBacklog(() => markDone(backlog, "debt-invalid"));
+  assert.throws(() => archiveItem(emptyBacklog(), pending.id), {
+    code: "not_found",
+    message: "debt item not found",
+  });
 });
 
 test("append is immutable and creates only pending canonical items", () => {
