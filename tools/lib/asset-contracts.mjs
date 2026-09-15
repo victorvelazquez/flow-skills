@@ -7,6 +7,7 @@ const FORBIDDEN_VALUE =
 const PORTABLE_CORE_MODULES = new Set([
   "core/flow-debt-backlog.mjs",
   "core/flow-debt-contract.mjs",
+  "core/flow-debt-preparation.mjs",
 ]);
 
 export function sha256(value) {

@@ -16,6 +16,7 @@ const opencodeAgent = (name) => `hosts/opencode/agents/${name}.md`;
 const portableDebtCore = [
   "core/flow-debt-backlog.mjs",
   "core/flow-debt-contract.mjs",
+  "core/flow-debt-preparation.mjs",
 ];
 
 const readOnlyWorkflows = [
@@ -158,11 +159,11 @@ test("OpenCode adapter mapping rejects unsupported workflows and destinations ou
   const coreMapping = arbitraryCore.mappings.find(
     ({ source }) => source === "core/flow-debt-contract.mjs",
   );
-  coreMapping.source = "core/flow-debt-unapproved.mjs";
-  coreMapping.destination = "core/flow-debt-unapproved.mjs";
+  coreMapping.source = "core/flow-debt-foreign.mjs";
+  coreMapping.destination = "core/flow-debt-foreign.mjs";
   arbitraryCore.sourceSelectors[
     arbitraryCore.sourceSelectors.indexOf("core/flow-debt-contract.mjs")
-  ] = "core/flow-debt-unapproved.mjs";
+  ] = "core/flow-debt-foreign.mjs";
   assert.throws(
     () => validateOpenCodeAdapterMappings(arbitraryCore, registry),
     /approved core debt modules/i,
