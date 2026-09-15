@@ -26,6 +26,7 @@
   "sourceSelectors": [
     "core/flow-debt-backlog.mjs",
     "core/flow-debt-contract.mjs",
+    "core/flow-debt-preparation.mjs",
     "hosts/opencode/agents/flow-branch-agent.md",
     "hosts/opencode/agents/flow-git-agent.md",
     "hosts/opencode/agents/flow-pr-agent.md",
@@ -86,6 +87,11 @@
     {
       "source": "core/flow-debt-contract.mjs",
       "destination": "core/flow-debt-contract.mjs",
+      "role": "portable"
+    },
+    {
+      "source": "core/flow-debt-preparation.mjs",
+      "destination": "core/flow-debt-preparation.mjs",
       "role": "portable"
     },
     {

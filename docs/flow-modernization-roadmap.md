@@ -73,6 +73,7 @@ The following integration evidence is limited to the clean local `main` history 
 | T2.4c.2 | [#39](https://github.com/victorvelazquez/flow-skills/pull/39) | `integrated/current-main` | Added debt creation preview candidates. |
 | T2.4d | [#40](https://github.com/victorvelazquez/flow-skills/pull/40) | `integrated/current-main` | Published Flow Debt runtime across supported hosts. |
 | T2.5a | [#41](https://github.com/victorvelazquez/flow-skills/pull/41) | `integrated/current-main` | Added pure pending/done/archived lifecycle helpers and refreshed locks. |
+| T2.5b | [#43](https://github.com/victorvelazquez/flow-skills/pull/43) | `complete` | Added the atomic writer module; merge commit `11a1fc0` is on current `main`. |
 
 ## Current Flow Debt state
 
@@ -90,7 +91,7 @@ T3 and T4 may be reordered only through an explicit roadmap amendment with the r
 
 ### T2.5b — Atomic writer module only
 
-- **Status:** `pending`
+- **Status:** `complete`
 - **Dependencies:** T2.5a complete on current `main`.
 - **Objective:** Provide a small, fail-closed Node writer primitive for later authorized mutations.
 - **Scope:** Exclusive lock; controlled residue handling; same-directory atomic replacement; postcondition verification; focused module tests.
@@ -98,8 +99,8 @@ T3 and T4 may be reordered only through an explicit roadmap amendment with the r
 - **Acceptance:** Node is explicitly selected; lock contention fails closed; only controlled residues are handled; replacement occurs in the target directory; a failed postcondition is reported as failure; documented limits exclude a total TOCTOU/power-loss guarantee.
 - **Verification:** Strict-TDD tests for contention, residues, same-directory replacement, and postcondition failure; independent verifier repeats the focused suite and checks the stated limits.
 - **Review boundary:** Writer primitive and its tests/docs only; <=400 changed lines or explicit `size:exception`.
-- **Completion:** `status: pending`; branch: —; commit: —; PR: —; verification: —.
-- **Next allowed task:** T2.5c, only after merge evidence updates this card.
+- **Completion:** `status: complete`; branch: `feat/flow-debt-atomic-writer`; commit: `11a1fc0`; PR: [#43](https://github.com/victorvelazquez/flow-skills/pull/43); verification: merge commit observed on current `main`.
+- **Next allowed task:** T2.5c.
 
 ### T2.5c — Preparation only
 

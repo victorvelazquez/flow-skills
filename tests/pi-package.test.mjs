@@ -20,6 +20,7 @@ const expectedRuntimes = registry.workflows
 const requiredDebtCore = [
   "core/flow-debt-backlog.mjs",
   "core/flow-debt-contract.mjs",
+  "core/flow-debt-preparation.mjs",
 ];
 const requiredLibraries = [
   "scripts/lib/detect-tooling.mjs",

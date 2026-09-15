@@ -1,17 +1,17 @@
 {
   "$schema": "flow-generation-lock/v2",
-  "generationId": "c2dcb87e8ea07096866f52c3d9cc852f4e34a18a29ad075fec4942635704ce4a",
+  "generationId": "afde7dc17302757207bc1125678df21434640f8f09fc64163a6285d601c61f56",
   "package": {
-    "sha256": "f1f32b0e0ec256cceb69ca214489fd4eca2778ec828b9fe2c79ef17f1ec24f3b"
+    "sha256": "e41733f20c6847c64d42cae0a9630a452e13b76a58ad4b8e5904103fd24808fd"
   },
   "hosts": [
     {
       "host": "opencode",
-      "sha256": "346eb768d2bfde11c36402c4ab2c86dc2ae549a2474029cf0ff661527f1e4d1a"
+      "sha256": "f5d61fc8ec9aa1f4064dbb37d38f6c50ebe38c4ed0326e829085fec5bef2377a"
     },
     {
       "host": "pi",
-      "sha256": "5e3bb24b8e8ab55cd54079e185788722a5386d34daba56d6845af520767661da"
+      "sha256": "d5b4cd1d305f2ec976f92a487e3d815517eeabce762e0e9aeae0bcbb28674384"
     }
   ],
   "sources": [
@@ -33,6 +33,13 @@
       "source": "core/flow-debt-contract.mjs",
       "sha256": "f81fc4003a98c7bca2de1e59440fa9687837de098d6a65e4808012e501907c01",
       "bytes": 5207,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "core/flow-debt-preparation.mjs",
+      "sha256": "f0a1fe252ca27a8f258e9d99d8798b930b1938cbaa11e3fea5c51b5c16e43d52",
+      "bytes": 5718,
       "mode": "100644",
       "executable": false
     },
@@ -150,15 +157,15 @@
     },
     {
       "source": "hosts/pi/flow-assets.json",
-      "sha256": "03f57235cfae117b0422bbda77fe7d4e3fddc3c0ac6a7af1a0d79ac8ee892a35",
-      "bytes": 1932,
+      "sha256": "3c0acfce3f245ad5656e5626bfd654dad849ef8e5a68447d78b5222b77730b90",
+      "bytes": 1970,
       "mode": "100644",
       "executable": false
     },
     {
       "source": "package.json",
-      "sha256": "02971b33486ed71bcd0be1d4abafbeb8898be90d0080b86d9838ead8a6371865",
-      "bytes": 2157,
+      "sha256": "fee69e27476b3b2102deaee414d39cfe11713063f2ebd85a0d3b79fe90537ffc",
+      "bytes": 2195,
       "mode": "100644",
       "executable": false
     },

@@ -4,9 +4,9 @@
   "distribution": {
     "kind": "package-resources"
   },
-  "generationId": "c2dcb87e8ea07096866f52c3d9cc852f4e34a18a29ad075fec4942635704ce4a",
+  "generationId": "afde7dc17302757207bc1125678df21434640f8f09fc64163a6285d601c61f56",
   "manifest": {
-    "sha256": "5e3bb24b8e8ab55cd54079e185788722a5386d34daba56d6845af520767661da"
+    "sha256": "d5b4cd1d305f2ec976f92a487e3d815517eeabce762e0e9aeae0bcbb28674384"
   },
   "records": [
     {
@@ -31,6 +31,13 @@
       "executable": false
     },
     {
+      "source": "core/flow-debt-preparation.mjs",
+      "sha256": "f0a1fe252ca27a8f258e9d99d8798b930b1938cbaa11e3fea5c51b5c16e43d52",
+      "bytes": 5718,
+      "mode": "100644",
+      "executable": false
+    },
+    {
       "source": "docs/multihost-migration.md",
       "sha256": "a3f608cf49628b94b60356c32339646d52ae9c5ef8acfe3784c0575ba63cd8a2",
       "bytes": 4750,
@@ -39,15 +46,15 @@
     },
     {
       "source": "hosts/pi/flow-assets.json",
-      "sha256": "03f57235cfae117b0422bbda77fe7d4e3fddc3c0ac6a7af1a0d79ac8ee892a35",
-      "bytes": 1932,
+      "sha256": "3c0acfce3f245ad5656e5626bfd654dad849ef8e5a68447d78b5222b77730b90",
+      "bytes": 1970,
       "mode": "100644",
       "executable": false
     },
     {
       "source": "package.json",
-      "sha256": "02971b33486ed71bcd0be1d4abafbeb8898be90d0080b86d9838ead8a6371865",
-      "bytes": 2157,
+      "sha256": "fee69e27476b3b2102deaee414d39cfe11713063f2ebd85a0d3b79fe90537ffc",
+      "bytes": 2195,
       "mode": "100644",
       "executable": false
     },
@@ -424,8 +431,8 @@
     }
   ],
   "totals": {
-    "bytes": 688414,
-    "count": 59
+    "bytes": 694208,
+    "count": 60
   },
-  "hostIdentity": "ee907d44c9529876a2cc9808dd34f0769021095ba182b54b8d111549faf3f880"
+  "hostIdentity": "2caba13a4ae3a9c6681d12f20bb2f365d3cccea498077628d61c25055e52044d"
 }
