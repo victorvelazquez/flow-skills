@@ -4,7 +4,7 @@
   "distribution": {
     "kind": "managed-deployment"
   },
-  "generationId": "184b996342357e92995941dab2a0b3915be02b560fc19e706711f56e9110e6ec",
+  "generationId": "1eada80304a45cfc173c784a9ccbcdb19447546ba2c36209ba7129dae7bed55e",
   "manifest": {
     "sha256": "49b1d41075a33c05598c2ef449675f84fb77aa2e8b588e487576e12b47181bb5"
   },
@@ -76,8 +76,8 @@
     {
       "source": "hosts/opencode/agents/flow-review-agent.md",
       "destination": "agents/flow-review-agent.md",
-      "sha256": "bd85019aac19a419d8ea4f03671e80ca4eebb1fc1a6bdaffcef4dad38d947d76",
-      "bytes": 2428,
+      "sha256": "0ad91b2eb7d24e7f248eaaf6f6a2fa1d8a451a79d6db2dc38eaf1644f130858f",
+      "bytes": 1448,
       "mode": "100644",
       "executable": false
     },
@@ -156,8 +156,8 @@
     {
       "source": "hosts/opencode/commands/flow-refactor.md",
       "destination": "commands/flow-refactor.md",
-      "sha256": "36536eca248e21148c2d331567d9a8b10d701bfc09648235984d4e8601363ae3",
-      "bytes": 527,
+      "sha256": "f849e2e40a6d2a76f24204399914c148b79ca7f69b0c54738c2183a7d25ea1e3",
+      "bytes": 514,
       "mode": "100644",
       "executable": false
     },
@@ -252,8 +252,8 @@
     {
       "source": "scripts/flow-refactor.mjs",
       "destination": "scripts/flow-refactor.mjs",
-      "sha256": "7f1ea79e178e1ab95c2d0cea4f3b7053733cac025831b82f01de359e3e4b93de",
-      "bytes": 598,
+      "sha256": "b94bfa0e1c98622d2f10102e8b6a6ea89cd67759bcf94613e5c5895650b686e8",
+      "bytes": 3378,
       "mode": "100644",
       "executable": false
     },
@@ -604,8 +604,8 @@
     {
       "source": "skills/flow-refactor/SKILL.md",
       "destination": "skills/flow-refactor/SKILL.md",
-      "sha256": "0d0c38856cac6d6040c5d9fc8e365f69754a3cffe62bf1b18a2fe72daeafb2f1",
-      "bytes": 16914,
+      "sha256": "59251f9347b36f7a6f34fd36a229b43a6370819876a7e5e79ddea1d9edb8d2d4",
+      "bytes": 2614,
       "mode": "100644",
       "executable": false
     },
@@ -635,8 +635,8 @@
     }
   ],
   "totals": {
-    "bytes": 726145,
+    "bytes": 713632,
     "count": 78
   },
-  "hostIdentity": "b29c6a6f193f0bd31338cbedff116dee91adcabb8e49c2f6b3e379afa40fff85"
+  "hostIdentity": "db2dc8c4aae785aaed8e5d28a7bfd7a40952864c8d25f61172669ec53bea8e84"
 }

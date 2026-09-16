@@ -4,7 +4,7 @@
   "distribution": {
     "kind": "package-resources"
   },
-  "generationId": "184b996342357e92995941dab2a0b3915be02b560fc19e706711f56e9110e6ec",
+  "generationId": "1eada80304a45cfc173c784a9ccbcdb19447546ba2c36209ba7129dae7bed55e",
   "manifest": {
     "sha256": "0a1e360073b4984a8bbd027bb6dda202c12cdd622bf764769e4da6164f28cc84"
   },
@@ -123,8 +123,8 @@
     },
     {
       "source": "scripts/flow-refactor.mjs",
-      "sha256": "7f1ea79e178e1ab95c2d0cea4f3b7053733cac025831b82f01de359e3e4b93de",
-      "bytes": 598,
+      "sha256": "b94bfa0e1c98622d2f10102e8b6a6ea89cd67759bcf94613e5c5895650b686e8",
+      "bytes": 3378,
       "mode": "100644",
       "executable": false
     },
@@ -431,8 +431,8 @@
     },
     {
       "source": "skills/flow-refactor/SKILL.md",
-      "sha256": "0d0c38856cac6d6040c5d9fc8e365f69754a3cffe62bf1b18a2fe72daeafb2f1",
-      "bytes": 16914,
+      "sha256": "59251f9347b36f7a6f34fd36a229b43a6370819876a7e5e79ddea1d9edb8d2d4",
+      "bytes": 2614,
       "mode": "100644",
       "executable": false
     },
@@ -459,8 +459,8 @@
     }
   ],
   "totals": {
-    "bytes": 711421,
+    "bytes": 699901,
     "count": 64
   },
-  "hostIdentity": "934b8d06de2b5e769fa46f6911b844121f3516951c526f18b108eb162b90bb6a"
+  "hostIdentity": "1a3115e7fa140f58d55bd97cd5b41611f87e0e7b4d4270e2403d3821a9037e0d"
 }
