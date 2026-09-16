@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -25,12 +26,23 @@ function sameJson(left, right) {
   return canonicalJson(left) === canonicalJson(right);
 }
 
+function canonicalWorkingBytes(root, source, target) {
+  const bytes = fs.readFileSync(target);
+  const attribute = spawnSync("git", ["check-attr", "eol", "--", source], {
+    cwd: root,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  });
+  if (!attribute.stdout?.endsWith(": eol: lf\n")) return bytes;
+  return Buffer.from(bytes.toString("utf8").replaceAll("\r\n", "\n"));
+}
+
 function fileRecord(root, source, destination) {
   const target = path.join(root, ...source.split("/"));
   const stat = fs.lstatSync(target);
   if (!stat.isFile() || stat.isSymbolicLink())
     throw new Error(`Package resource must be a regular file: ${source}`);
-  const bytes = fs.readFileSync(target);
+  const bytes = canonicalWorkingBytes(root, source, target);
   const executable = Boolean(stat.mode & 0o111);
   return {
     source,
@@ -72,7 +84,7 @@ function expandSelector(root, selector) {
 }
 
 function withoutDestination(record) {
-  const { destination, ...source } = record;
+  const { destination: _destination, ...source } = record;
   return source;
 }
 

@@ -272,6 +272,8 @@ function committedWorkspaceGeneration() {
   git(repo, ["config", "core.autocrlf", "true"]);
   git(repo, ["config", "user.email", "test@example.test"]);
   git(repo, ["config", "user.name", "Test"]);
+  git(repo, ["add", ".gitattributes"]);
+  git(repo, ["commit", "-qm", "attributes"]);
   git(repo, ["add", "."]);
   git(repo, ["commit", "-qm", "fixture"]);
   return { repo, destination, generation };

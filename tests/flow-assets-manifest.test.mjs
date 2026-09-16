@@ -218,10 +218,12 @@ test("manifest and lock define a deterministic, complete, safe mirror", () => {
     "hosts/pi/flow-assets.lock.json",
     "package.json",
     ...manifest.liveMirrored.patterns.map((entry) => entry.path),
-    ...manifest.liveMirrored.libraries,
-  ]
-    .map((entry) => `${entry} -text`)
-    .sort();
+    ...manifest.liveMirrored.libraries.filter(
+      (entry) => entry !== "scripts/lib/flow-debt-writer.mjs",
+    ),
+  ].map((entry) => `${entry} -text`);
+  expectedAttributes.push("scripts/lib/flow-debt-writer.mjs text eol=lf");
+  expectedAttributes.sort();
   assert.deepEqual([...attributeLines].sort(), expectedAttributes);
 
   assert.doesNotMatch(manifestBytes.toString("utf8"), /\r/);

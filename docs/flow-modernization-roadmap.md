@@ -147,7 +147,7 @@ T3 and T4 may be reordered only through an explicit roadmap amendment with the r
 
 ### T2.5e — Independent mutation verification
 
-- **Status:** `verified awaiting merge`
+- **Status:** `complete`
 - **Dependencies:** T2.5d complete on current `main`.
 - **Objective:** Independently verify mutation safety and packaging/deployment evidence without granting authority.
 - **Scope:** Internal read-only verification/reporting for concurrency, stale handles, residues, recovery, rollback, postcondition, packaged state, deployed state, and absence of self-authorizing code authority in the portable core.
@@ -155,12 +155,12 @@ T3 and T4 may be reordered only through an explicit roadmap amendment with the r
 - **Acceptance:** The internal verifier produces evidence for each required category, distinguishes pass/fail/skip, and never mutates state; it confirms that approval remains host-owned and the portable core cannot self-authorize; packaged and deployed checks do not claim success when capability is absent.
 - **Verification:** Strict-TDD tests for report classification and non-mutation; independent verifier runs the full matrix against an isolated fixture and records exact skips.
 - **Review boundary:** Verifier/reporting and fixtures/tests only; <=400 changed lines or explicit `size:exception`.
-- **Completion:** `status: verified awaiting merge`; branch: `feat/flow-debt-independent-verification`; commit: —; PR: —; verification: focused verifier suite 3/3 passed; relevant Flow Debt/package suite 59 passed with 1 Windows capability skip; independent verifier PASS; `npm pack --dry-run` and whitespace checks passed; full suite matched 8 pre-existing provenance failures on clean `main`; deployed-state capability remained an explicit skip.
-- **Next allowed task:** T2.6, only after T2.5e merge evidence is observed on updated `main`; reconcile this card in the T2.6 branch.
+- **Completion:** `status: complete`; branch: `feat/flow-debt-independent-verification`; commit: `f35dc41`; PR: [#47](https://github.com/victorvelazquez/flow-skills/pull/47); verification: merge commit `f35dc41` observed as an ancestor of updated `main` (`72b142c`).
+- **Next allowed task:** T2.6.
 
 ### T2.6 — Flow Debt closure
 
-- **Status:** `pending`
+- **Status:** `verified awaiting merge`
 - **Dependencies:** T2.5e complete on current `main`.
 - **Objective:** Close Flow Debt modernization with an audit/refactor and complete neutral guidance.
 - **Scope:** Audit/refactor; exact manual neutral drafts; migration and legacy guidance; documentation; complete provenance and package checks.
@@ -168,7 +168,7 @@ T3 and T4 may be reordered only through an explicit roadmap amendment with the r
 - **Acceptance:** Legacy guidance is identified or removed deliberately; manual drafts are exact and neutral; migration guidance is actionable; provenance/package checks are complete and independently reviewable.
 - **Verification:** Strict-TDD where behavior changes; documentation/provenance/package checks with exact evidence; independent reviewer confirms no Gentle coupling and no hidden authority.
 - **Review boundary:** Closure audit, refactor, guidance, docs, and package/provenance evidence only; <=400 changed lines or explicit `size:exception`.
-- **Completion:** `status: pending`; branch: —; commit: —; PR: —; verification: —.
+- **Completion:** `status: verified awaiting merge`; branch: `feat/flow-debt-closure`; commit: —; PR: —; verification: focused Flow Debt/package/provenance suite 134 passed with 2 Windows capability skips; full suite 339 passed with 7 Windows capability skips; Pi/OpenCode provenance verified generation `c3967e74c7cbe53e7b7d473c008fef8ba55e4f472e6d88488985a3e5aa5a8d9b`; `npm pack --dry-run` and `git diff --check` passed; independent verifier PASS; 199 changed lines.
 - **Next allowed task:** T3, only after T2.6 merge evidence is observed on updated `main`; reconcile this card in the T3 branch.
 
 ### T3 — `flow-playbook-compare`

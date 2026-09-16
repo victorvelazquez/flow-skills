@@ -146,6 +146,27 @@ test("removed legacy surfaces have no public registry, package, or OpenCode adap
   assert.equal(exists("skills/flow-skills-sync/SKILL.md"), false);
 });
 
+test("legacy Flow Debt stores require manual drafts, previews, and separate authority", () => {
+  const guide = read(migrationGuide);
+  const legacy =
+    guide.match(
+      /## Legacy Flow Debt stores\r?\n\r?\n([\s\S]*?)(?=\r?\n## |\s*$)/,
+    )?.[1] || "";
+
+  assert.match(legacy, /no automatic migration/i);
+  assert.match(legacy, /Preserve\s+legacy-store data/i);
+  assert.match(legacy, /manually author neutral v1 drafts/i);
+  assert.match(legacy, /`create-preview`/);
+  assert.match(legacy, /Inspect the returned candidates/i);
+  assert.match(
+    legacy,
+    /external legacy-layout resolution under repository policy/i,
+  );
+  assert.match(legacy, /separately authorized lifecycle/i);
+  assert.doesNotMatch(legacy, /automatically migrates|auto-migrates/i);
+  assert.doesNotMatch(legacy, /node tools\/flow-assets\.mjs --reconcile/i);
+});
+
 test("README defers legacy transitions to the matrix without stale finish or release claims", () => {
   const readme = read("README.md");
 
