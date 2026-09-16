@@ -173,7 +173,7 @@ T3 and T4 may be reordered only through an explicit roadmap amendment with the r
 
 ### T3 — `flow-playbook-compare`
 
-- **Status:** `verified awaiting merge`
+- **Status:** `complete`
 - **Dependencies:** T2.6 complete on current `main`.
 - **Objective:** Publish `flow-playbook-compare` as a new read-only playbook replacement/comparison workflow while retaining `flow-playbook-sync`.
 - **Scope:** Resolve the configured playbook path in this decided order: CLI `--playbook-path` > `.flow/playbook.json` schema `{ "playbookPath": "<path>" }` > `FLOW_PLAYBOOK_PATH`. A higher-priority invalid value fails closed with no fallback. Compare and render a deterministic JSON report with stable, sorted, neutral advisory replacement candidates.
@@ -181,20 +181,21 @@ T3 and T4 may be reordered only through an explicit roadmap amendment with the r
 - **Acceptance:** Precedence and fail-closed invalid configuration are tested and documented; output is read-only and identifies neutral replacement candidates deterministically; missing configuration returns neutral `unavailable` with zero candidates and no side effects.
 - **Verification:** Strict-TDD precedence, invalid-source, deterministic ordering, unavailable, and read-only tests; independent verifier checks all three sources and confirms no `flow-pr`/apply invocation.
 - **Review boundary:** Compare command/core/config tests and docs only; `size:exception`: 405 additions + 35 deletions = 440 changed lines, authorized because required generated root asset and v2 provenance locks publish the workflow.
-- **Completion:** `status: verified awaiting merge`; branch: `feat/flow-playbook-compare`; commit: none; PR: none; verification: focused 13/13; full 342 passed, 0 failed, 7 Windows capability skips; Pi/OpenCode provenance generation `da5e7b4a38ac8a147d76e0f873e491ccdaeb0a8c6884fb0ee4c4d824680a6425`; `npm pack --dry-run` and `git diff --check` passed; independent verifier PASS; authorized 405 additions + 35 deletions = 440 changed-line size exception due required generated locks.
-- **Next allowed task:** T4, only after T3 merge evidence is observed on updated `main`; reconcile this card in the T4 branch.
+- **Completion:** `status: complete`; branch: `feat/flow-playbook-compare`; commit: `4b35dcf`; PR: [#50](https://github.com/victorvelazquez/flow-skills/pull/50); verification: focused 13/13; full 342 passed, 0 failed, 7 Windows capability skips; Pi/OpenCode provenance generation `da5e7b4a38ac8a147d76e0f873e491ccdaeb0a8c6884fb0ee4c4d824680a6425`; `npm pack --dry-run` and `git diff --check` passed; independent verifier PASS; authorized 405 additions + 35 deletions = 440 changed-line size exception due required generated locks. Merge reconciliation: updated `main` contains T3 commit `4b35dcf` through merge commit `f8dc497`.
+- **Next allowed task:** T4.
 
 ### T4 — `flow-contract-request`
 
-- **Status:** `pending`
-- **Dependencies:** T3 complete on current `main`; reordering requires a roadmap amendment.
-- **Objective:** Request configured contract targets through explicit preview and execution paths.
-- **Scope:** Configurable `.flow/contract-targets.json`; preview; execute; explicit cross-repository approval; local outbox fallback.
-- **Non-goals:** No SDD or Gentle coupling, no synthesized approval, no delivery authority, and no cross-repository action without explicit approval.
-- **Acceptance:** Targets are validated from configuration; preview has no side effects; execution requires explicit approval for each cross-repository action; unavailable remote delivery uses a transparent local outbox fallback.
+- **Status:** `verified awaiting merge`
+- **Dependencies:** T3 complete on current `main`; reconciled from merge commit `f8dc497` containing T3 commit `4b35dcf`.
+- **Objective:** Modernize the existing `flow-request` workflow in place with explicit single-target preview and execution.
+- **Authorized contract:** `.flow/contract-targets.json` is exactly `{ "schema": "flow-contract-targets/v1", "targets": { "<target-key>": { "path": "<local repository path>" } } }` with no unknown top-level properties; UNC and normalized `//` network paths are invalid. `preview --target <target-key> --request-json <JSON object>` validates exactly one configured local target and returns a deterministic candidate without writing. `execute` accepts the same one-target input and writes one immutable JSON record to `<target>/.flow/inbox/contract-request-<sha256>.json`; if that local repository is unavailable, it writes the same immutable record to requester-local `.flow/outbox/contract-request-<sha256>.json`. The runtime makes no network request. Every cross-repository `execute` requires the host adapter's native approval before it can invoke the approved runtime form; the portable runtime never creates approval.
+- **Scope:** Existing `flow-request` contract/runtime; configurable local-repository targets; single-target preview/execute; host-native cross-repository approval; requester-local immutable JSON outbox fallback.
+- **Non-goals:** No SDD or Gentle coupling, no synthesized approval, no delivery authority, no network transport, no multi-target invocation, and no cross-repository action without explicit approval.
+- **Acceptance:** Configuration and local targets are validated; preview has no side effects; each cross-repository execution is host-approved; a locally unavailable target produces a transparent immutable requester-local outbox fallback.
 - **Verification:** Strict-TDD target/config, preview, approval decline/grant, cross-repository, and outbox tests; independent verifier validates no cross-repository mutation without approval.
-- **Review boundary:** Contract-request workflow, config, adapter boundary, tests, and docs only; <=400 changed lines or explicit `size:exception`.
-- **Completion:** `status: pending`; branch: —; commit: —; PR: —; verification: —.
+- **Review boundary:** Contract-request workflow, config, adapter boundary, tests, and docs only; `size:exception`: 713 additions + 308 deletions = 1,021 changed lines, explicitly authorized because replacing the 243-line legacy contract and publishing its runtime, host adapter, package metadata, and required root/v2 provenance locks form one inseparable safe workflow.
+- **Completion:** `status: verified awaiting merge`; branch: `feat/flow-contract-request`; commit: none; PR: none; verification: strict-TDD RED observed; focused 59/59 with 1 Windows capability skip; full 348 passed, 0 failed, 7 Windows capability skips; Pi/OpenCode provenance generation `184b996342357e92995941dab2a0b3915be02b560fc19e706711f56e9110e6ec`; `npm pack --dry-run` and `git diff --check` passed; independent verifier PASS; authorized 713 additions + 308 deletions = 1,021 changed-line size exception.
 - **Next allowed task:** T5, only after T4 merge evidence is observed on updated `main`; reconcile this card in the T5 branch.
 
 ### T5 — Simplify `flow-refactor`

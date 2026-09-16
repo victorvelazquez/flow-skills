@@ -39,7 +39,7 @@ The command is a read-only preview whose JSON identifies `host: "opencode"`. Run
 | `flow-playbook-sync` | Previewed project/playbook comparison |
 | `flow-pr` | Prepared and verified pull-request workflow |
 | `flow-refactor` | Read-only scoped refactoring audit |
-| `flow-request` | Cross-project request lifecycle guidance |
+| `flow-request` | Single-target local contract-request preview and host-approved execution |
 | `flow-ui` | Read-only UI compliance audit |
 
 `ui-design-system` is a support resource used by relevant Flow skills; it is not an end-user workflow.

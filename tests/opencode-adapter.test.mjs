@@ -327,6 +327,7 @@ test("OpenCode Git and GitHub adapter mappings preserve destinations and native 
     "flow-debt-agent",
     "flow-git-agent",
     "flow-pr-agent",
+    "flow-request-agent",
     "flow-review-agent",
   ];
 
@@ -372,6 +373,30 @@ test("OpenCode Git and GitHub adapter mappings preserve destinations and native 
   ])
     assert.equal(exists(adapter), true, `missing adapter: ${adapter}`);
   assert.equal(validateOpenCodeAdapterMappings(manifest, registry), manifest);
+});
+
+test("OpenCode flow-request adapter reserves cross-repository execution for native approval", () => {
+  const command = read(opencodeCommand("flow-request"));
+  const agent = read(opencodeAgent("flow-request-agent"));
+
+  assert.match(command, /^agent: flow-request-agent$/m);
+  assert.match(agent, /execute --target \* --request-json \*': allow/);
+  assert.match(
+    agent,
+    /execute --target \* --request-json \* --host-approval approved': ask/,
+  );
+  assert.match(
+    agent,
+    /approval is declined or unavailable, do not invoke execute/i,
+  );
+  assert.match(
+    agent,
+    /same-repository or outbox result, invoke the plain execute form/i,
+  );
+  assert.match(
+    agent,
+    /Never add `--host-approval approved` without the native prompt/i,
+  );
 });
 
 test("OpenCode PR adapter owns native clarification and one execute approval", () => {

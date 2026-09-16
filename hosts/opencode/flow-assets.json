@@ -32,6 +32,7 @@
     "hosts/opencode/agents/flow-debt-agent.md",
     "hosts/opencode/agents/flow-git-agent.md",
     "hosts/opencode/agents/flow-pr-agent.md",
+    "hosts/opencode/agents/flow-request-agent.md",
     "hosts/opencode/agents/flow-review-agent.md",
     "hosts/opencode/commands/flow-audit.md",
     "hosts/opencode/commands/flow-branch.md",
@@ -55,6 +56,7 @@
     "scripts/flow-playbook-sync.mjs",
     "scripts/flow-pr.mjs",
     "scripts/flow-refactor.mjs",
+    "scripts/flow-request.mjs",
     "scripts/flow-ui.mjs",
     "scripts/lib/detect-tooling.mjs",
     "scripts/lib/dotnet-format.mjs",
@@ -118,6 +120,11 @@
     {
       "source": "hosts/opencode/agents/flow-pr-agent.md",
       "destination": "agents/flow-pr-agent.md",
+      "role": "agent"
+    },
+    {
+      "source": "hosts/opencode/agents/flow-request-agent.md",
+      "destination": "agents/flow-request-agent.md",
       "role": "agent"
     },
     {
@@ -245,6 +252,11 @@
     {
       "source": "scripts/flow-refactor.mjs",
       "destination": "scripts/flow-refactor.mjs",
+      "role": "portable"
+    },
+    {
+      "source": "scripts/flow-request.mjs",
+      "destination": "scripts/flow-request.mjs",
       "role": "portable"
     },
     {

@@ -1,24 +1,24 @@
 {
   "$schema": "flow-generation-lock/v2",
-  "generationId": "da5e7b4a38ac8a147d76e0f873e491ccdaeb0a8c6884fb0ee4c4d824680a6425",
+  "generationId": "184b996342357e92995941dab2a0b3915be02b560fc19e706711f56e9110e6ec",
   "package": {
-    "sha256": "5407fef6411759695aebd837fa8b00588ea2c74bf3bf08c8081710266a0d3673"
+    "sha256": "0dc5a25f137fb8000806e752804e998db9863bb55a169f2df86df8cd897abab7"
   },
   "hosts": [
     {
       "host": "opencode",
-      "sha256": "149082006e68439ccc547f4c2c2e927bed794147d9f9cce5336cc5e838b361dc"
+      "sha256": "49b1d41075a33c05598c2ef449675f84fb77aa2e8b588e487576e12b47181bb5"
     },
     {
       "host": "pi",
-      "sha256": "8c4a8ad00698cb6bced284990136edfa030fa7a267312221373e283f7d3063a0"
+      "sha256": "0a1e360073b4984a8bbd027bb6dda202c12cdd622bf764769e4da6164f28cc84"
     }
   ],
   "sources": [
     {
       "source": "README.md",
-      "sha256": "777c9deeae2d35d12792ad6d001e8161901a85d487e0c5d6ab45ead88880e330",
-      "bytes": 3493,
+      "sha256": "e5f83542f5e174df0d38ef373374fbc6f1fba0c4e949966476be6b4f8334db13",
+      "bytes": 3459,
       "mode": "100644",
       "executable": false
     },
@@ -45,8 +45,8 @@
     },
     {
       "source": "docs/multihost-migration.md",
-      "sha256": "eeff19f8d65ae691fe79c6be286fe49d0d275ade39af858792ce0783aef1ea4f",
-      "bytes": 5517,
+      "sha256": "1c673a28e175cbe690fe8cf4fe6dcae730fc77510bbb9cfa6e68d959f9fa63ab",
+      "bytes": 5633,
       "mode": "100644",
       "executable": false
     },
@@ -75,6 +75,13 @@
       "source": "hosts/opencode/agents/flow-pr-agent.md",
       "sha256": "c5224bdfb5be8bc3d0726102cf8261337764df99ea5afa68c707a60cf5df018e",
       "bytes": 6572,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "hosts/opencode/agents/flow-request-agent.md",
+      "sha256": "3810099797ca2e1eebb0d2284ffce803604ef259e57857cdc4a8887cf04629d9",
+      "bytes": 1670,
       "mode": "100644",
       "executable": false
     },
@@ -157,8 +164,8 @@
     },
     {
       "source": "hosts/opencode/commands/flow-request.md",
-      "sha256": "9f311c8d5be5227e773fd6d494cab6760db38af5e169ec7938d28092374d8fae",
-      "bytes": 439,
+      "sha256": "57d3ac6fd12212578b4182aa4334067fbf49a83b4f9726a96263ee494b165a5d",
+      "bytes": 477,
       "mode": "100644",
       "executable": false
     },
@@ -171,15 +178,15 @@
     },
     {
       "source": "hosts/pi/flow-assets.json",
-      "sha256": "489a021d22aad7a190a381123d4c7a2c61a99e84c959861df53d3f3cd4491e27",
-      "bytes": 2122,
+      "sha256": "4dab8741b4a4ff22e9c60567752784f04da55174d60006739382002b6092bccf",
+      "bytes": 2154,
       "mode": "100644",
       "executable": false
     },
     {
       "source": "package.json",
-      "sha256": "18b570c21203f07882b5d6f594f59488bc0fa4634cbaeff22204be8969ff9dfe",
-      "bytes": 2356,
+      "sha256": "0586d13ccdd719e2c2782dfd17d1173161194fcf27efb79109d81539188845aa",
+      "bytes": 2388,
       "mode": "100644",
       "executable": false
     },
@@ -250,6 +257,13 @@
       "source": "scripts/flow-refactor.mjs",
       "sha256": "7f1ea79e178e1ab95c2d0cea4f3b7053733cac025831b82f01de359e3e4b93de",
       "bytes": 598,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "scripts/flow-request.mjs",
+      "sha256": "587fcb6b5c03afe1d585c41c5ba6122f9fb01ec243e2498b577a3dceff58d08f",
+      "bytes": 5897,
       "mode": "100644",
       "executable": false
     },
@@ -556,8 +570,8 @@
     },
     {
       "source": "skills/flow-request/SKILL.md",
-      "sha256": "eb7fdc2a5241cc3569809551306b7f03bd92c520578d1aa63eda5eff5c1e7ff5",
-      "bytes": 7986,
+      "sha256": "aa516d759ab22f75bfcce3a3f455b300ae49ca4b79d9252a52b8d60ca30188e6",
+      "bytes": 2290,
       "mode": "100644",
       "executable": false
     },

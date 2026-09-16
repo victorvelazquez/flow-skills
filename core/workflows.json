@@ -95,8 +95,8 @@
       "id": "flow-request",
       "contract": "skills/flow-request/SKILL.md",
       "resources": ["skills/flow-request"],
-      "runtime": null,
-      "outcome": "cross-project request lifecycle guidance",
+      "runtime": "scripts/flow-request.mjs",
+      "outcome": "single-target local contract-request preview and host-approved execution",
       "mutation": "approval-required",
       "hosts": { "opencode": "supported", "pi": "supported" }
     },

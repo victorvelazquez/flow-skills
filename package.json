@@ -52,6 +52,7 @@
     "scripts/flow-playbook-sync.mjs",
     "scripts/flow-pr.mjs",
     "scripts/flow-refactor.mjs",
+    "scripts/flow-request.mjs",
     "scripts/flow-ui.mjs",
     "scripts/lib/detect-tooling.mjs",
     "scripts/lib/dotnet-format.mjs",

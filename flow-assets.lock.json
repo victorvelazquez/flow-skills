@@ -9,8 +9,8 @@
     "sha256": "6593df36caf20f294bd1e521510dd978099e6b2d1e9ca66ce519deff3cb0cb9c"
   },
   "totals": {
-    "bytes": 678075,
-    "count": 56
+    "bytes": 678276,
+    "count": 57
   },
   "files": [
     {
@@ -80,6 +80,13 @@
       "path": "scripts/flow-refactor.mjs",
       "sha256": "7f1ea79e178e1ab95c2d0cea4f3b7053733cac025831b82f01de359e3e4b93de",
       "bytes": 598,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "path": "scripts/flow-request.mjs",
+      "sha256": "587fcb6b5c03afe1d585c41c5ba6122f9fb01ec243e2498b577a3dceff58d08f",
+      "bytes": 5897,
       "mode": "100644",
       "executable": false
     },
@@ -386,8 +393,8 @@
     },
     {
       "path": "skills/flow-request/SKILL.md",
-      "sha256": "eb7fdc2a5241cc3569809551306b7f03bd92c520578d1aa63eda5eff5c1e7ff5",
-      "bytes": 7986,
+      "sha256": "aa516d759ab22f75bfcce3a3f455b300ae49ca4b79d9252a52b8d60ca30188e6",
+      "bytes": 2290,
       "mode": "100644",
       "executable": false
     },
