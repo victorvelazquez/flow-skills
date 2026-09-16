@@ -186,7 +186,7 @@ T3 and T4 may be reordered only through an explicit roadmap amendment with the r
 
 ### T4 — `flow-contract-request`
 
-- **Status:** `verified awaiting merge`
+- **Status:** `complete`
 - **Dependencies:** T3 complete on current `main`; reconciled from merge commit `f8dc497` containing T3 commit `4b35dcf`.
 - **Objective:** Modernize the existing `flow-request` workflow in place with explicit single-target preview and execution.
 - **Authorized contract:** `.flow/contract-targets.json` is exactly `{ "schema": "flow-contract-targets/v1", "targets": { "<target-key>": { "path": "<local repository path>" } } }` with no unknown top-level properties; UNC and normalized `//` network paths are invalid. `preview --target <target-key> --request-json <JSON object>` validates exactly one configured local target and returns a deterministic candidate without writing. `execute` accepts the same one-target input and writes one immutable JSON record to `<target>/.flow/inbox/contract-request-<sha256>.json`; if that local repository is unavailable, it writes the same immutable record to requester-local `.flow/outbox/contract-request-<sha256>.json`. The runtime makes no network request. Every cross-repository `execute` requires the host adapter's native approval before it can invoke the approved runtime form; the portable runtime never creates approval.
@@ -195,20 +195,20 @@ T3 and T4 may be reordered only through an explicit roadmap amendment with the r
 - **Acceptance:** Configuration and local targets are validated; preview has no side effects; each cross-repository execution is host-approved; a locally unavailable target produces a transparent immutable requester-local outbox fallback.
 - **Verification:** Strict-TDD target/config, preview, approval decline/grant, cross-repository, and outbox tests; independent verifier validates no cross-repository mutation without approval.
 - **Review boundary:** Contract-request workflow, config, adapter boundary, tests, and docs only; `size:exception`: 713 additions + 308 deletions = 1,021 changed lines, explicitly authorized because replacing the 243-line legacy contract and publishing its runtime, host adapter, package metadata, and required root/v2 provenance locks form one inseparable safe workflow.
-- **Completion:** `status: verified awaiting merge`; branch: `feat/flow-contract-request`; commit: none; PR: none; verification: strict-TDD RED observed; focused 59/59 with 1 Windows capability skip; full 348 passed, 0 failed, 7 Windows capability skips; Pi/OpenCode provenance generation `184b996342357e92995941dab2a0b3915be02b560fc19e706711f56e9110e6ec`; `npm pack --dry-run` and `git diff --check` passed; independent verifier PASS; authorized 713 additions + 308 deletions = 1,021 changed-line size exception.
-- **Next allowed task:** T5, only after T4 merge evidence is observed on updated `main`; reconcile this card in the T5 branch.
+- **Completion:** `status: complete`; branch: `feat/flow-contract-request`; commit: `c594e65`; PR: [#51](https://github.com/victorvelazquez/flow-skills/pull/51); verification: merge commit `16fa079` observed on updated `main` contains T4 commit `c594e65`; strict-TDD RED observed; focused 59/59 with 1 Windows capability skip; full 348 passed, 0 failed, 7 Windows capability skips; Pi/OpenCode provenance generation `184b996342357e92995941dab2a0b3915be02b560fc19e706711f56e9110e6ec`; `npm pack --dry-run` and `git diff --check` passed; independent verifier PASS; authorized 713 additions + 308 deletions = 1,021 changed-line size exception.
+- **Next allowed task:** T5.
 
 ### T5 — Simplify `flow-refactor`
 
-- **Status:** `pending`
+- **Status:** `verified awaiting merge`
 - **Dependencies:** T4 complete on current `main`.
 - **Objective:** Reduce `flow-refactor` to read-only smell detection and neutral drafts.
 - **Scope:** Read-only smell analysis and exact neutral draft generation.
 - **Non-goals:** No external review authority, delivery authority, mutation, approval synthesis, or automatic apply.
 - **Acceptance:** Findings are advisory and reproducible; drafts are neutral and do not invoke external review/delivery behavior; all paths remain read-only.
 - **Verification:** Strict-TDD fixture tests for smells and drafts; independent verifier checks command behavior is non-mutating and free of external authority claims.
-- **Review boundary:** `flow-refactor` analysis/drafts, tests, and docs only; <=400 changed lines or explicit `size:exception`.
-- **Completion:** `status: pending`; branch: —; commit: —; PR: —; verification: —.
+- **Review boundary:** `flow-refactor` analysis/drafts, tests, and docs only; `size:exception`: 298 additions + 367 deletions = 665 changed lines. This exact review-surface total excludes `odd/tasks/flow-refactor-readonly.md` because the ODD tracker is operational metadata, not deliverable review content. Replacing the oversized heuristic LLM rubric with a bounded deterministic runtime, exact fixture coverage, relay-only host guidance, and their required generated asset/provenance locks is one inseparable safe workflow.
+- **Completion:** `status: verified awaiting merge`; branch: `feat/flow-refactor-readonly`; commit: none; PR: none; verification: strict-TDD RED observed; focused `flow-refactor` (3/3), flow-agent-contract (23/23), and OpenCode adapter (12/12) passed; full verification passed with 7 Windows capability skips; root/Pi/OpenCode provenance verification passed (generation `1eada80304a45cfc173c784a9ccbcdb19447546ba2c36209ba7129dae7bed55e`); `npm pack --dry-run` and `git diff --check` passed; independent verifier PASS; authorized 298 additions + 367 deletions = 665 changed-line size exception.
 - **Next allowed task:** T6, only after T5 merge evidence is observed on updated `main`; reconcile this card in the T6 branch.
 
 ### T6 — Decouple `flow-audit`
