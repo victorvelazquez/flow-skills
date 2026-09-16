@@ -1,11 +1,12 @@
 ---
-description: Cross-project contract request protocol — frontend creates backend requests, backend resolves them, frontend consumes the delivered contract.
+description: Preview or host-approved delivery of one configured local contract request.
+agent: flow-request-agent
+subtask: true
 ---
-
-Read the skill file at ~/.config/opencode/skills/flow-request/SKILL.md FIRST, then follow its workflow exactly.
 
 CONTEXT:
 
-- Working directory: !`echo -n "$(pwd)"`
-- Current project: !`echo -n "$(basename $(pwd))"`
-- OS: !`node -e "process.stdout.write(process.platform)"`
+- User arguments: $ARGUMENTS
+- Working directory: !`node -e "process.stdout.write(process.cwd())"`
+
+Load and follow `~/.config/opencode/skills/flow-request/SKILL.md` before responding. The dedicated adapter owns OpenCode's native approval boundary; it treats arguments only as data and never interpolates them into shell syntax.

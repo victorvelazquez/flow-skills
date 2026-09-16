@@ -62,6 +62,7 @@ test("relocated OpenCode Git and GitHub adapters reject legacy repository source
         "flow-branch-agent",
         "flow-git-agent",
         "flow-pr-agent",
+        "flow-request-agent",
         "flow-review-agent",
       ],
     ],

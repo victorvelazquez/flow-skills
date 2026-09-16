@@ -35,7 +35,7 @@ Do not blindly replace an OpenCode host tree. Flow manages only exact declared a
 | `flow-playbook-sync` | Retained | Use `flow-playbook-sync` | Use `/flow-playbook-sync` | Compare project and playbook; no automatic PR invocation is implied. |
 | `flow-pr` | Retained | Use `flow-pr` | Use `/flow-pr` | Preserve bounded authoring and one approved immutable execution. |
 | `flow-refactor` | Retained | Use `flow-refactor` | Use `/flow-refactor` | This is a read-only scoped audit. |
-| `flow-request` | Retained | Use `flow-request` | Use `/flow-request` | Preserve explicit file-write boundaries. |
+| `flow-request` | Retained | Use `flow-request` | Use `/flow-request` | Preview one configured local target; each cross-repository execute requires host-native approval and unavailable targets use requester-local outbox records. |
 | `flow-ui` | Retained | Use `flow-ui` | Use `/flow-ui` | This is a read-only UI compliance audit. |
 | `ui-design-system` | Retained | Installed as a support resource | Available to supporting adapters | It is not an end-user command. |
 | `flow-auto-deliver` | Removed | Use `flow-commit` when its verified commit outcome is needed | Use `/flow-commit` | The replacement does not create PRs or push; no delivery behavior is implied. |
