@@ -17,19 +17,20 @@ A task is not authorized merely because it appeared in conversation or memory. A
 
 1. Start from a clean, updated `main` and create an isolated task branch.
 2. Read this entire roadmap and inspect the current repository state.
-3. Confirm that every listed dependency is complete on current `main`.
-4. Select exactly one pending task; do not bundle its successor.
-5. Use strict TDD and obtain independent verification. A capability skip is recorded as a skip, never as a passing result.
-6. Do not commit or open a PR unless the user explicitly requests it.
+3. Confirm that every listed dependency has merge evidence on current `main`.
+4. If the predecessor card still says `verified awaiting merge`, reconcile it to `complete` in the new task branch using that merge evidence.
+5. Select exactly one pending task; predecessor reconciliation is metadata, not bundled implementation work.
+6. Use strict TDD and obtain independent verification. A capability skip is recorded as a skip, never as a passing result.
+7. Do not commit or open a PR unless the user explicitly requests it.
 
 Copy/paste prompt:
 
 ```text
 Read docs/flow-modernization-roadmap.md in full. On a clean, updated main, verify
-that <TASK_ID> dependencies are complete, then implement only <TASK_ID> with strict
-TDD and independent verification. Preserve the roadmap's non-negotiables and review
-boundary. Do not commit or create a PR unless I explicitly request it. Update this
-roadmap's completion record only after merge evidence exists.
+merge evidence for <TASK_ID>'s dependencies and reconcile any predecessor still marked
+verified awaiting merge. Then implement only <TASK_ID> with strict TDD and independent
+verification. Preserve the roadmap's non-negotiables and review boundary. Do not
+commit or create a PR unless I explicitly request it.
 ```
 
 ## Non-negotiables
@@ -54,7 +55,21 @@ roadmap's completion record only after merge evidence exists.
 | `in progress` | A single writer owns a branch; no successor may begin. |
 | `blocked` | A dependency, approval, or roadmap decision prevents safe progress. |
 | `verified awaiting merge` | Independent evidence exists; completion waits for merge evidence. |
-| `complete` | Merge evidence was recorded in this roadmap. |
+| `complete` | Merge evidence from current `main` was recorded in this roadmap, either immediately or through successor-branch reconciliation. |
+
+## Rolling merge reconciliation
+
+Use one implementation PR per task. A verified task remains `verified awaiting merge` in its own PR because that PR cannot truthfully contain evidence of its future merge.
+
+After that PR merges:
+
+1. Update local `main` and verify the predecessor's merge evidence there.
+2. Create the successor's isolated branch.
+3. In that branch, update the predecessor card to `complete` with its commit/PR/merge evidence.
+4. Implement and verify only the successor, leaving it `verified awaiting merge`.
+5. Include both the predecessor metadata reconciliation and the successor work in the successor's single PR.
+
+The successor is authorized by observed merge evidence on clean, updated `main`; it does not require a separate roadmap-only commit or PR. A stale predecessor card may be reconciled only when repository evidence is unambiguous. Missing or contradictory evidence is `BLOCKED`.
 
 ## Completed history
 
@@ -141,7 +156,7 @@ T3 and T4 may be reordered only through an explicit roadmap amendment with the r
 - **Verification:** Strict-TDD tests for report classification and non-mutation; independent verifier runs the full matrix against an isolated fixture and records exact skips.
 - **Review boundary:** Verifier/reporting and fixtures/tests only; <=400 changed lines or explicit `size:exception`.
 - **Completion:** `status: verified awaiting merge`; branch: `feat/flow-debt-independent-verification`; commit: —; PR: —; verification: focused verifier suite 3/3 passed; relevant Flow Debt/package suite 59 passed with 1 Windows capability skip; independent verifier PASS; `npm pack --dry-run` and whitespace checks passed; full suite matched 8 pre-existing provenance failures on clean `main`; deployed-state capability remained an explicit skip.
-- **Next allowed task:** T2.6, only after merge evidence updates this card.
+- **Next allowed task:** T2.6, only after T2.5e merge evidence is observed on updated `main`; reconcile this card in the T2.6 branch.
 
 ### T2.6 — Flow Debt closure
 
@@ -154,7 +169,7 @@ T3 and T4 may be reordered only through an explicit roadmap amendment with the r
 - **Verification:** Strict-TDD where behavior changes; documentation/provenance/package checks with exact evidence; independent reviewer confirms no Gentle coupling and no hidden authority.
 - **Review boundary:** Closure audit, refactor, guidance, docs, and package/provenance evidence only; <=400 changed lines or explicit `size:exception`.
 - **Completion:** `status: pending`; branch: —; commit: —; PR: —; verification: —.
-- **Next allowed task:** T3, only after merge evidence updates this card.
+- **Next allowed task:** T3, only after T2.6 merge evidence is observed on updated `main`; reconcile this card in the T3 branch.
 
 ### T3 — `flow-playbook-compare`
 
@@ -167,7 +182,7 @@ T3 and T4 may be reordered only through an explicit roadmap amendment with the r
 - **Verification:** Strict-TDD precedence and read-only tests; independent verifier checks all three sources and confirms no `flow-pr`/apply invocation.
 - **Review boundary:** Compare command/core/config tests and docs only; <=400 changed lines or explicit `size:exception`.
 - **Completion:** `status: pending`; branch: —; commit: —; PR: —; verification: —.
-- **Next allowed task:** T4, only after merge evidence updates this card.
+- **Next allowed task:** T4, only after T3 merge evidence is observed on updated `main`; reconcile this card in the T4 branch.
 
 ### T4 — `flow-contract-request`
 
@@ -180,7 +195,7 @@ T3 and T4 may be reordered only through an explicit roadmap amendment with the r
 - **Verification:** Strict-TDD target/config, preview, approval decline/grant, cross-repository, and outbox tests; independent verifier validates no cross-repository mutation without approval.
 - **Review boundary:** Contract-request workflow, config, adapter boundary, tests, and docs only; <=400 changed lines or explicit `size:exception`.
 - **Completion:** `status: pending`; branch: —; commit: —; PR: —; verification: —.
-- **Next allowed task:** T5, only after merge evidence updates this card.
+- **Next allowed task:** T5, only after T4 merge evidence is observed on updated `main`; reconcile this card in the T5 branch.
 
 ### T5 — Simplify `flow-refactor`
 
@@ -193,7 +208,7 @@ T3 and T4 may be reordered only through an explicit roadmap amendment with the r
 - **Verification:** Strict-TDD fixture tests for smells and drafts; independent verifier checks command behavior is non-mutating and free of external authority claims.
 - **Review boundary:** `flow-refactor` analysis/drafts, tests, and docs only; <=400 changed lines or explicit `size:exception`.
 - **Completion:** `status: pending`; branch: —; commit: —; PR: —; verification: —.
-- **Next allowed task:** T6, only after merge evidence updates this card.
+- **Next allowed task:** T6, only after T5 merge evidence is observed on updated `main`; reconcile this card in the T6 branch.
 
 ### T6 — Decouple `flow-audit`
 
@@ -206,7 +221,7 @@ T3 and T4 may be reordered only through an explicit roadmap amendment with the r
 - **Verification:** Strict-TDD evidence, cache, and isolation tests; independent verifier confirms audit remains read-only and a fix requires separate authorization.
 - **Review boundary:** Audit evidence/cache and isolated fix boundary/tests/docs only; <=400 changed lines or explicit `size:exception`.
 - **Completion:** `status: pending`; branch: —; commit: —; PR: —; verification: —.
-- **Next allowed task:** T7, only after merge evidence updates this card.
+- **Next allowed task:** T7, only after T6 merge evidence is observed on updated `main`; reconcile this card in the T7 branch.
 
 ### T7 — Portfolio integration
 
@@ -223,7 +238,7 @@ T3 and T4 may be reordered only through an explicit roadmap amendment with the r
 
 ## Drift control
 
-Before work, read this roadmap in full and verify current `main` plus dependencies. Stop on any conflict among the roadmap, repository state, task card, or requested work; do not resolve it through chat assumptions. Update a completion record only after merge evidence exists. Any scope, assurance, dependency, ordering, or strategy change requires an explicit roadmap amendment before implementation.
+Before work, read this roadmap in full and verify current `main` plus dependencies. Stop on any conflict among the roadmap, repository state, task card, or requested work; do not resolve it through chat assumptions. Mark a task `complete` only from merge evidence observed on updated `main`; when using rolling reconciliation, record that evidence in the successor branch before implementing the successor. Any scope, assurance, dependency, ordering, or strategy change requires an explicit roadmap amendment before implementation.
 
 ## Session-close checklist
 
@@ -232,7 +247,8 @@ Before work, read this roadmap in full and verify current `main` plus dependenci
 - [ ] Strict-TDD and focused validation evidence are recorded, with skips labeled as skips.
 - [ ] Independent verification is recorded or explicitly pending.
 - [ ] No commit/PR was made unless the user requested it.
-- [ ] Completion was not marked without merge evidence.
+- [ ] Completion was not marked without merge evidence from updated `main`.
+- [ ] Any predecessor reconciliation records exact merge evidence in the current task branch.
 - [ ] The next allowed task is named without starting it.
 
 ## Handoff template
