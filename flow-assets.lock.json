@@ -9,8 +9,8 @@
     "sha256": "6593df36caf20f294bd1e521510dd978099e6b2d1e9ca66ce519deff3cb0cb9c"
   },
   "totals": {
-    "bytes": 674457,
-    "count": 54
+    "bytes": 678075,
+    "count": 56
   },
   "files": [
     {
@@ -52,6 +52,13 @@
       "path": "scripts/flow-docs-sync.mjs",
       "sha256": "062853f97ad1175ccd92a7f7abcb03b77745a130b93af0d14c45678deea285f6",
       "bytes": 20426,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "path": "scripts/flow-playbook-compare.mjs",
+      "sha256": "d7146ccdf1c32937f2078197b5a268bbf189d2e17b4aee550127f7a68ba813db",
+      "bytes": 2265,
       "mode": "100644",
       "executable": false
     },
@@ -339,6 +346,13 @@
       "path": "skills/flow-docs-sync/SKILL.md",
       "sha256": "1bcb376df94d7dc28c8b9ae1cb35ae90a1543f919d7ee0a49a2ebdb9ba8b88cd",
       "bytes": 2112,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "path": "skills/flow-playbook-compare/SKILL.md",
+      "sha256": "5c2173364b6deabc29ab739ba1cf0659f0c5838769006ef4598488b0d3886f21",
+      "bytes": 1353,
       "mode": "100644",
       "executable": false
     },

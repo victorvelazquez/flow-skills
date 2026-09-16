@@ -1,17 +1,17 @@
 {
   "$schema": "flow-generation-lock/v2",
-  "generationId": "c3967e74c7cbe53e7b7d473c008fef8ba55e4f472e6d88488985a3e5aa5a8d9b",
+  "generationId": "da5e7b4a38ac8a147d76e0f873e491ccdaeb0a8c6884fb0ee4c4d824680a6425",
   "package": {
-    "sha256": "84471a6c9e444d3f590e8d899beaf19ad6f5c3bed09cb5169ebafd6df00907c0"
+    "sha256": "5407fef6411759695aebd837fa8b00588ea2c74bf3bf08c8081710266a0d3673"
   },
   "hosts": [
     {
       "host": "opencode",
-      "sha256": "ac054f3acb30655503d3db873a31f247e1510964a27ce2dd0d4516dc61c08b98"
+      "sha256": "149082006e68439ccc547f4c2c2e927bed794147d9f9cce5336cc5e838b361dc"
     },
     {
       "host": "pi",
-      "sha256": "3ae6d7931aca5213d55610811d4d79a4ad4509e2705cc76426acf0f404a8a30c"
+      "sha256": "8c4a8ad00698cb6bced284990136edfa030fa7a267312221373e283f7d3063a0"
     }
   ],
   "sources": [
@@ -128,6 +128,13 @@
       "executable": false
     },
     {
+      "source": "hosts/opencode/commands/flow-playbook-compare.md",
+      "sha256": "211983fa5ea089e7d9381a18f2c63283c399271a38155716a4100856ed90ee17",
+      "bytes": 444,
+      "mode": "100644",
+      "executable": false
+    },
+    {
       "source": "hosts/opencode/commands/flow-playbook-sync.md",
       "sha256": "b5082a879571cfbd96b8c34da75d0cbce4148975d54dca6e859a7b0456d0c7af",
       "bytes": 764,
@@ -164,15 +171,15 @@
     },
     {
       "source": "hosts/pi/flow-assets.json",
-      "sha256": "6d7f60df7169dbc9c902150f1e0b54edf624f8fec5b7b8341334e6ad13242ab4",
-      "bytes": 2013,
+      "sha256": "489a021d22aad7a190a381123d4c7a2c61a99e84c959861df53d3f3cd4491e27",
+      "bytes": 2122,
       "mode": "100644",
       "executable": false
     },
     {
       "source": "package.json",
-      "sha256": "970370bdf5070499b37a7d3163f5f52bd8116005ef25983286d29b09862fd969",
-      "bytes": 2238,
+      "sha256": "18b570c21203f07882b5d6f594f59488bc0fa4634cbaeff22204be8969ff9dfe",
+      "bytes": 2356,
       "mode": "100644",
       "executable": false
     },
@@ -215,6 +222,13 @@
       "source": "scripts/flow-docs-sync.mjs",
       "sha256": "062853f97ad1175ccd92a7f7abcb03b77745a130b93af0d14c45678deea285f6",
       "bytes": 20426,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "scripts/flow-playbook-compare.mjs",
+      "sha256": "d7146ccdf1c32937f2078197b5a268bbf189d2e17b4aee550127f7a68ba813db",
+      "bytes": 2265,
       "mode": "100644",
       "executable": false
     },
@@ -502,6 +516,13 @@
       "source": "skills/flow-docs-sync/SKILL.md",
       "sha256": "1bcb376df94d7dc28c8b9ae1cb35ae90a1543f919d7ee0a49a2ebdb9ba8b88cd",
       "bytes": 2112,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "skills/flow-playbook-compare/SKILL.md",
+      "sha256": "5c2173364b6deabc29ab739ba1cf0659f0c5838769006ef4598488b0d3886f21",
+      "bytes": 1353,
       "mode": "100644",
       "executable": false
     },
