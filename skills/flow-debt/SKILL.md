@@ -47,3 +47,35 @@ A create preparation accepts only a `flow-debt-draft/v1` document:
   ]
 }
 ```
+
+## Manual neutral draft
+
+Manually author this exact neutral v1 document before any Flow lifecycle. It is
+input data, not a command or approval.
+
+```json
+{
+  "schema": "flow-debt-draft/v1",
+  "title": "Document unclear retry behavior",
+  "problem": "The current behavior is unclear when a retry is requested.",
+  "priority": "p2",
+  "severity": "medium",
+  "scope": ["scripts/example.mjs"],
+  "acceptanceCriteria": ["Document the retry outcome."],
+  "verification": ["Read the documented retry outcome."],
+  "producer": {
+    "kind": "manual",
+    "reference": "local-observation"
+  },
+  "evidence": [
+    {
+      "reference": "manual:local-observation",
+      "summary": "Observed behavior needs documentation."
+    }
+  ]
+}
+```
+
+Replace values only with observed local evidence. Pass the complete document as
+JSON data to `create-preview --draft-json <json>`. Inspect the returned candidates
+before any lifecycle.

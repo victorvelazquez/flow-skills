@@ -42,6 +42,21 @@ Do not blindly replace an OpenCode host tree. Flow manages only exact declared a
 | `flow-figma` | Removed | No v1 replacement | No v1 replacement | `flow-ui` remains an audit only; it does not generate Figma-to-code output. |
 | `flow-skills-sync` | Removed | No end-user replacement | No end-user replacement | Maintainers may start an exceptional read-only preview with `node tools/flow-assets.mjs --reconcile --host opencode --source <absolute-path> --dry-run`. |
 
+## Legacy Flow Debt stores
+
+Flow performs no automatic migration of a legacy Flow Debt store. Preserve
+legacy-store data unchanged; do not modify, delete, or reconcile it.
+
+1. Begin with external legacy-layout resolution under repository policy. The Flow
+   package does not decide whether a legacy layout is safe or complete.
+2. Manually author neutral v1 drafts from observed legacy data; do not copy a legacy
+   store or infer missing values.
+3. Pass each draft to `create-preview`. Inspect the returned candidates. The preview
+   remains read-only and does not migrate or store the draft.
+4. A separately authorized lifecycle is considered only after external legacy-layout
+   resolution under repository policy. It remains subject to the repository's
+   approval policy and the host-owned approval boundary.
+
 ## Exceptional reconciliation
 
 Reconciliation is not deployment, synchronization, or installation. A maintainer must explicitly select a host and an absolute source, preview differences against the repository, and obtain separate approval for any identity-bound repository correction. Shared skills, runtimes, manifests, locks, package metadata, and control files remain repository-authored and report-only. Reconciliation never commits, pushes, publishes, deploys, installs, or mutates the host.

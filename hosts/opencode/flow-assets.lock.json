@@ -4,7 +4,7 @@
   "distribution": {
     "kind": "managed-deployment"
   },
-  "generationId": "278a346e7f92ff6fbf0963e4301cbd6f24bef0094a7880ab175ad8eda7348cdb",
+  "generationId": "c3967e74c7cbe53e7b7d473c008fef8ba55e4f472e6d88488985a3e5aa5a8d9b",
   "manifest": {
     "sha256": "ac054f3acb30655503d3db873a31f247e1510964a27ce2dd0d4516dc61c08b98"
   },
@@ -524,8 +524,8 @@
     {
       "source": "skills/flow-debt/SKILL.md",
       "destination": "skills/flow-debt/SKILL.md",
-      "sha256": "6db401d75f92550bf883d364cf51590bce733afdec691da2524306716b163ce3",
-      "bytes": 2342,
+      "sha256": "44ae9d547c2874e1bc7c7fdc5f73264ac06a76a91eaa0ffc8ddc8d87be502188",
+      "bytes": 3257,
       "mode": "100644",
       "executable": false
     },
@@ -595,8 +595,8 @@
     }
   ],
   "totals": {
-    "bytes": 719259,
+    "bytes": 720174,
     "count": 73
   },
-  "hostIdentity": "dd56d9d2a75af69b78250f29d1c5e348f79694eae0af9e8bed1d7298bbbecf00"
+  "hostIdentity": "5a985ed0c5f801f8d403e69fa7829217bd305bd89ff80882f2e01b8c2adaa274"
 }

@@ -1,6 +1,6 @@
 {
   "$schema": "flow-generation-lock/v2",
-  "generationId": "278a346e7f92ff6fbf0963e4301cbd6f24bef0094a7880ab175ad8eda7348cdb",
+  "generationId": "c3967e74c7cbe53e7b7d473c008fef8ba55e4f472e6d88488985a3e5aa5a8d9b",
   "package": {
     "sha256": "84471a6c9e444d3f590e8d899beaf19ad6f5c3bed09cb5169ebafd6df00907c0"
   },
@@ -45,8 +45,8 @@
     },
     {
       "source": "docs/multihost-migration.md",
-      "sha256": "a3f608cf49628b94b60356c32339646d52ae9c5ef8acfe3784c0575ba63cd8a2",
-      "bytes": 4750,
+      "sha256": "eeff19f8d65ae691fe79c6be286fe49d0d275ade39af858792ce0783aef1ea4f",
+      "bytes": 5517,
       "mode": "100644",
       "executable": false
     },
@@ -493,8 +493,8 @@
     },
     {
       "source": "skills/flow-debt/SKILL.md",
-      "sha256": "6db401d75f92550bf883d364cf51590bce733afdec691da2524306716b163ce3",
-      "bytes": 2342,
+      "sha256": "44ae9d547c2874e1bc7c7fdc5f73264ac06a76a91eaa0ffc8ddc8d87be502188",
+      "bytes": 3257,
       "mode": "100644",
       "executable": false
     },

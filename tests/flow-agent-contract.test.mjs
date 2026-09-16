@@ -759,6 +759,41 @@ test("flow-debt keeps preparation portable and delegates its only approval to th
   assert.doesNotMatch(reviewAgent, /flow-auto-deliver/i);
 });
 
+test("flow-debt manual neutral drafts are exact and remain preview-only", () => {
+  const debt = read("skills/flow-debt/SKILL.md");
+  const manual =
+    debt.match(/## Manual neutral draft\n\n([\s\S]*?)(?=\n## |\s*$)/)?.[1] ||
+    "";
+  const draft = JSON.parse(
+    manual.match(/```json\n([\s\S]*?)\n```/)?.[1] || "{}",
+  );
+
+  assert.match(manual, /Manually author this exact neutral v1 document/i);
+  assert.deepEqual(draft, {
+    schema: "flow-debt-draft/v1",
+    title: "Document unclear retry behavior",
+    problem: "The current behavior is unclear when a retry is requested.",
+    priority: "p2",
+    severity: "medium",
+    scope: ["scripts/example.mjs"],
+    acceptanceCriteria: ["Document the retry outcome."],
+    verification: ["Read the documented retry outcome."],
+    producer: { kind: "manual", reference: "local-observation" },
+    evidence: [
+      {
+        reference: "manual:local-observation",
+        summary: "Observed behavior needs documentation.",
+      },
+    ],
+  });
+  assert.match(manual, /`create-preview --draft-json <json>`/);
+  assert.match(
+    manual,
+    /Inspect the returned candidates\s+before any lifecycle/i,
+  );
+  assert.doesNotMatch(manual, /host-approval|execute|prepare-/i);
+});
+
 test("flow-commit agent has no edit or external-directory exceptions", () => {
   const agent = read("hosts/opencode/agents/flow-git-agent.md");
   const edit = permissionRules(agent, "edit");

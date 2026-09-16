@@ -242,6 +242,10 @@ test("Pi provenance locks retain canonical bytes across checkout platforms", () 
       new RegExp(`^${relative.replaceAll("/", "\\/")} -text$`, "m"),
     );
   }
+  assert.match(
+    attributes,
+    /^scripts\/lib\/flow-debt-writer\.mjs text eol=lf$/m,
+  );
 });
 
 test("v2 host manifests reject timestamps, absolute paths, and sensitive fields", () => {
