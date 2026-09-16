@@ -4,9 +4,9 @@
   "distribution": {
     "kind": "package-resources"
   },
-  "generationId": "c3967e74c7cbe53e7b7d473c008fef8ba55e4f472e6d88488985a3e5aa5a8d9b",
+  "generationId": "da5e7b4a38ac8a147d76e0f873e491ccdaeb0a8c6884fb0ee4c4d824680a6425",
   "manifest": {
-    "sha256": "3ae6d7931aca5213d55610811d4d79a4ad4509e2705cc76426acf0f404a8a30c"
+    "sha256": "8c4a8ad00698cb6bced284990136edfa030fa7a267312221373e283f7d3063a0"
   },
   "records": [
     {
@@ -46,15 +46,15 @@
     },
     {
       "source": "hosts/pi/flow-assets.json",
-      "sha256": "6d7f60df7169dbc9c902150f1e0b54edf624f8fec5b7b8341334e6ad13242ab4",
-      "bytes": 2013,
+      "sha256": "489a021d22aad7a190a381123d4c7a2c61a99e84c959861df53d3f3cd4491e27",
+      "bytes": 2122,
       "mode": "100644",
       "executable": false
     },
     {
       "source": "package.json",
-      "sha256": "970370bdf5070499b37a7d3163f5f52bd8116005ef25983286d29b09862fd969",
-      "bytes": 2238,
+      "sha256": "18b570c21203f07882b5d6f594f59488bc0fa4634cbaeff22204be8969ff9dfe",
+      "bytes": 2356,
       "mode": "100644",
       "executable": false
     },
@@ -97,6 +97,13 @@
       "source": "scripts/flow-docs-sync.mjs",
       "sha256": "062853f97ad1175ccd92a7f7abcb03b77745a130b93af0d14c45678deea285f6",
       "bytes": 20426,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "scripts/flow-playbook-compare.mjs",
+      "sha256": "d7146ccdf1c32937f2078197b5a268bbf189d2e17b4aee550127f7a68ba813db",
+      "bytes": 2265,
       "mode": "100644",
       "executable": false
     },
@@ -388,6 +395,13 @@
       "executable": false
     },
     {
+      "source": "skills/flow-playbook-compare/SKILL.md",
+      "sha256": "5c2173364b6deabc29ab739ba1cf0659f0c5838769006ef4598488b0d3886f21",
+      "bytes": 1353,
+      "mode": "100644",
+      "executable": false
+    },
+    {
       "source": "skills/flow-playbook-sync/SKILL.md",
       "sha256": "ac1ee1069b2c269f247e04175b3c92cf6b74fd964ec6a9de47169a8ff6b7ee4c",
       "bytes": 2717,
@@ -438,8 +452,8 @@
     }
   ],
   "totals": {
-    "bytes": 707229,
-    "count": 61
+    "bytes": 711074,
+    "count": 63
   },
-  "hostIdentity": "2e5ac91de2dbefed4a022fe62a4d64425221cac9eb2119a615d0c541b1882a63"
+  "hostIdentity": "e723188fa2221000b9295a834b922f80d60dee063d4da2da8e2667d3830983aa"
 }

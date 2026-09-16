@@ -56,6 +56,15 @@
       "hosts": { "opencode": "supported", "pi": "supported" }
     },
     {
+      "id": "flow-playbook-compare",
+      "contract": "skills/flow-playbook-compare/SKILL.md",
+      "resources": ["skills/flow-playbook-compare"],
+      "runtime": "scripts/flow-playbook-compare.mjs",
+      "outcome": "read-only neutral playbook replacement candidates",
+      "mutation": "read-only",
+      "hosts": { "opencode": "supported", "pi": "supported" }
+    },
+    {
       "id": "flow-playbook-sync",
       "contract": "skills/flow-playbook-sync/SKILL.md",
       "resources": ["skills/flow-playbook-sync"],

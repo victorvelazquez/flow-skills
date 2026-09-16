@@ -14,6 +14,7 @@ const expectedIds = [
   "flow-commit",
   "flow-debt",
   "flow-docs-sync",
+  "flow-playbook-compare",
   "flow-playbook-sync",
   "flow-pr",
   "flow-refactor",

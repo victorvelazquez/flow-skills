@@ -160,7 +160,7 @@ T3 and T4 may be reordered only through an explicit roadmap amendment with the r
 
 ### T2.6 — Flow Debt closure
 
-- **Status:** `verified awaiting merge`
+- **Status:** `complete`
 - **Dependencies:** T2.5e complete on current `main`.
 - **Objective:** Close Flow Debt modernization with an audit/refactor and complete neutral guidance.
 - **Scope:** Audit/refactor; exact manual neutral drafts; migration and legacy guidance; documentation; complete provenance and package checks.
@@ -168,20 +168,20 @@ T3 and T4 may be reordered only through an explicit roadmap amendment with the r
 - **Acceptance:** Legacy guidance is identified or removed deliberately; manual drafts are exact and neutral; migration guidance is actionable; provenance/package checks are complete and independently reviewable.
 - **Verification:** Strict-TDD where behavior changes; documentation/provenance/package checks with exact evidence; independent reviewer confirms no Gentle coupling and no hidden authority.
 - **Review boundary:** Closure audit, refactor, guidance, docs, and package/provenance evidence only; <=400 changed lines or explicit `size:exception`.
-- **Completion:** `status: verified awaiting merge`; branch: `feat/flow-debt-closure`; commit: —; PR: —; verification: focused Flow Debt/package/provenance suite 134 passed with 2 Windows capability skips; full suite 339 passed with 7 Windows capability skips; Pi/OpenCode provenance verified generation `c3967e74c7cbe53e7b7d473c008fef8ba55e4f472e6d88488985a3e5aa5a8d9b`; `npm pack --dry-run` and `git diff --check` passed; independent verifier PASS; 199 changed lines.
-- **Next allowed task:** T3, only after T2.6 merge evidence is observed on updated `main`; reconcile this card in the T3 branch.
+- **Completion:** `status: complete`; branch: `feat/flow-debt-closure`; commit: `2409e3f`; PR: [#49](https://github.com/victorvelazquez/flow-skills/pull/49); verification: merge commit `2409e3f` observed on updated `main`.
+- **Next allowed task:** T3.
 
 ### T3 — `flow-playbook-compare`
 
-- **Status:** `pending`
+- **Status:** `verified awaiting merge`
 - **Dependencies:** T2.6 complete on current `main`.
-- **Objective:** Provide a read-only playbook replacement/comparison workflow.
-- **Scope:** Resolve configuration in this decided order: CLI > `.flow/playbook.json` > `FLOW_PLAYBOOK_PATH`; compare and render neutral results.
-- **Non-goals:** No automatic `flow-pr`, apply, external delivery, approval, or mutation.
-- **Acceptance:** Precedence is tested and documented; output remains read-only and clearly identifies replacement candidates; missing configuration fails or reports neutrally without falling through to side effects.
-- **Verification:** Strict-TDD precedence and read-only tests; independent verifier checks all three sources and confirms no `flow-pr`/apply invocation.
-- **Review boundary:** Compare command/core/config tests and docs only; <=400 changed lines or explicit `size:exception`.
-- **Completion:** `status: pending`; branch: —; commit: —; PR: —; verification: —.
+- **Objective:** Publish `flow-playbook-compare` as a new read-only playbook replacement/comparison workflow while retaining `flow-playbook-sync`.
+- **Scope:** Resolve the configured playbook path in this decided order: CLI `--playbook-path` > `.flow/playbook.json` schema `{ "playbookPath": "<path>" }` > `FLOW_PLAYBOOK_PATH`. A higher-priority invalid value fails closed with no fallback. Compare and render a deterministic JSON report with stable, sorted, neutral advisory replacement candidates.
+- **Non-goals:** No `flow-pr`, apply, delivery, approval, external action, or mutation.
+- **Acceptance:** Precedence and fail-closed invalid configuration are tested and documented; output is read-only and identifies neutral replacement candidates deterministically; missing configuration returns neutral `unavailable` with zero candidates and no side effects.
+- **Verification:** Strict-TDD precedence, invalid-source, deterministic ordering, unavailable, and read-only tests; independent verifier checks all three sources and confirms no `flow-pr`/apply invocation.
+- **Review boundary:** Compare command/core/config tests and docs only; `size:exception`: 405 additions + 35 deletions = 440 changed lines, authorized because required generated root asset and v2 provenance locks publish the workflow.
+- **Completion:** `status: verified awaiting merge`; branch: `feat/flow-playbook-compare`; commit: none; PR: none; verification: focused 13/13; full 342 passed, 0 failed, 7 Windows capability skips; Pi/OpenCode provenance generation `da5e7b4a38ac8a147d76e0f873e491ccdaeb0a8c6884fb0ee4c4d824680a6425`; `npm pack --dry-run` and `git diff --check` passed; independent verifier PASS; authorized 405 additions + 35 deletions = 440 changed-line size exception due required generated locks.
 - **Next allowed task:** T4, only after T3 merge evidence is observed on updated `main`; reconcile this card in the T4 branch.
 
 ### T4 — `flow-contract-request`

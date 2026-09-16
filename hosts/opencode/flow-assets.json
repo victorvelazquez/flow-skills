@@ -11,6 +11,7 @@
     "flow-commit",
     "flow-debt",
     "flow-docs-sync",
+    "flow-playbook-compare",
     "flow-playbook-sync",
     "flow-pr",
     "flow-refactor",
@@ -38,6 +39,7 @@
     "hosts/opencode/commands/flow-commit.md",
     "hosts/opencode/commands/flow-debt.md",
     "hosts/opencode/commands/flow-docs-sync.md",
+    "hosts/opencode/commands/flow-playbook-compare.md",
     "hosts/opencode/commands/flow-playbook-sync.md",
     "hosts/opencode/commands/flow-pr.md",
     "hosts/opencode/commands/flow-refactor.md",
@@ -49,6 +51,7 @@
     "scripts/flow-commit.mjs",
     "scripts/flow-debt.mjs",
     "scripts/flow-docs-sync.mjs",
+    "scripts/flow-playbook-compare.mjs",
     "scripts/flow-playbook-sync.mjs",
     "scripts/flow-pr.mjs",
     "scripts/flow-refactor.mjs",
@@ -73,6 +76,7 @@
     "skills/flow-commit/**",
     "skills/flow-debt/**",
     "skills/flow-docs-sync/**",
+    "skills/flow-playbook-compare/**",
     "skills/flow-playbook-sync/**",
     "skills/flow-pr/**",
     "skills/flow-refactor/**",
@@ -158,6 +162,12 @@
       "role": "adapter"
     },
     {
+      "workflow": "flow-playbook-compare",
+      "source": "hosts/opencode/commands/flow-playbook-compare.md",
+      "destination": "commands/flow-playbook-compare.md",
+      "role": "adapter"
+    },
+    {
       "workflow": "flow-playbook-sync",
       "source": "hosts/opencode/commands/flow-playbook-sync.md",
       "destination": "commands/flow-playbook-sync.md",
@@ -215,6 +225,11 @@
     {
       "source": "scripts/flow-docs-sync.mjs",
       "destination": "scripts/flow-docs-sync.mjs",
+      "role": "portable"
+    },
+    {
+      "source": "scripts/flow-playbook-compare.mjs",
+      "destination": "scripts/flow-playbook-compare.mjs",
       "role": "portable"
     },
     {
@@ -335,6 +350,11 @@
     {
       "source": "skills/flow-docs-sync/**",
       "destination": "skills/flow-docs-sync/**",
+      "role": "portable"
+    },
+    {
+      "source": "skills/flow-playbook-compare/**",
+      "destination": "skills/flow-playbook-compare/**",
       "role": "portable"
     },
     {
