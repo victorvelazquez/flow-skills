@@ -79,7 +79,7 @@ The following integration evidence is limited to the clean local `main` history 
 
 ## Current Flow Debt state
 
-Published public behavior is read-only: `list`, `show`, and `create-preview`. The core contains pure pending/done/archived helpers. There are no public mutations and no code authority. This state is intentional; do not infer an execute capability from lifecycle helpers.
+Published public behavior includes read-only `list`, `show`, and `create-preview`, plus host-approved `execute` and `recover` mutations completed by T2.5d. The portable core does not hold code authority: it cannot synthesize approval or authorize its own mutations. Host adapters own explicit approval, and execution accepts only a current, bound preparation after that approval. Do not infer authority from lifecycle helpers or from the existence of executable mutation paths.
 
 ## Dependency order
 
@@ -132,15 +132,15 @@ T3 and T4 may be reordered only through an explicit roadmap amendment with the r
 
 ### T2.5e — Independent mutation verification
 
-- **Status:** `pending`
+- **Status:** `verified awaiting merge`
 - **Dependencies:** T2.5d complete on current `main`.
 - **Objective:** Independently verify mutation safety and packaging/deployment evidence without granting authority.
-- **Scope:** Read-only verification/reporting for concurrency, stale handles, residues, recovery, rollback, postcondition, packaged state, deployed state, and absence of code authority.
-- **Non-goals:** No remediation, mutation, approval, install, deployment, reconciliation, release, or code authority. Remediation requires separately authorized work.
-- **Acceptance:** The verifier produces evidence for each required category, distinguishes pass/fail/skip, and never mutates state; packaged and deployed checks do not claim success when capability is absent.
+- **Scope:** Internal read-only verification/reporting for concurrency, stale handles, residues, recovery, rollback, postcondition, packaged state, deployed state, and absence of self-authorizing code authority in the portable core.
+- **Non-goals:** No public verifier interface; no remediation, mutation, approval, manifest/lock publication, install, deployment, reconciliation, release, or code authority. Remediation requires separately authorized work.
+- **Acceptance:** The internal verifier produces evidence for each required category, distinguishes pass/fail/skip, and never mutates state; it confirms that approval remains host-owned and the portable core cannot self-authorize; packaged and deployed checks do not claim success when capability is absent.
 - **Verification:** Strict-TDD tests for report classification and non-mutation; independent verifier runs the full matrix against an isolated fixture and records exact skips.
 - **Review boundary:** Verifier/reporting and fixtures/tests only; <=400 changed lines or explicit `size:exception`.
-- **Completion:** `status: pending`; branch: —; commit: —; PR: —; verification: —.
+- **Completion:** `status: verified awaiting merge`; branch: `feat/flow-debt-independent-verification`; commit: —; PR: —; verification: focused verifier suite 3/3 passed; relevant Flow Debt/package suite 59 passed with 1 Windows capability skip; independent verifier PASS; `npm pack --dry-run` and whitespace checks passed; full suite matched 8 pre-existing provenance failures on clean `main`; deployed-state capability remained an explicit skip.
 - **Next allowed task:** T2.6, only after merge evidence updates this card.
 
 ### T2.6 — Flow Debt closure
