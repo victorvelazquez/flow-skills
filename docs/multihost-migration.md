@@ -22,9 +22,9 @@ Do not blindly replace an OpenCode host tree. Flow manages only exact declared a
 
 ## Complete migration matrix
 
-`Retained` means the v1 workflow is available through both declared Pi resources and the OpenCode adapter. `Removed` means there is no hidden alias or automatic substitute.
+`Retained` means a legacy v1 workflow remains available through both declared Pi resources and the OpenCode adapter. `Added` means a new v1 workflow is available through both hosts but has no legacy surface. `Removed` means there is no hidden alias or automatic substitute.
 
-| Legacy surface | Status | Pi transition | OpenCode transition | Guidance |
+| Flow surface | Status | Pi transition | OpenCode transition | Guidance |
 | --- | --- | --- | --- | --- |
 | `flow-audit` | Retained | Use `flow-audit` through package discovery | Use `/flow-audit` | Read-only advisory evidence and recommendations; it rejects `--fix`. |
 | `flow-audit-fix` | Added | Use `flow-audit-fix` through package discovery | Use `/flow-audit-fix` | Preview first; each execution requires explicit host-native approval. |
@@ -33,6 +33,7 @@ Do not blindly replace an OpenCode host tree. Flow manages only exact declared a
 | `flow-commit` | Retained | Use `flow-commit` | Use `/flow-commit` | Preserve prepare, seal, one approval, execute, and verify. |
 | `flow-debt` | Retained | Use `flow-debt` | Use `/flow-debt` | Project-local debt changes stop for required approval. |
 | `flow-docs-sync` | Retained | Use `flow-docs-sync` | Use `/flow-docs-sync` | Preview content changes before approval. |
+| `flow-playbook-compare` | Added | Use `flow-playbook-compare` | Use `/flow-playbook-compare` | Read-only comparison returns neutral replacement candidates; it does not invoke `flow-pr` or apply changes. |
 | `flow-playbook-sync` | Retained | Use `flow-playbook-sync` | Use `/flow-playbook-sync` | Compare project and playbook; no automatic PR invocation is implied. |
 | `flow-pr` | Retained | Use `flow-pr` | Use `/flow-pr` | Preserve bounded authoring and one approved immutable execution. |
 | `flow-refactor` | Retained | Use `flow-refactor` | Use `/flow-refactor` | This is a read-only scoped audit. |

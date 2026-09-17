@@ -13,10 +13,11 @@ const readJson = (file) => JSON.parse(read(file));
 const exists = (file) => fs.existsSync(path.join(root, ...file.split("/")));
 const opencodeCommand = (name) => `hosts/opencode/commands/${name}.md`;
 const opencodeAgent = (name) => `hosts/opencode/agents/${name}.md`;
-const portableDebtCore = [
+const portableCoreResources = [
   "core/flow-debt-backlog.mjs",
   "core/flow-debt-contract.mjs",
   "core/flow-debt-preparation.mjs",
+  "core/workflows.json",
 ];
 
 const readOnlyWorkflows = [
@@ -246,13 +247,13 @@ test("OpenCode Git and GitHub adapters return unavailable instead of inferring m
     assert.match(read(opencodeAgent(agent)), expected);
 });
 
-test("OpenCode managed mappings include each adapter's portable skills, runtime dependencies, and debt core modules", () => {
+test("OpenCode managed mappings include portable core resources, skills, and runtimes", () => {
   const manifest = readJson("hosts/opencode/flow-assets.json");
   const portable = manifest.mappings.filter(({ role }) => role === "portable");
 
   assert.deepEqual(
     portable.filter(({ source }) => source.startsWith("core/")),
-    portableDebtCore.map((source) => ({
+    portableCoreResources.map((source) => ({
       source,
       destination: source,
       role: "portable",
@@ -260,7 +261,7 @@ test("OpenCode managed mappings include each adapter's portable skills, runtime 
   );
   assert.deepEqual(
     manifest.sourceSelectors.filter((source) => source.startsWith("core/")),
-    portableDebtCore,
+    portableCoreResources,
   );
   assert.deepEqual(
     portable.find(

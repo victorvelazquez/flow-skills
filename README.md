@@ -12,7 +12,7 @@ Install the reviewed Flow package through Pi's package workflow:
 pi install <package-source>
 ```
 
-Pi discovers only the explicitly declared `flow-*` resources in `package.json`. The package does not copy files into Pi settings or require OpenCode assets. Review the package source before installation; package installation, updates, and removal remain under Pi's security model.
+Pi discovers only the explicitly declared `flow-*` resources in `package.json`. The portable `core/workflows.json` registry and reproducible provenance locks are packaged with those resources. The package does not copy files into Pi settings or require OpenCode assets. Review the package source before installation; package installation, updates, and removal remain under Pi's security model.
 
 ### OpenCode (supported compatibility path)
 
@@ -37,13 +37,13 @@ The command is a read-only preview whose JSON identifies `host: "opencode"`. Run
 | `flow-commit` | Prepared, sealed, and verified semantic commits |
 | `flow-debt` | Project-local technical-debt lifecycle guidance |
 | `flow-docs-sync` | Previewed incremental documentation updates |
+| `flow-playbook-compare` | Read-only neutral playbook replacement candidates |
 | `flow-playbook-sync` | Previewed project/playbook comparison |
 | `flow-pr` | Prepared and verified pull-request workflow |
 | `flow-refactor` | Read-only scoped refactoring audit |
 | `flow-request` | Single-target local contract-request preview and host-approved execution |
 | `flow-ui` | Read-only UI compliance audit |
-
-`ui-design-system` is a support resource used by relevant Flow skills; it is not an end-user workflow.
+| `ui-design-system` | Support resource used by relevant Flow skills; not an end-user workflow |
 
 ## OpenCode commands
 
@@ -58,7 +58,7 @@ This one-release compatibility adapter supports OpenCode only. `--host pi`, `--e
 
 ## Migration
 
-Pi package resources are the primary path, while OpenCode retains native adapters with the same supported workflow outcomes. The [multihost migration matrix](docs/multihost-migration.md) records every prior command and skill as retained, replaced, or removed, including the no-blind-replacement rule.
+Pi package resources are the primary path, while OpenCode retains native adapters with the same supported workflow outcomes. The [multihost migration matrix](docs/multihost-migration.md) records every Flow surface as retained, added, or removed, including the no-blind-replacement rule.
 
 ## Requirements
 

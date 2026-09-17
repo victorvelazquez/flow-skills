@@ -26,6 +26,7 @@ const legacyNames = [
   "flow-commit",
   "flow-debt",
   "flow-docs-sync",
+  "flow-playbook-compare",
   "flow-playbook-sync",
   "flow-pr",
   "flow-refactor",
@@ -36,15 +37,13 @@ const legacyNames = [
   "flow-figma",
   "flow-skills-sync",
 ];
+const addedNames = ["flow-audit-fix", "flow-playbook-compare"];
 const removedNames = ["flow-auto-deliver", "flow-figma", "flow-skills-sync"];
 const read = (file) =>
   fs.readFileSync(path.join(root, ...file.split("/")), "utf8");
 const readJson = (file) => JSON.parse(read(file));
 const migrationRowPattern = (name, status) =>
-  new RegExp(
-    "\\\\|\\\\s*`" + name + "`[^\\\\n]*\\\\|\\\\s*" + status + "\\\\s*\\\\|",
-    "i",
-  );
+  new RegExp(String.raw`\|\s*\x60${name}\x60[^\n]*\|\s*${status}\s*\|`, "i");
 
 test("relocated OpenCode content commands have no legacy repository source path", () => {
   for (const workflow of relocatedContentCommands) {
@@ -76,7 +75,7 @@ test("relocated OpenCode Git and GitHub adapters reject legacy repository source
 test("the migration matrix assigns a disposition and transition to every prior command or skill", () => {
   const guide = read(migrationGuide);
 
-  assert.match(guide, /\|\s*Legacy surface\s*\|\s*Status\s*\|/i);
+  assert.match(guide, /\|\s*Flow surface\s*\|\s*Status\s*\|/i);
   for (const name of legacyNames) {
     assert.match(
       guide,
@@ -105,14 +104,20 @@ test("the migration matrix assigns a disposition and transition to every prior c
   assert.match(guide, /never .*blindly replace|Do not .*blindly replace/i);
 });
 
-test("retained workflows stay declared for both hosts while removed names have no hidden substitute", () => {
+test("registry workflows have correct retained or added semantics on both hosts", () => {
   const guide = read(migrationGuide);
   const registry = readJson("core/workflows.json");
   const piManifest = readJson("hosts/pi/flow-assets.json");
   const openCodeManifest = readJson("hosts/opencode/flow-assets.json");
 
   for (const workflow of registry.workflows) {
-    assert.match(guide, migrationRowPattern(workflow.id, "Retained"));
+    assert.match(
+      guide,
+      migrationRowPattern(
+        workflow.id,
+        addedNames.includes(workflow.id) ? "Added" : "Retained",
+      ),
+    );
     assert.equal(workflow.hosts.pi, "supported");
     assert.equal(workflow.hosts.opencode, "supported");
     assert.ok(piManifest.workflows.includes(workflow.id));
@@ -168,10 +173,13 @@ test("legacy Flow Debt stores require manual drafts, previews, and separate auth
   assert.doesNotMatch(legacy, /node tools\/flow-assets\.mjs --reconcile/i);
 });
 
-test("README defers legacy transitions to the matrix without stale finish or release claims", () => {
+test("README documents every registry workflow and defers legacy transitions to the matrix", () => {
   const readme = read("README.md");
+  const registry = readJson("core/workflows.json");
 
   assert.match(readme, /docs\/multihost-migration\.md/);
+  for (const { id } of registry.workflows)
+    assert.match(readme, new RegExp(String.raw`\| \x60${id}\x60 \|`));
   assert.doesNotMatch(readme, /flow-(?:finish|release)/i);
   assert.doesNotMatch(readme, /Use `\/flow-skills-sync`/i);
 });

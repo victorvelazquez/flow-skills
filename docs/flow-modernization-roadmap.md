@@ -213,7 +213,7 @@ T3 and T4 may be reordered only through an explicit roadmap amendment with the r
 
 ### T6 — Decouple `flow-audit`
 
-- **Status:** `verified awaiting merge`
+- **Status:** `complete`
 - **Dependencies:** T5 complete on current `main`.
 - **Objective:** Make `flow-audit` advisory evidence only and isolate any fix mutation.
 - **Scope:** Read-only advisory evidence; an explicitly isolated, separately authorized fix-mutation boundary; optional non-authoritative cache.
@@ -221,20 +221,20 @@ T3 and T4 may be reordered only through an explicit roadmap amendment with the r
 - **Acceptance:** Audit output distinguishes evidence from recommendations; fixes cannot run through audit implicitly; cache is optional and never authoritative; no native-review/delivery authority is claimed.
 - **Verification:** Strict-TDD evidence, cache, and isolation tests; independent verifier confirms audit remains read-only and a fix requires separate authorization.
 - **Review boundary:** Audit evidence/cache and isolated fix boundary/tests/docs only; `size:exception`: 848 additions + 532 deletions + 173 untracked additions = 1,553 changed lines, excluding `odd/tasks/flow-audit-decoupling.md`. The read-only audit contract, separately host-approved fix workflow, Pi/OpenCode registrations, regression coverage, and required provenance locks must change together to preserve the no-implicit-mutation boundary.
-- **Completion:** `status: verified awaiting merge`; branch: `feat/flow-audit-decoupling`; commit: none; PR: none; verification: strict-TDD RED observed; focused audit 9/9, OpenCode adapter 14/14, asset generation 8/8, and full suite 356 passed with 7 Windows capability skips; root/Pi/OpenCode provenance verification passed (generation `c7195580d0635bbc39194b3a66d5f4b88b67314f1a5084398dfe4ad0fe33644e`); `npm pack --dry-run --json` and `git diff --check` passed; independent verifier PASS; authorized 1,553-line size exception.
-- **Next allowed task:** T7, only after T6 merge evidence is observed on updated `main`; reconcile this card in the T7 branch.
+- **Completion:** `status: complete`; branch: `feat/flow-audit-decoupling`; commit: `187d1f9`; PR: [#53](https://github.com/victorvelazquez/flow-skills/pull/53); merge evidence: updated `main` contains T6 commit `187d1f9` through merge commit `d82763a`; verification: strict-TDD RED observed; focused audit 9/9, OpenCode adapter 14/14, asset generation 8/8, and full suite 356 passed with 7 Windows capability skips; root/Pi/OpenCode provenance verification passed (generation `c7195580d0635bbc39194b3a66d5f4b88b67314f1a5084398dfe4ad0fe33644e`); `npm pack --dry-run --json` and `git diff --check` passed; independent verifier PASS; authorized 1,553-line size exception.
+- **Next allowed task:** T7.
 
 ### T7 — Portfolio integration
 
-- **Status:** `pending`
-- **Dependencies:** T6 complete on current `main`.
+- **Status:** `verified awaiting merge`
+- **Dependencies:** T6 complete on current `main` (reconciled from merge commit `d82763a` containing T6 commit `187d1f9`).
 - **Objective:** Integrate the modernized portfolio as a package with reproducible provenance.
 - **Scope:** Registry, resources, adapters, package, docs, migration, locks, full tests, provenance, `npm pack`, and independent review.
 - **Non-goals:** Release is separately authorized; no publish/release/deploy/install/reconcile by default; no Gentle delivery authority.
 - **Acceptance:** Registry/resources/adapters are coherent; package and migration docs are complete; locks and provenance are reproducible; `npm pack` evidence is captured; independent review covers the integrated portfolio.
 - **Verification:** Strict-TDD for behavior changes; full focused portfolio suite; provenance/package checks and `npm pack`; independent review. Any unavailable deployment check is an explicit skip, not pass.
 - **Review boundary:** Integration artifacts listed above; plan a coherent slice or explicit `size:exception` before review.
-- **Completion:** `status: pending`; branch: —; commit: —; PR: —; verification: —.
+- **Completion:** `status: verified awaiting merge`; branch: `feat/flow-portfolio-integration`; commit: none; PR: none; verification: strict-TDD RED observed (6 expected focused failures), then focused portfolio 56 passed with 1 Windows capability skip and full suite 356 passed with 7 Windows capability skips; root/Pi/OpenCode provenance verification passed at generation `e16e59145b1aebc499f560afb61b089a20ad4c73c242e3e898d885a26eda3281`; `npm pack --dry-run --json` included 69 entries; `git diff --check` passed with CRLF conversion warnings only; independent verifier PASS; 173 tracked changed lines, excluding `odd/tasks/flow-portfolio-integration.md`.
 - **Next allowed task:** None; choose follow-up only through a roadmap amendment.
 
 ## Drift control
