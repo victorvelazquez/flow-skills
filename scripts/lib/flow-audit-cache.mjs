@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-export const FLOW_AUDIT_CACHE_SCHEMA = "flow-audit-delivery-evidence/v4";
+export const FLOW_AUDIT_CACHE_SCHEMA = "flow-audit-advisory-cache/v1";
 export const FLOW_AUDIT_CACHE_TTL_MS = 30 * 60 * 1000;
 
 function hash(value) {
@@ -31,7 +31,9 @@ function gitText(cwd, args) {
 
 function readUntrackedEntries(cwd) {
   return git(cwd, ["ls-files", "--others", "--exclude-standard", "-z"])
-    .split("\0").filter(Boolean).sort();
+    .split("\0")
+    .filter(Boolean)
+    .sort();
 }
 
 function hashUntrackedFiles(root, entries) {
@@ -63,15 +65,44 @@ function hashUntrackedFiles(root, entries) {
 function resolvePublicationBoundary(root, baseRef, candidateRef) {
   if (!baseRef && !candidateRef) return null;
   if (!baseRef || !candidateRef) {
-    throw new Error("publication fingerprint requires both baseRef and candidateRef");
+    throw new Error(
+      "publication fingerprint requires both baseRef and candidateRef",
+    );
   }
-  const publicationBaseCommit = gitText(root, ["rev-parse", "--verify", `${baseRef}^{commit}`]);
-  const candidateCommit = gitText(root, ["rev-parse", "--verify", `${candidateRef}^{commit}`]);
-  const mergeBase = gitText(root, ["merge-base", publicationBaseCommit, candidateCommit]);
-  const publicationBaseTree = gitText(root, ["rev-parse", `${publicationBaseCommit}^{tree}`]);
-  const candidateTree = gitText(root, ["rev-parse", `${candidateCommit}^{tree}`]);
-  const changedPaths = git(root, ["diff", "--name-only", "--no-renames", publicationBaseCommit, candidateCommit, "--"])
-    .split("\n").filter(Boolean).sort();
+  const publicationBaseCommit = gitText(root, [
+    "rev-parse",
+    "--verify",
+    `${baseRef}^{commit}`,
+  ]);
+  const candidateCommit = gitText(root, [
+    "rev-parse",
+    "--verify",
+    `${candidateRef}^{commit}`,
+  ]);
+  const mergeBase = gitText(root, [
+    "merge-base",
+    publicationBaseCommit,
+    candidateCommit,
+  ]);
+  const publicationBaseTree = gitText(root, [
+    "rev-parse",
+    `${publicationBaseCommit}^{tree}`,
+  ]);
+  const candidateTree = gitText(root, [
+    "rev-parse",
+    `${candidateCommit}^{tree}`,
+  ]);
+  const changedPaths = git(root, [
+    "diff",
+    "--name-only",
+    "--no-renames",
+    publicationBaseCommit,
+    candidateCommit,
+    "--",
+  ])
+    .split("\n")
+    .filter(Boolean)
+    .sort();
   return {
     baseRef,
     candidateRef,
@@ -90,10 +121,17 @@ export function getCandidateFingerprint(cwd = process.cwd(), options = {}) {
   if (!root) throw new Error("not inside a git worktree");
   const canonicalRoot = canonicalPath(root);
   const remote = (() => {
-    try { return gitText(root, ["config", "--get", "remote.origin.url"]); }
-    catch { return ""; }
+    try {
+      return gitText(root, ["config", "--get", "remote.origin.url"]);
+    } catch {
+      return "";
+    }
   })();
-  const publication = resolvePublicationBoundary(root, options.baseRef || null, options.candidateRef || null);
+  const publication = resolvePublicationBoundary(
+    root,
+    options.baseRef || null,
+    options.candidateRef || null,
+  );
   const head = gitText(root, ["rev-parse", "HEAD"]);
   const staged = git(root, ["diff", "--binary", "--cached"], "buffer");
   const unstaged = git(root, ["diff", "--binary"], "buffer");
@@ -101,13 +139,17 @@ export function getCandidateFingerprint(cwd = process.cwd(), options = {}) {
   const untrackedHash = hashUntrackedFiles(root, untracked);
   const toolConfigDigest = options.toolConfigDigest || null;
   const repoIdentity = hash(JSON.stringify({ remote, root: canonicalRoot }));
-  const fingerprint = hash(Buffer.concat([
-    Buffer.from(`publication\0${JSON.stringify(publication)}\0tool-config\0${toolConfigDigest || ""}\0head\0${head}\0staged\0`),
-    Buffer.from(staged),
-    Buffer.from("\0unstaged\0"),
-    Buffer.from(unstaged),
-    Buffer.from(`\0untracked\0${untrackedHash}`),
-  ]));
+  const fingerprint = hash(
+    Buffer.concat([
+      Buffer.from(
+        `publication\0${JSON.stringify(publication)}\0tool-config\0${toolConfigDigest || ""}\0head\0${head}\0staged\0`,
+      ),
+      Buffer.from(staged),
+      Buffer.from("\0unstaged\0"),
+      Buffer.from(unstaged),
+      Buffer.from(`\0untracked\0${untrackedHash}`),
+    ]),
+  );
   return {
     root: canonicalRoot,
     remote,
@@ -120,11 +162,21 @@ export function getCandidateFingerprint(cwd = process.cwd(), options = {}) {
 }
 
 export function candidateChanged(before, after) {
-  return !after || before.repoIdentity !== after.repoIdentity || before.fingerprint !== after.fingerprint;
+  return (
+    !after ||
+    before.repoIdentity !== after.repoIdentity ||
+    before.fingerprint !== after.fingerprint
+  );
 }
 
-export function getCachePath(repoIdentity, cacheRoot = process.env.FLOW_AUDIT_CACHE_DIR) {
-  return path.join(cacheRoot || path.join(os.homedir(), ".flow", "cache", "audit-evidence-v1"), `${repoIdentity}.json`);
+export function getCachePath(
+  repoIdentity,
+  cacheRoot = process.env.FLOW_AUDIT_CACHE_DIR,
+) {
+  return path.join(
+    cacheRoot || path.join(os.homedir(), ".flow", "cache", "audit-advisory-v1"),
+    `${repoIdentity}.json`,
+  );
 }
 
 function normalizeChecks(details = []) {
@@ -146,7 +198,10 @@ function isSha256(value) {
 }
 
 function isBoundedText(value, allowNull = false) {
-  return (allowNull && value === null) || (typeof value === "string" && value.length > 0 && value.length <= 512);
+  return (
+    (allowNull && value === null) ||
+    (typeof value === "string" && value.length > 0 && value.length <= 512)
+  );
 }
 
 export function toolResultHashes(details = []) {
@@ -167,47 +222,76 @@ function isValidPassCache(cached, candidate, now) {
     cached.repoIdentity !== candidate.repoIdentity ||
     cached.fingerprint !== candidate.fingerprint ||
     cached.toolConfigDigest !== candidate.toolConfigDigest ||
-    JSON.stringify(cached.publication || null) !== JSON.stringify(candidate.publication || null) ||
+    JSON.stringify(cached.publication || null) !==
+      JSON.stringify(candidate.publication || null) ||
     cached.status !== "PASS" ||
     !Array.isArray(cached.checks) ||
     !Array.isArray(cached.toolResultHashes) ||
     cached.checks.length === 0 ||
     cached.checks.length > 7 ||
     cached.checks.length !== cached.toolResultHashes.length ||
-    !Number.isFinite(createdAt) || now - createdAt < 0 || now - createdAt > FLOW_AUDIT_CACHE_TTL_MS
-  ) return false;
+    !Number.isFinite(createdAt) ||
+    now - createdAt < 0 ||
+    now - createdAt > FLOW_AUDIT_CACHE_TTL_MS
+  )
+    return false;
   let passed = 0;
-  return cached.checks.every((check, index) => {
-    const claimed = cached.toolResultHashes[index];
-    const normalized = {
-      tool: check?.tool,
-      command: check?.command || null,
-      status: check?.status,
-      exitCode: check?.exitCode,
-      stdoutHash: check?.stdoutHash,
-      stderrHash: check?.stderrHash,
-    };
-    const validStatus = normalized.status === "passed" || normalized.status === "skipped";
-    const validExitCode = normalized.status === "passed" ? normalized.exitCode === 0 : normalized.exitCode === null;
-    if (normalized.status === "passed") passed += 1;
-    return validStatus && validExitCode && isBoundedText(normalized.tool) &&
-      isBoundedText(normalized.command, true) && isSha256(normalized.stdoutHash) &&
-      isSha256(normalized.stderrHash) && isSha256(check.resultHash) &&
-      check.resultHash === hash(JSON.stringify(normalized)) && claimed?.tool === normalized.tool &&
-      claimed?.status === normalized.status && claimed?.exitCode === normalized.exitCode &&
-      claimed?.hash === check.resultHash && isSha256(claimed?.hash);
-  }) && passed > 0;
+  return (
+    cached.checks.every((check, index) => {
+      const claimed = cached.toolResultHashes[index];
+      const normalized = {
+        tool: check?.tool,
+        command: check?.command || null,
+        status: check?.status,
+        exitCode: check?.exitCode,
+        stdoutHash: check?.stdoutHash,
+        stderrHash: check?.stderrHash,
+      };
+      const validStatus =
+        normalized.status === "passed" || normalized.status === "skipped";
+      const validExitCode =
+        normalized.status === "passed"
+          ? normalized.exitCode === 0
+          : normalized.exitCode === null;
+      if (normalized.status === "passed") passed += 1;
+      return (
+        validStatus &&
+        validExitCode &&
+        isBoundedText(normalized.tool) &&
+        isBoundedText(normalized.command, true) &&
+        isSha256(normalized.stdoutHash) &&
+        isSha256(normalized.stderrHash) &&
+        isSha256(check.resultHash) &&
+        check.resultHash === hash(JSON.stringify(normalized)) &&
+        claimed?.tool === normalized.tool &&
+        claimed?.status === normalized.status &&
+        claimed?.exitCode === normalized.exitCode &&
+        claimed?.hash === check.resultHash &&
+        isSha256(claimed?.hash)
+      );
+    }) && passed > 0
+  );
 }
 
 export function readPassCache(candidate, now = Date.now()) {
   try {
-    const cached = JSON.parse(fs.readFileSync(getCachePath(candidate.repoIdentity), "utf8"));
+    const cached = JSON.parse(
+      fs.readFileSync(getCachePath(candidate.repoIdentity), "utf8"),
+    );
     return isValidPassCache(cached, candidate, now) ? cached : null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 export function writePassCache(candidate, automated) {
-  if (automated?.overallStatus !== "PASS" || !automated.details?.some((detail) => detail.status === "passed" && detail.exitCode === 0)) return null;
+  if (
+    automated?.overallStatus !== "PASS" ||
+    !automated.details?.some(
+      (detail) => detail.status === "passed" && detail.exitCode === 0,
+    )
+  )
+    return null;
   const cachePath = getCachePath(candidate.repoIdentity);
   const payload = {
     schema: FLOW_AUDIT_CACHE_SCHEMA,
@@ -224,7 +308,10 @@ export function writePassCache(candidate, automated) {
   };
   fs.mkdirSync(path.dirname(cachePath), { recursive: true });
   const tempPath = `${cachePath}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(tempPath, JSON.stringify(payload, null, 2), { encoding: "utf8", mode: 0o600 });
+  fs.writeFileSync(tempPath, JSON.stringify(payload, null, 2), {
+    encoding: "utf8",
+    mode: 0o600,
+  });
   fs.renameSync(tempPath, cachePath);
   return payload;
 }

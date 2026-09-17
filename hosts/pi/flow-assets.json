@@ -6,6 +6,7 @@
   },
   "workflows": [
     "flow-audit",
+    "flow-audit-fix",
     "flow-branch",
     "flow-build",
     "flow-commit",
@@ -33,6 +34,7 @@
     "docs/multihost-migration.md",
     "hosts/pi/flow-assets.json",
     "package.json",
+    "scripts/flow-audit-fix.mjs",
     "scripts/flow-audit.mjs",
     "scripts/flow-branch.mjs",
     "scripts/flow-build.mjs",
@@ -59,6 +61,7 @@
     "scripts/lib/helpers.mjs",
     "scripts/lib/process-control.mjs",
     "scripts/lib/scope.mjs",
+    "skills/flow-audit-fix/**",
     "skills/flow-audit/**",
     "skills/flow-branch/**",
     "skills/flow-build/**",

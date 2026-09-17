@@ -10,11 +10,10 @@
  *   --scope [path]                        Determine audit scope from git → JSON
  *   --run lint|typecheck|test [--scope p] Run a specific tool → JSON
  *   --run-all                             Run all tools in parallel → aggregated JSON
- *   --report                              Aggregate results from stdin/file → JSON
- *   --fix [--auto-only]                   Auto-fix lint + format, then re-verify → JSON
+ *   --report                              Aggregate supplied audit evidence → JSON
  */
 
-import { execSync, spawnSync, spawn } from "child_process";
+import { spawnSync, spawn } from "child_process";
 import {
   run,
   runSafe,
@@ -23,7 +22,12 @@ import {
   readJsonFile,
 } from "./lib/helpers.mjs";
 import { detectTooling } from "./lib/detect-tooling.mjs";
-import { candidateChanged, getCandidateFingerprint, readPassCache, writePassCache } from "./lib/flow-audit-cache.mjs";
+import {
+  candidateChanged,
+  getCandidateFingerprint,
+  readPassCache,
+  writePassCache,
+} from "./lib/flow-audit-cache.mjs";
 import { compactAutomatedResults } from "./lib/flow-audit-output.mjs";
 import { terminateProcessTree } from "./lib/process-control.mjs";
 import { buildDotnetFormatExecution } from "./lib/dotnet-format.mjs";
@@ -34,6 +38,18 @@ import os from "os";
 import { createHash } from "node:crypto";
 
 const CHECK_TIMEOUT_MS = 10 * 60 * 1000;
+const SUPPORTED_RUN_CHECKS = new Set([
+  "lint",
+  "typecheck",
+  "type-check",
+  "test",
+  "format",
+  "fmt",
+  "coverage",
+  "cov",
+  "security",
+  "audit",
+]);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -415,7 +431,12 @@ function buildToolchain(candidate = null) {
       ? { name: typeChecker, command: typeCommand }
       : null,
     formatter: tooling.formatter
-      ? { name: tooling.formatter, command: formatCommand, file: formatFile, args: formatArgs }
+      ? {
+          name: tooling.formatter,
+          command: formatCommand,
+          file: formatFile,
+          args: formatArgs,
+        }
       : null,
     coverage: tooling.coverage
       ? { name: tooling.coverage, command: coverageCommand }
@@ -675,6 +696,14 @@ function runTool(flags) {
     process.exit(1);
   }
 
+  if (!SUPPORTED_RUN_CHECKS.has(tool)) {
+    process.stderr.write(
+      `Error: unsupported read-only audit check '${tool}'.\n`,
+    );
+    process.exitCode = 1;
+    return;
+  }
+
   // Build toolchain directly — no subprocess overhead
   const toolchain = buildToolchain();
 
@@ -743,7 +772,9 @@ function runTool(flags) {
       stderr = String(result.stderr || "").trim();
       exitCode = result.status ?? 1;
       if (exitCode !== 0) {
-        const error = new Error(stderr || stdout || `${execution.file} exited ${exitCode}`);
+        const error = new Error(
+          stderr || stdout || `${execution.file} exited ${exitCode}`,
+        );
         error.status = exitCode;
         error.stdout = stdout;
         error.stderr = stderr;
@@ -859,38 +890,20 @@ function report() {
 
   const aggregated = aggregateResults(results);
 
-  process.stdout.write(JSON.stringify(aggregated, null, 2) + "\n");
-
-  // Auto-update .flow-skills/work/status.json if it exists in the project
-  const statusJsonPath = path.join(
-    process.cwd(),
-    ".flow-skills",
-    "work",
-    "status.json",
+  process.stdout.write(
+    JSON.stringify(
+      {
+        schema: "flow-audit-advisory-evidence/v1",
+        mode: "report",
+        evidence: aggregated,
+        recommendations: [
+          "Review the aggregated evidence before choosing any separate workflow.",
+        ],
+      },
+      null,
+      2,
+    ) + "\n",
   );
-  if (fs.existsSync(statusJsonPath)) {
-    try {
-      const statusJson = JSON.parse(fs.readFileSync(statusJsonPath, "utf8"));
-      if (!statusJson.validation) statusJson.validation = {};
-      statusJson.validation.lastCheck = aggregated.ranAt;
-      statusJson.validation.overallStatus = aggregated.overallStatus;
-      if (!statusJson.finalChecklist) statusJson.finalChecklist = {};
-      statusJson.finalChecklist.qualityCheckPassed =
-        aggregated.overallStatus === "PASS";
-      fs.writeFileSync(
-        statusJsonPath,
-        JSON.stringify(statusJson, null, 2) + "\n",
-        "utf8",
-      );
-      process.stderr.write(
-        `status.json updated: validation.overallStatus=${aggregated.overallStatus}\n`,
-      );
-    } catch (err) {
-      process.stderr.write(
-        `Warning: could not update status.json: ${err.message}\n`,
-      );
-    }
-  }
 }
 
 // ─── --run-all ────────────────────────────────────────────────────────────────
@@ -905,7 +918,7 @@ function report() {
  * Returns the aggregated report JSON including totalDuration, ranAt, and
  * keyLines per tool result.
  */
-async function executeRunAll(flags, candidate = null) {
+async function executeRunAll(_flags, candidate = null) {
   const startTime = Date.now();
 
   // Build toolchain directly — no subprocess overhead
@@ -966,12 +979,16 @@ async function executeRunAll(flags, candidate = null) {
 
       const start = Date.now();
       // Use shell: true for cross-platform command resolution (npx, etc.)
-      const child = spawn(toolDef.file || toolDef.command, toolDef.file ? toolDef.args : [], {
-        shell: !toolDef.file,
-        detached: process.platform !== "win32",
-        cwd: process.cwd(),
-        stdio: ["ignore", "pipe", "pipe"],
-      });
+      const child = spawn(
+        toolDef.file || toolDef.command,
+        toolDef.file ? toolDef.args : [],
+        {
+          shell: !toolDef.file,
+          detached: process.platform !== "win32",
+          cwd: process.cwd(),
+          stdio: ["ignore", "pipe", "pipe"],
+        },
+      );
 
       let stdout = "";
       let stderr = "";
@@ -1014,8 +1031,15 @@ async function executeRunAll(flags, candidate = null) {
             command: toolDef.command,
             exitCode: 1,
             stdout,
-            stderr: [stderr, `Execution timed out after ${CHECK_TIMEOUT_MS / 1000} seconds.`].filter(Boolean).join("\n"),
-            keyLines: extractKeyLines([stdout, stderr].filter(Boolean).join("\n")),
+            stderr: [
+              stderr,
+              `Execution timed out after ${CHECK_TIMEOUT_MS / 1000} seconds.`,
+            ]
+              .filter(Boolean)
+              .join("\n"),
+            keyLines: extractKeyLines(
+              [stdout, stderr].filter(Boolean).join("\n"),
+            ),
             duration: Date.now() - start,
             status: "error",
           });
@@ -1074,83 +1098,134 @@ async function runAll(flags) {
 
 async function auto(flags) {
   const dryRun = hasTruthyFlag(flags["dry-run"]);
-  const detection = buildToolchain();
-  const scopeResult = getScopeInfo(flags);
-
-  const result = {
-    success: true,
-    mode: "auto",
-    dryRun,
-    detection,
-    scope: scopeResult,
-    automated: null,
-    nextAction: "llm-review",
+  const evidence = {
+    detection: buildToolchain(),
+    scope: getScopeInfo(flags),
+    automated: dryRun ? null : await executeRunAll(flags),
   };
 
-  if (!dryRun) {
-    result.automated = await executeRunAll(flags);
-  }
-
-  process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+  process.stdout.write(
+    JSON.stringify(
+      {
+        schema: "flow-audit-advisory-evidence/v1",
+        mode: "auto",
+        evidence,
+        recommendations: dryRun
+          ? ["Run the audit without --dry-run to collect automated evidence."]
+          : [
+              "Review the collected evidence before choosing any separate workflow.",
+            ],
+      },
+      null,
+      2,
+    ) + "\n",
+  );
 }
 
 function fingerprintChecksCandidate(baseRef, candidateRef) {
-  const provisional = getCandidateFingerprint(process.cwd(), { baseRef, candidateRef });
+  const provisional = getCandidateFingerprint(process.cwd(), {
+    baseRef,
+    candidateRef,
+  });
   const toolchain = buildToolchain(provisional);
-  const checks = ["linter", "typeChecker", "testRunner", "formatter", "coverage", "security"]
-    .map((key) => {
-      const tool = toolchain[key];
-      return [key, tool ? {
-        name: tool.name || null,
-        command: tool.command || null,
-        file: tool.file || null,
-        args: tool.args || null,
-      } : null];
-    });
+  const checks = [
+    "linter",
+    "typeChecker",
+    "testRunner",
+    "formatter",
+    "coverage",
+    "security",
+  ].map((key) => {
+    const tool = toolchain[key];
+    return [
+      key,
+      tool
+        ? {
+            name: tool.name || null,
+            command: tool.command || null,
+            file: tool.file || null,
+            args: tool.args || null,
+          }
+        : null,
+    ];
+  });
   const toolConfigDigest = createHash("sha256")
     .update(JSON.stringify(checks))
     .digest("hex");
-  return getCandidateFingerprint(process.cwd(), { baseRef, candidateRef, toolConfigDigest });
+  return getCandidateFingerprint(process.cwd(), {
+    baseRef,
+    candidateRef,
+    toolConfigDigest,
+  });
 }
 
 async function checksOnly(flags) {
   const baseRef = flags["base-ref"] !== true ? flags["base-ref"] : null;
-  const candidateRef = flags["candidate-ref"] !== true ? flags["candidate-ref"] : null;
+  const candidateRef =
+    flags["candidate-ref"] !== true ? flags["candidate-ref"] : null;
   let candidate;
   try {
     candidate = fingerprintChecksCandidate(baseRef, candidateRef);
   } catch (err) {
-    process.stdout.write(JSON.stringify({
-      success: false,
-      mode: "checks-only",
-      error: `Could not fingerprint the review candidate: ${err.message}`,
-    }, null, 2) + "\n");
+    process.stdout.write(
+      JSON.stringify(
+        {
+          schema: "flow-audit-advisory-evidence/v1",
+          mode: "checks-only",
+          evidence: {
+            source: "unavailable",
+            error: `Could not fingerprint the audit scope: ${err.message}`,
+          },
+          recommendations: ["Resolve the scope error and rerun the audit."],
+        },
+        null,
+        2,
+      ) + "\n",
+    );
     process.exitCode = 1;
     return;
   }
 
-  const usePassCache = !hasTruthyFlag(flags["no-pass-cache"]);
-  const cached = usePassCache ? readPassCache(candidate) : null;
+  const cacheEnabled = !hasTruthyFlag(flags["no-pass-cache"]);
+  const cached = cacheEnabled ? readPassCache(candidate) : null;
   if (cached) {
-    process.stdout.write(JSON.stringify({
-      success: true,
-      mode: "checks-only",
-      candidate,
-      evidence: { source: "local-cache", advisory: true, timestamp: cached.timestamp },
-      automated: {
-        overallStatus: "PASS",
-        summary: "local advisory evidence cache hit",
-        details: cached.checks.map((check) => ({
-          tool: check.tool,
-          command: check.command,
-          status: check.status,
-          exitCode: check.exitCode,
-          stdoutHash: check.stdoutHash,
-          stderrHash: check.stderrHash,
-          keyLines: [],
-        })),
-      },
-    }, null, 2) + "\n");
+    process.stdout.write(
+      JSON.stringify(
+        {
+          schema: "flow-audit-advisory-evidence/v1",
+          mode: "checks-only",
+          evidence: {
+            source: "local-cache",
+            candidate,
+            cache: {
+              enabled: true,
+              used: true,
+              authoritative: false,
+              written: false,
+              timestamp: cached.timestamp,
+            },
+            automated: {
+              overallStatus: "PASS",
+              summary: "local advisory evidence cache hit",
+              details: cached.checks.map((check) => ({
+                tool: check.tool,
+                command: check.command,
+                status: check.status,
+                exitCode: check.exitCode,
+                stdoutHash: check.stdoutHash,
+                stderrHash: check.stderrHash,
+                keyLines: [],
+              })),
+            },
+          },
+          recommendations: [
+            "Rerun checks when current evidence is needed; the cache is advisory only.",
+          ],
+        },
+        null,
+        2,
+      ) + "\n",
+    );
     return;
   }
 
@@ -1162,148 +1237,57 @@ async function checksOnly(flags) {
     finalCandidate = null;
   }
   const changedDuringChecks = candidateChanged(candidate, finalCandidate);
-  const success = automated.overallStatus === "PASS" && !changedDuringChecks;
-  const writtenCache = success && usePassCache ? writePassCache(finalCandidate, automated) : null;
-  process.stdout.write(JSON.stringify({
-    success,
-    mode: "checks-only",
-    candidate: finalCandidate || candidate,
-    evidence: {
-      source: "fresh",
-      advisory: usePassCache,
-      authoritative: !usePassCache,
-      written: Boolean(writtenCache),
-    },
-    automated: compactAutomatedResults(automated),
-    ...(changedDuringChecks
-      ? { error: "Candidate changed while checks were running; rerun checks before native review." }
-      : automated.overallStatus === "SKIP"
-        ? { error: "No supported checks were configured; SKIP is not a PASS and cannot authorize native review." }
-        : {}),
-  }, null, 2) + "\n");
-  if (!success) process.exitCode = 1;
-}
-
-// ─── --fix ────────────────────────────────────────────────────────────────────
-
-/**
- * Runs auto-fixable repair commands (lint:fix, format), then re-verifies.
- * With --auto-only: only runs mechanical fixers (no LLM-required fixes).
- * Without --auto-only: also emits a structured repair plan for LLM-assisted fixes.
- *
- * Repair tiers:
- *   Tier 1 (auto): eslint --fix, prettier --write, cargo fmt, gofmt -w
- *   Tier 2 (LLM plan): emits fixable issues JSON for agent consumption
- */
-async function fix(flags) {
-  const autoOnly = flags["auto-only"] === true;
-
-  // Build toolchain directly — no subprocess overhead
-  const toolchain = buildToolchain();
-
-  const pkg = readJsonFile("package.json");
-  const scripts = (pkg && pkg.scripts) || {};
-
-  const fixResults = [];
-
-  // ── Tier 1: Lint auto-fix ──────────────────────────────────────────────────
-  const lintFixCommand =
-    scripts["lint:fix"] ||
-    scripts["fix:lint"] ||
-    (toolchain.linter?.name === "eslint" ? "npx eslint . --fix" : null) ||
-    (toolchain.linter?.name === "biome" ? "npx biome lint --apply ." : null) ||
-    (toolchain.linter?.name === "clippy"
-      ? "cargo clippy --fix --allow-dirty"
-      : null) ||
-    (toolchain.linter?.name === "ruff" ? "ruff check . --fix" : null);
-
-  if (lintFixCommand) {
-    process.stderr.write(`Running lint fix: ${lintFixCommand}\n`);
-    const r = runSafe(lintFixCommand);
-    fixResults.push({
-      step: "lint:fix",
-      command: lintFixCommand,
-      ok: r.ok,
-      output: r.output,
-    });
-    process.stderr.write(
-      r.ok
-        ? `  OK: lint:fix passed\n`
-        : `  WARNING: lint:fix exited with issues (some may need manual fix)\n`,
-    );
-  }
-
-  // ── Tier 1: Format auto-fix ────────────────────────────────────────────────
-  const formatFixCommand =
-    scripts["format"] ||
-    scripts["fmt"] ||
-    scripts["fix:format"] ||
-    (toolchain.formatter?.name === "prettier"
-      ? "npx prettier --write ."
-      : null) ||
-    (toolchain.formatter?.name === "biome-format"
-      ? "npx biome format --write ."
-      : null) ||
-    (toolchain.formatter?.name === "rustfmt" ? "cargo fmt" : null) ||
-    (toolchain.formatter?.name === "gofmt" ? "gofmt -w ." : null);
-
-  if (formatFixCommand) {
-    process.stderr.write(`Running format fix: ${formatFixCommand}\n`);
-    const r = runSafe(formatFixCommand);
-    fixResults.push({
-      step: "format",
-      command: formatFixCommand,
-      ok: r.ok,
-      output: r.output,
-    });
-    process.stderr.write(
-      r.ok ? `  OK: format passed\n` : `  WARNING: format exited with issues\n`,
-    );
-  }
-
-  // ── Verify: re-run lint and format check after fixes ──────────────────────
-  const verifyResults = [];
-  const verifyTools = [
-    { key: "lint", command: toolchain.linter?.command },
-    { key: "format", command: toolchain.formatter?.command },
-  ].filter((t) => t.command);
-
-  for (const t of verifyTools) {
-    process.stderr.write(`Verifying ${t.key}: ${t.command}\n`);
-    const r = runSafe(t.command);
-    verifyResults.push({ tool: t.key, ok: r.ok, output: r.output });
-    process.stderr.write(
-      r.ok ? `  OK: ${t.key} passed\n` : `  FAIL: ${t.key} still failing\n`,
-    );
-  }
-
-  const stillFailing = verifyResults.filter((r) => !r.ok).map((r) => r.tool);
-
-  const summary = {
-    fixed: fixResults.filter((r) => r.ok).map((r) => r.step),
-    partiallyFixed: fixResults.filter((r) => !r.ok).map((r) => r.step),
-    stillFailing,
-    verifyResults,
-    fixResults,
-    autoOnly,
-  };
-
-  if (!autoOnly) {
-    // Emit a repair plan stub for LLM-assisted fixes (human-readable guidance)
-    summary.repairPlanNote =
-      "For issues that cannot be auto-fixed (logic bugs, security, race conditions, missing tests), " +
-      "review the [REVIEW] section of the audit report and apply fixes manually. " +
-      "Re-run `node flow-audit.mjs --run-all` after each fix to verify.";
-  }
-
-  process.stdout.write(JSON.stringify(summary, null, 2) + "\n");
+  const passed = automated.overallStatus === "PASS" && !changedDuringChecks;
+  const writtenCache =
+    passed && cacheEnabled ? writePassCache(finalCandidate, automated) : null;
+  const recommendations = changedDuringChecks
+    ? [
+        "The audit scope changed while checks ran; rerun the audit for current evidence.",
+      ]
+    : automated.overallStatus === "SKIP"
+      ? [
+          "Configure a supported check before relying on this advisory evidence.",
+        ]
+      : passed
+        ? [
+            "Review the collected evidence before choosing any separate workflow.",
+          ]
+        : ["Resolve reported check failures and rerun the audit."];
+  process.stdout.write(
+    JSON.stringify(
+      {
+        schema: "flow-audit-advisory-evidence/v1",
+        mode: "checks-only",
+        evidence: {
+          source: "fresh",
+          candidate: finalCandidate || candidate,
+          cache: {
+            enabled: cacheEnabled,
+            used: false,
+            authoritative: false,
+            written: Boolean(writtenCache),
+          },
+          automated: compactAutomatedResults(automated),
+        },
+        recommendations,
+      },
+      null,
+      2,
+    ) + "\n",
+  );
+  if (!passed) process.exitCode = 1;
 }
 
 // ─── Entry point ──────────────────────────────────────────────────────────────
 
 const flags = parseArgs();
 
-if (flags["checks-only"]) {
+if (flags["fix"]) {
+  process.stderr.write(
+    "Error: --fix is not supported by flow-audit. Use flow-audit-fix as a separately approved workflow.\n",
+  );
+  process.exitCode = 1;
+} else if (flags["checks-only"]) {
   await checksOnly(flags);
 } else if (flags["detect"]) {
   detect();
@@ -1317,8 +1301,6 @@ if (flags["checks-only"]) {
   runTool(flags);
 } else if (flags["report"]) {
   report();
-} else if (flags["fix"]) {
-  await fix(flags);
 } else {
   process.stderr.write(
     "Usage:\n" +
@@ -1328,8 +1310,7 @@ if (flags["checks-only"]) {
       "  node flow-audit.mjs --scope [path] [--since <ref>]\n" +
       "  node flow-audit.mjs --run lint|typecheck|test|format|coverage|security\n" +
       "  node flow-audit.mjs --run-all\n" +
-      "  node flow-audit.mjs --report --file <results.json>\n" +
-      "  node flow-audit.mjs --fix [--auto-only]\n",
+      "  node flow-audit.mjs --report --file <results.json>\n",
   );
   process.exit(1);
 }

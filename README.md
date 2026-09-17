@@ -30,7 +30,8 @@ The command is a read-only preview whose JSON identifies `host: "opencode"`. Run
 
 | Skill | Description |
 | --- | --- |
-| `flow-audit` | Code quality audit — lint, typecheck, tests, security, and review evidence |
+| `flow-audit` | Read-only code-quality evidence with separate advisory recommendations |
+| `flow-audit-fix` | Separately invoked, host-approved configured audit fixes |
 | `flow-branch` | Safe existing-branch selection, updates, and guarded cleanup |
 | `flow-build` | Guided project documentation generation |
 | `flow-commit` | Prepared, sealed, and verified semantic commits |

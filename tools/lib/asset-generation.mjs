@@ -324,11 +324,11 @@ export function validateOpenCodeAdapterMappings(manifest, registry) {
     throw error;
   }
   const mappedWorkflows = adapters.map(({ workflow }) => workflow);
+  const declaredWorkflows = new Set(manifest.workflows);
   if (
-    mappedWorkflows.length !== manifest.workflows.length ||
-    mappedWorkflows.some(
-      (workflow, index) => workflow !== manifest.workflows[index],
-    )
+    mappedWorkflows.length !== declaredWorkflows.size ||
+    new Set(mappedWorkflows).size !== mappedWorkflows.length ||
+    mappedWorkflows.some((workflow) => !declaredWorkflows.has(workflow))
   )
     throw new Error(
       "OpenCode adapter mappings must cover each declared workflow once.",
