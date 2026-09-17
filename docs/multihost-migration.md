@@ -26,7 +26,8 @@ Do not blindly replace an OpenCode host tree. Flow manages only exact declared a
 
 | Legacy surface | Status | Pi transition | OpenCode transition | Guidance |
 | --- | --- | --- | --- | --- |
-| `flow-audit` | Retained | Use `flow-audit` through package discovery | Use `/flow-audit` | Same scoped audit outcome; fixes remain separately approved. |
+| `flow-audit` | Retained | Use `flow-audit` through package discovery | Use `/flow-audit` | Read-only advisory evidence and recommendations; it rejects `--fix`. |
+| `flow-audit-fix` | Added | Use `flow-audit-fix` through package discovery | Use `/flow-audit-fix` | Preview first; each execution requires explicit host-native approval. |
 | `flow-branch` | Retained | Use `flow-branch` | Use `/flow-branch` | Native host clarification retains guarded update/delete approval. |
 | `flow-build` | Retained | Use `flow-build` | Use `/flow-build` | Guided documentation generation remains approval-bound for writes. |
 | `flow-commit` | Retained | Use `flow-commit` | Use `/flow-commit` | Preserve prepare, seal, one approval, execute, and verify. |

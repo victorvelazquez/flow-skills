@@ -200,7 +200,7 @@ T3 and T4 may be reordered only through an explicit roadmap amendment with the r
 
 ### T5 — Simplify `flow-refactor`
 
-- **Status:** `verified awaiting merge`
+- **Status:** `complete`
 - **Dependencies:** T4 complete on current `main`.
 - **Objective:** Reduce `flow-refactor` to read-only smell detection and neutral drafts.
 - **Scope:** Read-only smell analysis and exact neutral draft generation.
@@ -208,20 +208,20 @@ T3 and T4 may be reordered only through an explicit roadmap amendment with the r
 - **Acceptance:** Findings are advisory and reproducible; drafts are neutral and do not invoke external review/delivery behavior; all paths remain read-only.
 - **Verification:** Strict-TDD fixture tests for smells and drafts; independent verifier checks command behavior is non-mutating and free of external authority claims.
 - **Review boundary:** `flow-refactor` analysis/drafts, tests, and docs only; `size:exception`: 298 additions + 367 deletions = 665 changed lines. This exact review-surface total excludes `odd/tasks/flow-refactor-readonly.md` because the ODD tracker is operational metadata, not deliverable review content. Replacing the oversized heuristic LLM rubric with a bounded deterministic runtime, exact fixture coverage, relay-only host guidance, and their required generated asset/provenance locks is one inseparable safe workflow.
-- **Completion:** `status: verified awaiting merge`; branch: `feat/flow-refactor-readonly`; commit: none; PR: none; verification: strict-TDD RED observed; focused `flow-refactor` (3/3), flow-agent-contract (23/23), and OpenCode adapter (12/12) passed; full verification passed with 7 Windows capability skips; root/Pi/OpenCode provenance verification passed (generation `1eada80304a45cfc173c784a9ccbcdb19447546ba2c36209ba7129dae7bed55e`); `npm pack --dry-run` and `git diff --check` passed; independent verifier PASS; authorized 298 additions + 367 deletions = 665 changed-line size exception.
-- **Next allowed task:** T6, only after T5 merge evidence is observed on updated `main`; reconcile this card in the T6 branch.
+- **Completion:** `status: complete`; branch: `feat/flow-refactor-readonly`; commit: `7795a76`; PR: [#52](https://github.com/victorvelazquez/flow-skills/pull/52); verification: strict-TDD RED observed; focused `flow-refactor` (3/3), flow-agent-contract (23/23), and OpenCode adapter (12/12) passed; full verification passed with 7 Windows capability skips; root/Pi/OpenCode provenance verification passed (generation `1eada80304a45cfc173c784a9ccbcdb19447546ba2c36209ba7129dae7bed55e`); `npm pack --dry-run` and `git diff --check` passed; independent verifier PASS; authorized 298 additions + 367 deletions = 665 changed-line size exception. Merge reconciliation: updated `main` contains T5 commit `7795a76` through merge commit `70253f0`.
+- **Next allowed task:** T6.
 
 ### T6 — Decouple `flow-audit`
 
-- **Status:** `pending`
+- **Status:** `verified awaiting merge`
 - **Dependencies:** T5 complete on current `main`.
 - **Objective:** Make `flow-audit` advisory evidence only and isolate any fix mutation.
 - **Scope:** Read-only advisory evidence; an explicitly isolated, separately authorized fix-mutation boundary; optional non-authoritative cache.
 - **Non-goals:** No native-review claims, delivery claims, implicit fix mutation, authoritative cache, or Gentle coupling.
 - **Acceptance:** Audit output distinguishes evidence from recommendations; fixes cannot run through audit implicitly; cache is optional and never authoritative; no native-review/delivery authority is claimed.
 - **Verification:** Strict-TDD evidence, cache, and isolation tests; independent verifier confirms audit remains read-only and a fix requires separate authorization.
-- **Review boundary:** Audit evidence/cache and isolated fix boundary/tests/docs only; <=400 changed lines or explicit `size:exception`.
-- **Completion:** `status: pending`; branch: —; commit: —; PR: —; verification: —.
+- **Review boundary:** Audit evidence/cache and isolated fix boundary/tests/docs only; `size:exception`: 848 additions + 532 deletions + 173 untracked additions = 1,553 changed lines, excluding `odd/tasks/flow-audit-decoupling.md`. The read-only audit contract, separately host-approved fix workflow, Pi/OpenCode registrations, regression coverage, and required provenance locks must change together to preserve the no-implicit-mutation boundary.
+- **Completion:** `status: verified awaiting merge`; branch: `feat/flow-audit-decoupling`; commit: none; PR: none; verification: strict-TDD RED observed; focused audit 9/9, OpenCode adapter 14/14, asset generation 8/8, and full suite 356 passed with 7 Windows capability skips; root/Pi/OpenCode provenance verification passed (generation `c7195580d0635bbc39194b3a66d5f4b88b67314f1a5084398dfe4ad0fe33644e`); `npm pack --dry-run --json` and `git diff --check` passed; independent verifier PASS; authorized 1,553-line size exception.
 - **Next allowed task:** T7, only after T6 merge evidence is observed on updated `main`; reconcile this card in the T7 branch.
 
 ### T7 — Portfolio integration

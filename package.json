@@ -18,6 +18,7 @@
   "pi": {
     "skills": [
       "skills/flow-audit",
+      "skills/flow-audit-fix",
       "skills/flow-branch",
       "skills/flow-build",
       "skills/flow-commit",
@@ -42,6 +43,7 @@
     "hosts/pi/flow-assets.json",
     "hosts/pi/flow-assets.lock.json",
     "package.json",
+    "scripts/flow-audit-fix.mjs",
     "scripts/flow-audit.mjs",
     "scripts/flow-branch.mjs",
     "scripts/flow-build.mjs",
@@ -68,6 +70,7 @@
     "scripts/lib/helpers.mjs",
     "scripts/lib/process-control.mjs",
     "scripts/lib/scope.mjs",
+    "skills/flow-audit-fix/**",
     "skills/flow-audit/**",
     "skills/flow-branch/**",
     "skills/flow-build/**",

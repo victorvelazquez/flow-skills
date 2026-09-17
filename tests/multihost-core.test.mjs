@@ -9,6 +9,7 @@ const read = (file) =>
   fs.readFileSync(path.join(root, ...file.split("/")), "utf8");
 const expectedIds = [
   "flow-audit",
+  "flow-audit-fix",
   "flow-branch",
   "flow-build",
   "flow-commit",

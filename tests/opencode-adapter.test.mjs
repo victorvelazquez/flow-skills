@@ -201,6 +201,33 @@ test("OpenCode adapter mapping rejects unsupported workflows and destinations ou
   );
 });
 
+test("OpenCode adapter coverage follows workflow membership rather than source order", () => {
+  const manifest = readJson("hosts/opencode/flow-assets.json");
+  const registry = readJson("core/workflows.json");
+
+  assert.doesNotThrow(() =>
+    validateOpenCodeAdapterMappings(manifest, registry),
+  );
+
+  const duplicate = structuredClone(manifest);
+  duplicate.mappings.find(
+    ({ workflow }) => workflow === "flow-audit",
+  ).workflow = "flow-branch";
+  assert.throws(
+    () => validateOpenCodeAdapterMappings(duplicate, registry),
+    /cover each declared workflow once/i,
+  );
+
+  const extra = structuredClone(manifest);
+  extra.workflows = extra.workflows.filter(
+    (workflow) => workflow !== "flow-audit",
+  );
+  assert.throws(
+    () => validateOpenCodeAdapterMappings(extra, registry),
+    /cover each declared workflow once/i,
+  );
+});
+
 test("OpenCode Git and GitHub adapters return unavailable instead of inferring missing approval", () => {
   for (const [agent, expected] of [
     [
@@ -323,6 +350,7 @@ test("OpenCode Git and GitHub adapter mappings preserve destinations and native 
   const registry = readJson("core/workflows.json");
   const commandWorkflows = ["flow-branch", "flow-commit", "flow-pr"];
   const agents = [
+    "flow-audit-fix-agent",
     "flow-branch-agent",
     "flow-debt-agent",
     "flow-git-agent",
@@ -397,6 +425,22 @@ test("OpenCode flow-request adapter reserves cross-repository execution for nati
     agent,
     /Never add `--host-approval approved` without the native prompt/i,
   );
+});
+
+test("OpenCode audit fix adapter keeps mutation outside the read-only audit", () => {
+  const command = read(opencodeCommand("flow-audit-fix"));
+  const agent = read(opencodeAgent("flow-audit-fix-agent"));
+
+  assert.match(command, /^agent: flow-audit-fix-agent$/m);
+  assert.match(command, /^subtask: true$/m);
+  assert.match(agent, /flow-audit-fix\.mjs" preview': allow/);
+  assert.match(agent, /execute --host-approval approved': ask/);
+  assert.match(agent, /sole host-native approval/i);
+  assert.match(
+    agent,
+    /approval is declined or unavailable, do not invoke execute/i,
+  );
+  assert.doesNotMatch(agent, /flow-audit\.mjs --fix/i);
 });
 
 test("OpenCode PR adapter owns native clarification and one execute approval", () => {

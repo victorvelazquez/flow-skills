@@ -6,7 +6,16 @@
       "contract": "skills/flow-audit/SKILL.md",
       "resources": ["skills/flow-audit"],
       "runtime": "scripts/flow-audit.mjs",
-      "outcome": "scoped audit evidence and review findings",
+      "outcome": "read-only advisory audit evidence and recommendations",
+      "mutation": "read-only",
+      "hosts": { "opencode": "supported", "pi": "supported" }
+    },
+    {
+      "id": "flow-audit-fix",
+      "contract": "skills/flow-audit-fix/SKILL.md",
+      "resources": ["skills/flow-audit-fix"],
+      "runtime": "scripts/flow-audit-fix.mjs",
+      "outcome": "host-approved configured audit fixes",
       "mutation": "approval-required",
       "hosts": { "opencode": "supported", "pi": "supported" }
     },

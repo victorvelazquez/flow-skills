@@ -6,6 +6,7 @@
   },
   "workflows": [
     "flow-audit",
+    "flow-audit-fix",
     "flow-branch",
     "flow-build",
     "flow-commit",
@@ -28,12 +29,14 @@
     "core/flow-debt-backlog.mjs",
     "core/flow-debt-contract.mjs",
     "core/flow-debt-preparation.mjs",
+    "hosts/opencode/agents/flow-audit-fix-agent.md",
     "hosts/opencode/agents/flow-branch-agent.md",
     "hosts/opencode/agents/flow-debt-agent.md",
     "hosts/opencode/agents/flow-git-agent.md",
     "hosts/opencode/agents/flow-pr-agent.md",
     "hosts/opencode/agents/flow-request-agent.md",
     "hosts/opencode/agents/flow-review-agent.md",
+    "hosts/opencode/commands/flow-audit-fix.md",
     "hosts/opencode/commands/flow-audit.md",
     "hosts/opencode/commands/flow-branch.md",
     "hosts/opencode/commands/flow-build.md",
@@ -46,6 +49,7 @@
     "hosts/opencode/commands/flow-refactor.md",
     "hosts/opencode/commands/flow-request.md",
     "hosts/opencode/commands/flow-ui.md",
+    "scripts/flow-audit-fix.mjs",
     "scripts/flow-audit.mjs",
     "scripts/flow-branch.mjs",
     "scripts/flow-build.mjs",
@@ -72,6 +76,7 @@
     "scripts/lib/helpers.mjs",
     "scripts/lib/process-control.mjs",
     "scripts/lib/scope.mjs",
+    "skills/flow-audit-fix/**",
     "skills/flow-audit/**",
     "skills/flow-branch/**",
     "skills/flow-build/**",
@@ -103,6 +108,11 @@
       "role": "portable"
     },
     {
+      "source": "hosts/opencode/agents/flow-audit-fix-agent.md",
+      "destination": "agents/flow-audit-fix-agent.md",
+      "role": "agent"
+    },
+    {
       "source": "hosts/opencode/agents/flow-branch-agent.md",
       "destination": "agents/flow-branch-agent.md",
       "role": "agent"
@@ -131,6 +141,12 @@
       "source": "hosts/opencode/agents/flow-review-agent.md",
       "destination": "agents/flow-review-agent.md",
       "role": "agent"
+    },
+    {
+      "workflow": "flow-audit-fix",
+      "source": "hosts/opencode/commands/flow-audit-fix.md",
+      "destination": "commands/flow-audit-fix.md",
+      "role": "adapter"
     },
     {
       "workflow": "flow-audit",
@@ -203,6 +219,11 @@
       "source": "hosts/opencode/commands/flow-ui.md",
       "destination": "commands/flow-ui.md",
       "role": "adapter"
+    },
+    {
+      "source": "scripts/flow-audit-fix.mjs",
+      "destination": "scripts/flow-audit-fix.mjs",
+      "role": "portable"
     },
     {
       "source": "scripts/flow-audit.mjs",
@@ -332,6 +353,11 @@
     {
       "source": "scripts/lib/scope.mjs",
       "destination": "scripts/lib/scope.mjs",
+      "role": "portable"
+    },
+    {
+      "source": "skills/flow-audit-fix/**",
+      "destination": "skills/flow-audit-fix/**",
       "role": "portable"
     },
     {
