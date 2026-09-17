@@ -29,6 +29,7 @@
     "core/flow-debt-backlog.mjs",
     "core/flow-debt-contract.mjs",
     "core/flow-debt-preparation.mjs",
+    "core/workflows.json",
     "hosts/opencode/agents/flow-audit-fix-agent.md",
     "hosts/opencode/agents/flow-branch-agent.md",
     "hosts/opencode/agents/flow-debt-agent.md",
@@ -105,6 +106,11 @@
     {
       "source": "core/flow-debt-preparation.mjs",
       "destination": "core/flow-debt-preparation.mjs",
+      "role": "portable"
+    },
+    {
+      "source": "core/workflows.json",
+      "destination": "core/workflows.json",
       "role": "portable"
     },
     {

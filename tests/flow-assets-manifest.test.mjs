@@ -206,6 +206,7 @@ test("manifest and lock define a deterministic, complete, safe mirror", () => {
     "core/flow-debt-backlog.mjs",
     "core/flow-debt-contract.mjs",
     "core/flow-debt-preparation.mjs",
+    "core/workflows.json",
     "docs/multihost-migration.md",
     "flow-assets.json",
     "flow-assets.lock.json",

@@ -96,6 +96,11 @@ test("dual-host provenance shares one generation while retaining exact host owne
   assert.ok(
     piLock.records.every(({ destination }) => destination === undefined),
   );
+  for (const lock of [piLock, opencodeLock])
+    assert.ok(
+      lock.records.some(({ source }) => source === "core/workflows.json"),
+      `${lock.host} provenance must include the portable workflow registry`,
+    );
   assert.deepEqual(
     ownedDestinationPaths(opencodeLock),
     [...opencodeLock.records].map(({ destination }) => destination).sort(),

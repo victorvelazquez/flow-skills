@@ -4,15 +4,15 @@
   "distribution": {
     "kind": "package-resources"
   },
-  "generationId": "c7195580d0635bbc39194b3a66d5f4b88b67314f1a5084398dfe4ad0fe33644e",
+  "generationId": "e16e59145b1aebc499f560afb61b089a20ad4c73c242e3e898d885a26eda3281",
   "manifest": {
-    "sha256": "a919f9d5c123e8ed1254d52f5b021ecea630b5110d098f71331e1d36141132ff"
+    "sha256": "c81901fc762458d0f43cca8a6064e02c1aa11133328f150d11a895fb0d6399f9"
   },
   "records": [
     {
       "source": "README.md",
-      "sha256": "d8295c3180abce57f3c430e1070bbc695928f74bcfb03127fefe9c369280d6fa",
-      "bytes": 3533,
+      "sha256": "7030ca47d84b4de9c0a5ea73288e0e026518442a92426260205e2b6d9e7d7d8f",
+      "bytes": 3705,
       "mode": "100644",
       "executable": false
     },
@@ -38,23 +38,30 @@
       "executable": false
     },
     {
+      "source": "core/workflows.json",
+      "sha256": "d56c1a7a48572d249e3d766f46d6a646039fc7f0af94e207f19a470e2c4220ff",
+      "bytes": 4971,
+      "mode": "100644",
+      "executable": false
+    },
+    {
       "source": "docs/multihost-migration.md",
-      "sha256": "fa67a6762782efeadfdb904c6c6fe539ea53e4022e746e54762f85204ef2ca68",
-      "bytes": 5815,
+      "sha256": "772a955c6b5a7ab4045f51769f5d2fcee5568c38628b718aeb9dd4eb2d1d6202",
+      "bytes": 6121,
       "mode": "100644",
       "executable": false
     },
     {
       "source": "hosts/pi/flow-assets.json",
-      "sha256": "64d3bdee64bc9a1dc75d1421b2bf1f07ce3cbb39acf6fd06a7246c04e9acbd9a",
-      "bytes": 2242,
+      "sha256": "258174c8aa4bfc8ea9cfbf552d5b3feb7a3fbf00dc0bb030149d578e27aafe4b",
+      "bytes": 2269,
       "mode": "100644",
       "executable": false
     },
     {
       "source": "package.json",
-      "sha256": "1ad3ac490bd691a09edae798423724dc6b18a71c5b57bd08333294700a637039",
-      "bytes": 2485,
+      "sha256": "038040bb1cd5981127a7d43226fa29d2b787ce8bd79c19a39bd8f06e625dab42",
+      "bytes": 2512,
       "mode": "100644",
       "executable": false
     },
@@ -473,8 +480,8 @@
     }
   ],
   "totals": {
-    "bytes": 697989,
-    "count": 66
+    "bytes": 703492,
+    "count": 67
   },
-  "hostIdentity": "3e77b4d2b64bfe8f65b0ff878ce441e11e3e884c4dd921d6a87b0819a9c3d667"
+  "hostIdentity": "f711e70ab0fe290d8363f44ca195c94814221ba532fa65f6c9e806a6d897e6db"
 }

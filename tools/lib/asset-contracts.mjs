@@ -4,10 +4,11 @@ import path from "node:path";
 const FORBIDDEN_FIELD = /(?:captured|timestamp|token|secret|credential)/i;
 const FORBIDDEN_VALUE =
   /(?:[A-Za-z]:\\|^\/|\/Users\/|credentials|token|secret)/i;
-const PORTABLE_CORE_MODULES = new Set([
+const PORTABLE_CORE_RESOURCES = new Set([
   "core/flow-debt-backlog.mjs",
   "core/flow-debt-contract.mjs",
   "core/flow-debt-preparation.mjs",
+  "core/workflows.json",
 ]);
 
 export function sha256(value) {
@@ -181,7 +182,7 @@ function validateOpenCodeManifest(manifest) {
         mapping.source.endsWith("/**")) ||
         (mapping.source.startsWith("scripts/") &&
           !mapping.source.includes("*")) ||
-        PORTABLE_CORE_MODULES.has(mapping.source));
+        PORTABLE_CORE_RESOURCES.has(mapping.source));
 
     if (!validCommand && !validAgent && !validPortable)
       throw new Error(

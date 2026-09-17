@@ -38,6 +38,7 @@
     "core/flow-debt-backlog.mjs",
     "core/flow-debt-contract.mjs",
     "core/flow-debt-preparation.mjs",
+    "core/workflows.json",
     "docs/multihost-migration.md",
     "flow-generation.lock.json",
     "hosts/pi/flow-assets.json",
