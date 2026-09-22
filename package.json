@@ -31,6 +31,9 @@
       "skills/flow-request",
       "skills/flow-ui",
       "skills/ui-design-system"
+    ],
+    "prompts": [
+      "hosts/pi/prompts"
     ]
   },
   "files": [
@@ -41,8 +44,10 @@
     "core/workflows.json",
     "docs/multihost-migration.md",
     "flow-generation.lock.json",
+    "hosts/pi/agents/**",
     "hosts/pi/flow-assets.json",
     "hosts/pi/flow-assets.lock.json",
+    "hosts/pi/prompts/**",
     "package.json",
     "scripts/flow-audit-fix.mjs",
     "scripts/flow-audit.mjs",

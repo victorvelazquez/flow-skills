@@ -4,15 +4,15 @@
   "distribution": {
     "kind": "package-resources"
   },
-  "generationId": "e16e59145b1aebc499f560afb61b089a20ad4c73c242e3e898d885a26eda3281",
+  "generationId": "d4f732c222d1f03d0f8d14820ff003d280d85d2f9020793f14089e64f247ae26",
   "manifest": {
-    "sha256": "c81901fc762458d0f43cca8a6064e02c1aa11133328f150d11a895fb0d6399f9"
+    "sha256": "7f8036a0737c4b7ae1e026862dd94b7c0ae41814fe0489659f0154b9b8faa62b"
   },
   "records": [
     {
       "source": "README.md",
-      "sha256": "7030ca47d84b4de9c0a5ea73288e0e026518442a92426260205e2b6d9e7d7d8f",
-      "bytes": 3705,
+      "sha256": "d3fe28b21fddc98a868af4c1b64b89dc0b802deae84c0ad6a9711b732f49e28f",
+      "bytes": 4165,
       "mode": "100644",
       "executable": false
     },
@@ -46,22 +46,64 @@
     },
     {
       "source": "docs/multihost-migration.md",
-      "sha256": "772a955c6b5a7ab4045f51769f5d2fcee5568c38628b718aeb9dd4eb2d1d6202",
-      "bytes": 6121,
+      "sha256": "b5bca0b1ea55cb606627927229989a0cc555a495502eed3ecf542a6bca925deb",
+      "bytes": 10943,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "hosts/pi/agents/flow-branch.md",
+      "sha256": "58ef7e7dc80e260e724f35713cf1825aff88191f89dd52cb48082999239922eb",
+      "bytes": 600,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "hosts/pi/agents/flow-commit.md",
+      "sha256": "c47021b23a2fe00b4411f3ecbd9689b0185d5699908b77064aa530e3f9d22497",
+      "bytes": 600,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "hosts/pi/agents/flow-pr.md",
+      "sha256": "b98ab6c48b12017cd9edbfd01b3c3adf49191451335ca742cbba2f8cbe6a42c1",
+      "bytes": 593,
       "mode": "100644",
       "executable": false
     },
     {
       "source": "hosts/pi/flow-assets.json",
-      "sha256": "258174c8aa4bfc8ea9cfbf552d5b3feb7a3fbf00dc0bb030149d578e27aafe4b",
-      "bytes": 2269,
+      "sha256": "bb5f129f6fbb078b91d02587e2f46292db13fea3a7340c29a798f2fa85098c4c",
+      "bytes": 2322,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "hosts/pi/prompts/flow-branch.md",
+      "sha256": "96c019e6507f841dbf330bd23ff6b6a194ef4249fca0ebeacfd790cc3ba9e9dc",
+      "bytes": 444,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "hosts/pi/prompts/flow-commit.md",
+      "sha256": "f23b03363a566ec7bb83424bcff6afa56c9083fd68b82512f3fdf7644b633527",
+      "bytes": 441,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "hosts/pi/prompts/flow-pr.md",
+      "sha256": "dc01eb2b4f925fe892ab24985766d226c0fb69cd55a47532a95d34007fca29d3",
+      "bytes": 433,
       "mode": "100644",
       "executable": false
     },
     {
       "source": "package.json",
-      "sha256": "038040bb1cd5981127a7d43226fa29d2b787ce8bd79c19a39bd8f06e625dab42",
-      "bytes": 2512,
+      "sha256": "a9e264b3542e74e01fd63d7ed5949e02e25ef10adda216b089884d3850d95bcc",
+      "bytes": 2614,
       "mode": "100644",
       "executable": false
     },
@@ -480,8 +522,8 @@
     }
   ],
   "totals": {
-    "bytes": 703492,
-    "count": 67
+    "bytes": 712040,
+    "count": 73
   },
-  "hostIdentity": "f711e70ab0fe290d8363f44ca195c94814221ba532fa65f6c9e806a6d897e6db"
+  "hostIdentity": "583e1272b1465ede331fa9bcc686ee3353192e6811796f17fe113490bc9a4e59"
 }

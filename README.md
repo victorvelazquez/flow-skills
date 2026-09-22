@@ -14,6 +14,8 @@ pi install <package-source>
 
 Pi discovers only the explicitly declared `flow-*` resources in `package.json`. The portable `core/workflows.json` registry and reproducible provenance locks are packaged with those resources. The package does not copy files into Pi settings or require OpenCode assets. Review the package source before installation; package installation, updates, and removal remain under Pi's security model.
 
+The package supplies the native `/flow-commit`, `/flow-pr`, and `/flow-branch` prompt entrypoints. Their canonical supervised-agent definitions remain repository-owned in `hosts/pi/agents/` and are installed separately into the local Pi agent directory; this keeps package resources, agent discovery, and model-routing snapshots distinct. See [Pi agent installation and recovery](docs/multihost-migration.md) before installing or restoring those definitions.
+
 ### OpenCode (supported compatibility path)
 
 OpenCode continues to use the repository-local preview-first installer:

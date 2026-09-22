@@ -38,7 +38,7 @@ const activeProductFiles = [
   "flow-assets.json",
   "core/workflows.json",
   "core/host-adapter-contract.md",
-  "docs/multihost-migration.md",
+  // The explicit implementation integration guide is intentionally exempt.
   "hosts/opencode/flow-assets.json",
   "hosts/pi/flow-assets.json",
 ];

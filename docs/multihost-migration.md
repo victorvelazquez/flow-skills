@@ -20,6 +20,70 @@ Do not blindly replace an OpenCode host tree. Flow manages only exact declared a
 | Ownership | Pi/package manager owns placement; Flow writes no Pi settings | Flow deploys only lock-declared adapter paths; host configuration remains untouched |
 | Reconciliation | Not an end-user workflow | Maintainer-only, explicit, repository-local read-only preview before any separately approved correction |
 
+## Pi-native Flow agents and Gentle Pi
+
+### Ownership and architecture
+
+The Flow package is the source for three separate Pi-facing resource types:
+
+- `skills/flow-{commit,pr,branch}/` contain the workflow contracts and package-relative runtimes.
+- `hosts/pi/prompts/` is declared in `package.json`, so `pi install` provides the native `/flow-commit`, `/flow-pr`, and `/flow-branch` entrypoints.
+- `hosts/pi/agents/` contains the canonical `flow-commit`, `flow-pr`, and `flow-branch` agent definitions. Gentle Pi discovers these definitions from the local Pi agent directory so its supervised prompts can route to real agents.
+
+The package manifest and Pi provenance lock cover both canonical agent and prompt directories. The global agent copies are an installation target, not an editable source: update the repository checkout, reinstall from its canonical files, and regenerate repository locks through the deterministic generator. Do not copy workflow behavior into an agent or prompt.
+
+`gentle-pi` remains an external, unmodified package. Flow neither vendors nor patches it, and it does not edit its package files, extensions, or profile implementation. Pi package installation owns package placement; Gentle Pi owns global-agent discovery and its own profile state.
+
+### Install locally, then install the repository-backed agents
+
+Choose and retain a reviewed repository revision. Install the Flow package through Pi from that source (pin a Git tag or commit for a reproducible installation):
+
+```bash
+pi install <package-source>
+```
+
+Then install exactly the three repository-backed definitions into the local Pi agent directory. On POSIX shells, use the configured Pi home when present, otherwise its default:
+
+```bash
+PI_HOME="${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}"
+mkdir -p "$PI_HOME/agents"
+cp hosts/pi/agents/flow-{branch,commit,pr}.md "$PI_HOME/agents/"
+```
+
+On PowerShell, use the equivalent copy from the same checkout:
+
+```powershell
+$piHome = if ($env:PI_CODING_AGENT_DIR) { $env:PI_CODING_AGENT_DIR } else { Join-Path $HOME ".pi/agent" }
+New-Item -ItemType Directory -Force (Join-Path $piHome "agents")
+Copy-Item hosts/pi/agents/flow-branch.md, hosts/pi/agents/flow-commit.md, hosts/pi/agents/flow-pr.md (Join-Path $piHome "agents")
+```
+
+This procedure is intentionally explicit: it writes only those agent files and never changes Pi settings or Gentle Pi configuration. This repository task documents the procedure only; it does not perform the global installation.
+
+### Restart and discovery verification
+
+Close and restart Pi after package or global-agent changes. In the fresh session, verify all of the following before relying on routing:
+
+1. `pi list` reports the selected Flow package source.
+2. `/flow-commit`, `/flow-pr`, and `/flow-branch` are offered as prompt templates from the package.
+3. Gentle Pi discovers `flow-commit`, `flow-pr`, and `flow-branch` as agents; each definition loads its matching packaged skill and inherits its configured model routing.
+4. The local agent files byte-match `hosts/pi/agents/` at the reviewed repository revision. If they do not, replace only those three files from that revision and restart again.
+
+Do not add OpenCode compatibility fields, permissions, paths, or adapter syntax to Pi agent or prompt files. Their small Pi-native definitions load the packaged skills; the skills remain the sole workflow authority.
+
+### Gentle Pi Snapshot and recovery on another machine
+
+A Gentle Pi Snapshot rebuilds a profile from its effective discovered-agent routing. If the three Flow agents are absent when Snapshot runs, manual routing entries for their names can be lost because Snapshot has no discoverable agent to retain. Install and verify the global definitions **before** using Snapshot; then confirm the effective routing contains all three Flow names before accepting the profile update. Do not hand-edit a Snapshot result to compensate for absent agents.
+
+For backup and recovery, retain the Flow repository checkout (or its immutable commit/tag), the package source used by `pi install`, and any user-owned Gentle Pi profile backup separately. On another machine:
+
+1. Check out the same reviewed Flow revision and verify its committed provenance locks with `node tools/flow-assets.mjs --verify --host pi`.
+2. Run `pi install <package-source>` pinned to that same revision.
+3. Copy only `hosts/pi/agents/flow-branch.md`, `flow-commit.md`, and `flow-pr.md` into that machine's Pi agent directory using the procedure above.
+4. Restart Pi, repeat discovery verification, and only then use the user-owned Gentle Pi Snapshot/profile recovery flow.
+
+This order restores canonical Flow resources without copying, modifying, or backing up `gentle-pi` itself. It also makes the repository, not a machine-local agent edit, the recoverable source of truth.
+
 ## Complete migration matrix
 
 `Retained` means a legacy v1 workflow remains available through both declared Pi resources and the OpenCode adapter. `Added` means a new v1 workflow is available through both hosts but has no legacy surface. `Removed` means there is no hidden alias or automatic substitute.
