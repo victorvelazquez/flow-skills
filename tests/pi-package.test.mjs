@@ -17,6 +17,16 @@ const expectedRuntimes = registry.workflows
   .map(({ runtime }) => runtime)
   .filter(Boolean)
   .sort();
+const expectedPiAgents = [
+  "hosts/pi/agents/flow-branch.md",
+  "hosts/pi/agents/flow-commit.md",
+  "hosts/pi/agents/flow-pr.md",
+];
+const expectedPiPrompts = [
+  "hosts/pi/prompts/flow-branch.md",
+  "hosts/pi/prompts/flow-commit.md",
+  "hosts/pi/prompts/flow-pr.md",
+];
 const requiredCoreResources = [
   "core/flow-debt-backlog.mjs",
   "core/flow-debt-contract.mjs",
@@ -44,8 +54,10 @@ const requiredPackageFiles = [
   ...requiredCoreResources,
   "docs/multihost-migration.md",
   "flow-generation.lock.json",
+  "hosts/pi/agents/**",
   "hosts/pi/flow-assets.json",
   "hosts/pi/flow-assets.lock.json",
+  "hosts/pi/prompts/**",
   "package.json",
   ...expectedSkills.map((skill) => `${skill}/**`),
   ...expectedRuntimes,
@@ -159,6 +171,27 @@ function discoverPiSkills(packageRoot) {
   });
 }
 
+function discoverPiPrompts(packageRoot) {
+  const packageJson = readJson("package.json", packageRoot);
+  return packageJson.pi.prompts
+    .flatMap((relative) => {
+      assert.ok(
+        isContainedPackagePath(relative),
+        `unsafe prompt resource: ${relative}`,
+      );
+      const promptDirectory = path.join(packageRoot, relative);
+      assert.ok(
+        fs.statSync(promptDirectory).isDirectory(),
+        `missing prompt directory: ${relative}`,
+      );
+      return fs
+        .readdirSync(promptDirectory, { withFileTypes: true })
+        .filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
+        .map((entry) => `${relative}/${entry.name}`);
+    })
+    .sort();
+}
+
 test("Pi package metadata declares only the explicit v1 skill resources", () => {
   const packageJson = readJson("package.json");
 
@@ -166,6 +199,7 @@ test("Pi package metadata declares only the explicit v1 skill resources", () => 
   assert.ok(packageJson.keywords.includes("pi"));
   assert.ok(packageJson.keywords.includes("pi-package"));
   assert.deepEqual(packageJson.pi.skills, expectedSkills);
+  assert.deepEqual(packageJson.pi.prompts, ["hosts/pi/prompts"]);
   assert.deepEqual(packageJson.files, requiredPackageFiles);
   assert.deepEqual(
     packageJson.files.filter((entry) => entry.startsWith("core/")),
@@ -185,6 +219,30 @@ test("Pi package metadata declares only the explicit v1 skill resources", () => 
     JSON.stringify(manifest),
     /(?:[A-Za-z]:\\|\/Users\/|credentials|token|secret|opencode)/i,
   );
+});
+
+test("Pi documentation preserves package, global-agent, and Gentle Pi ownership boundaries", () => {
+  const readme = fs.readFileSync(path.join(root, "README.md"), "utf8");
+  const guide = fs.readFileSync(
+    path.join(root, "docs", "multihost-migration.md"),
+    "utf8",
+  );
+
+  assert.match(readme, /Pi agent installation and recovery/i);
+  assert.match(guide, /## Pi-native Flow agents and Gentle Pi/);
+  assert.match(guide, /`hosts\/pi\/agents\/`/);
+  assert.match(guide, /`hosts\/pi\/prompts\/`/);
+  assert.match(guide, /`gentle-pi` remains an external, unmodified package/i);
+  assert.match(guide, /never changes Pi settings or Gentle Pi configuration/i);
+  assert.match(
+    guide,
+    /Close and restart Pi after package or global-agent changes/i,
+  );
+  assert.match(
+    guide,
+    /Gentle Pi Snapshot rebuilds a profile from its effective discovered-agent routing/i,
+  );
+  assert.match(guide, /recovery on another machine/i);
 });
 
 test("Pi publication includes the flow-debt runtime exactly once", () => {
@@ -263,6 +321,12 @@ test("packed Pi discovery is complete and independent of OpenCode assets", () =>
   );
 
   assert.deepEqual(discoverPiSkills(packageRoot), expectedSkills);
+  assert.deepEqual(discoverPiPrompts(packageRoot), expectedPiPrompts);
+  for (const agent of expectedPiAgents)
+    assert.ok(
+      fs.existsSync(path.join(packageRoot, ...agent.split("/"))),
+      `missing canonical Pi agent: ${agent}`,
+    );
   for (const workflow of registry.workflows.filter(({ runtime }) => runtime)) {
     const skillDirectory = path.join(packageRoot, "skills", workflow.id);
     const runtime = path.resolve(skillDirectory, "..", "..", workflow.runtime);

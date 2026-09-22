@@ -60,6 +60,32 @@ test("Pi provenance is reproducible, package-bound, and marker-free", () => {
   );
 });
 
+test("Pi provenance covers canonical agents and prompts without claiming OpenCode ownership", () => {
+  const result = generateProvenance({ root });
+  const piLock = result.hostLocks.find(({ host }) => host === "pi");
+  const expected = [
+    "hosts/pi/agents/flow-branch.md",
+    "hosts/pi/agents/flow-commit.md",
+    "hosts/pi/agents/flow-pr.md",
+    "hosts/pi/prompts/flow-branch.md",
+    "hosts/pi/prompts/flow-commit.md",
+    "hosts/pi/prompts/flow-pr.md",
+  ];
+  const piSources = piLock.records.map(({ source }) => source);
+
+  for (const source of expected) {
+    assert.ok(piSources.includes(source), `missing Pi provenance: ${source}`);
+    assert.ok(
+      result.generationLock.sources.some((record) => record.source === source),
+      `missing common provenance: ${source}`,
+    );
+  }
+  assert.equal(
+    piSources.some((source) => source.startsWith("hosts/opencode/")),
+    false,
+  );
+});
+
 test("dual-host provenance shares one generation while retaining exact host ownership", () => {
   const result = generateProvenance({ root });
   const locks = new Map(result.hostLocks.map((lock) => [lock.host, lock]));
