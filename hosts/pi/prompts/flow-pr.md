@@ -1,6 +1,8 @@
 ---
-description: Run the Flow PR workflow through its supervised Pi subagent.
+description: Explain direct extension-owned Flow PR publication.
 argument-hint: "[instructions]"
 ---
 
-Use `subagent_run` to delegate the complete workflow to the `flow-pr` Pi/Gentle subagent with `mode: "task"`. Forward the user's complete arguments (`$ARGUMENTS`) and all relevant current conversation and working-directory context unchanged. Do not execute, restate, or supplement the workflow logic in this template.
+This prompt template is not the Flow PR publication boundary. The package extension registers `/flow-pr` as a command. It prepares and finalizes through the existing runtime, presents the finalized approval summary through one native confirmation, then executes at most once on affirmative approval.
+
+This template does not publish by delegation. Explain that delegated publication is mechanically disabled for safety, and ask the user to invoke `/flow-pr $ARGUMENTS` in interactive Pi TUI to review and confirm one PR publication.

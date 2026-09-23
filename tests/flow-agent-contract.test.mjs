@@ -74,6 +74,76 @@ test("flow-pr command, agent, and skill expose prepare, one approval, and execut
     /materialize-request|request-base64|base64url|flow-pr\/request-v1/,
   );
 });
+test("Pi flow-pr command requires native approval and delegation cannot execute", () => {
+  const pkg = JSON.parse(read("package.json"));
+  const extension = read("hosts/pi/extensions/flow-pr.js");
+  const prompt = read("hosts/pi/prompts/flow-pr.md");
+  const agent = read("hosts/pi/agents/flow-pr.md");
+  const skill = read("skills/flow-pr/SKILL.md");
+  const contract = read("core/host-adapter-contract.md");
+
+  assert.deepEqual(pkg.pi.extensions, ["hosts/pi/extensions"]);
+  assert.ok(pkg.files.includes("hosts/pi/extensions/**"));
+  assert.ok(pkg.files.includes("scripts/lib/flow-pr-pi-extension.mjs"));
+  assert.match(extension, /registerCommand\("flow-pr"/);
+  assert.match(extension, /ctx\.mode !== "tui"\s*\|\|\s*!ctx\.hasUI/);
+  assert.match(
+    extension,
+    /confirm:\s*\(title, message\)\s*=>\s*ctx\.ui\.confirm\(title, message\)/,
+  );
+  assert.match(extension, /directFlowPr\(args/);
+  assert.match(extension, /mode: ctx\.mode/);
+  assert.match(extension, /pi\.exec\(command, commandArgs, options\)/);
+  assert.match(extension, /ctx\.ui\.notify\(result\.text, "info"\)/);
+  assert.match(extension, /FlowPrRuntimeError/);
+  assert.doesNotMatch(extension, /flowPrExecuteGate|tool_call|sendUserMessage/);
+  assert.match(
+    extension,
+    /pi\.sendMessage\([\s\S]*?customType: "flow-pr-verified"/,
+  );
+  assert.match(extension, /display: false/);
+  assert.match(extension, /triggerTurn: true, deliverAs: "followUp"/);
+  assert.match(extension, /fileURLToPath\(import\.meta\.url\)/);
+  assert.match(
+    extension,
+    /packagePath\("skills\/flow-pr\/references\/output-contract\.md"\)/,
+  );
+  assert.doesNotMatch(
+    extension,
+    /Read the packaged skills\/flow-pr\/references\/output-contract\.md/,
+  );
+  assert.doesNotMatch(extension, /sendUserMessage/);
+
+  assert.match(prompt, /extension registers `\/flow-pr` as a command/i);
+  assert.match(prompt, /does not publish by delegation/i);
+  assert.match(prompt, /delegated publication is mechanically disabled/i);
+  assert.doesNotMatch(
+    prompt,
+    /Use `subagent_run` to delegate the complete workflow/i,
+  );
+
+  assert.match(agent, /^tools:\n {2}- read\n---/m);
+  assert.doesNotMatch(agent, /^ {2}- bash$/m);
+  assert.doesNotMatch(agent, /^ {2}- edit$/m);
+  assert.match(agent, /mechanically unable to publish/i);
+  assert.match(agent, /Do not claim a normal delegated approval route exists/i);
+  assert.match(
+    skill,
+    /one native `ctx\.ui\.confirm` immediately before execute/i,
+  );
+  assert.match(skill, /invocation itself is not consent/i);
+  assert.match(
+    skill,
+    /Pi delegated agents and prompt templates must be mechanically unable to execute publication/i,
+  );
+  assert.match(contract, /host-native gate/);
+  assert.match(
+    contract,
+    /invocation, previous answers, and adapter metadata never grant consent/,
+  );
+  assert.doesNotMatch(contract, /trusted Pi extension/);
+});
+
 test("flow-pr resolves genuine clarification inside its dedicated child invocation", () => {
   const command = read("hosts/opencode/commands/flow-pr.md");
   const agent = read("hosts/opencode/agents/flow-pr-agent.md");

@@ -25,8 +25,8 @@ const expectedPiAgents = [
 const expectedPiPrompts = [
   "hosts/pi/prompts/flow-branch.md",
   "hosts/pi/prompts/flow-commit.md",
-  "hosts/pi/prompts/flow-pr.md",
 ];
+const expectedPiExtensions = ["hosts/pi/extensions/flow-pr.js"];
 const requiredCoreResources = [
   "core/flow-debt-backlog.mjs",
   "core/flow-debt-contract.mjs",
@@ -45,6 +45,7 @@ const requiredLibraries = [
   "scripts/lib/flow-pr-drafting.mjs",
   "scripts/lib/flow-pr-executor.mjs",
   "scripts/lib/flow-pr-inspection.mjs",
+  "scripts/lib/flow-pr-pi-extension.mjs",
   "scripts/lib/helpers.mjs",
   "scripts/lib/process-control.mjs",
   "scripts/lib/scope.mjs",
@@ -55,6 +56,7 @@ const requiredPackageFiles = [
   "docs/multihost-migration.md",
   "flow-generation.lock.json",
   "hosts/pi/agents/**",
+  "hosts/pi/extensions/**",
   "hosts/pi/flow-assets.json",
   "hosts/pi/flow-assets.lock.json",
   "hosts/pi/prompts/**",
@@ -171,23 +173,40 @@ function discoverPiSkills(packageRoot) {
   });
 }
 
-function discoverPiPrompts(packageRoot) {
+function discoverPiExtensions(packageRoot) {
   const packageJson = readJson("package.json", packageRoot);
-  return packageJson.pi.prompts
+  return packageJson.pi.extensions
     .flatMap((relative) => {
       assert.ok(
         isContainedPackagePath(relative),
-        `unsafe prompt resource: ${relative}`,
+        `unsafe extension resource: ${relative}`,
       );
-      const promptDirectory = path.join(packageRoot, relative);
+      const extensionDirectory = path.join(packageRoot, relative);
       assert.ok(
-        fs.statSync(promptDirectory).isDirectory(),
-        `missing prompt directory: ${relative}`,
+        fs.statSync(extensionDirectory).isDirectory(),
+        `missing extension directory: ${relative}`,
       );
       return fs
-        .readdirSync(promptDirectory, { withFileTypes: true })
-        .filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
+        .readdirSync(extensionDirectory, { withFileTypes: true })
+        .filter((entry) => entry.isFile() && /\.[cm]?js$/.test(entry.name))
         .map((entry) => `${relative}/${entry.name}`);
+    })
+    .sort();
+}
+
+function discoverPiPrompts(packageRoot) {
+  const packageJson = readJson("package.json", packageRoot);
+  return packageJson.pi.prompts
+    .map((relative) => {
+      assert.ok(
+        isContainedPackagePath(relative) && relative.endsWith(".md"),
+        `unsafe prompt resource: ${relative}`,
+      );
+      assert.ok(
+        fs.statSync(path.join(packageRoot, relative)).isFile(),
+        `missing prompt file: ${relative}`,
+      );
+      return relative;
     })
     .sort();
 }
@@ -199,7 +218,8 @@ test("Pi package metadata declares only the explicit v1 skill resources", () => 
   assert.ok(packageJson.keywords.includes("pi"));
   assert.ok(packageJson.keywords.includes("pi-package"));
   assert.deepEqual(packageJson.pi.skills, expectedSkills);
-  assert.deepEqual(packageJson.pi.prompts, ["hosts/pi/prompts"]);
+  assert.deepEqual(packageJson.pi.prompts, expectedPiPrompts);
+  assert.deepEqual(packageJson.pi.extensions, ["hosts/pi/extensions"]);
   assert.deepEqual(packageJson.files, requiredPackageFiles);
   assert.deepEqual(
     packageJson.files.filter((entry) => entry.startsWith("core/")),
@@ -322,6 +342,7 @@ test("packed Pi discovery is complete and independent of OpenCode assets", () =>
 
   assert.deepEqual(discoverPiSkills(packageRoot), expectedSkills);
   assert.deepEqual(discoverPiPrompts(packageRoot), expectedPiPrompts);
+  assert.deepEqual(discoverPiExtensions(packageRoot), expectedPiExtensions);
   for (const agent of expectedPiAgents)
     assert.ok(
       fs.existsSync(path.join(packageRoot, ...agent.split("/"))),
