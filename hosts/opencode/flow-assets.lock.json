@@ -4,7 +4,7 @@
   "distribution": {
     "kind": "managed-deployment"
   },
-  "generationId": "d50b3deaaaee70f23a2b8c9bfe4c674f3dbcc1341edc9ea5314d57fb7b2a9b48",
+  "generationId": "6d171d512a8dc0984634c1359860d47957c07665ddb2f1eb26896ad87432be44",
   "manifest": {
     "sha256": "85c20a2f70ab39714e5ef8fb7be8ce02c86317c1a861c57f0eb37791e1f70173"
   },
@@ -276,8 +276,8 @@
     {
       "source": "scripts/flow-pr.mjs",
       "destination": "scripts/flow-pr.mjs",
-      "sha256": "c844cdd91553995d7d8cfe7da6206fff7563bc83893736c2bbbb3474e7aeee3a",
-      "bytes": 19071,
+      "sha256": "0f6407bd802ea33a63b220f1bf4ab71982384e8ff78b2f5e3b8802a0e64299fa",
+      "bytes": 23409,
       "mode": "100644",
       "executable": false
     },
@@ -636,8 +636,8 @@
     {
       "source": "skills/flow-pr/references/output-contract.md",
       "destination": "skills/flow-pr/references/output-contract.md",
-      "sha256": "f38fa19c2f7139e91be25cb437029ee15adf8d42d992856b92f39c50ad253a4a",
-      "bytes": 11561,
+      "sha256": "92c3a69c884f3eb53c26740b29759fb24af6797bf0796ac7c8bcdd6c3f870af4",
+      "bytes": 12107,
       "mode": "100644",
       "executable": false
     },
@@ -675,8 +675,8 @@
     }
   ],
   "totals": {
-    "bytes": 717729,
+    "bytes": 722613,
     "count": 83
   },
-  "hostIdentity": "765966aaf9a12c0765312f935ae3f7418290beb78d352e25855e07fc91fc7c05"
+  "hostIdentity": "7226696a4f7ee5510240ee53ad1179ad0bda21e8f48831651bf3b421cc9fffb7"
 }

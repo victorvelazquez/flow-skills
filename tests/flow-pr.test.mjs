@@ -475,6 +475,46 @@ test("prepare detects a breaking footer without exposing commit bodies", () => {
   );
 });
 
+test("uncoded finalize failure reports bounded intent diagnostics", () => {
+  const item = fixture();
+  const context = begin(item);
+  const marker = "PRIVATE_MARKER_829";
+  fs.writeFileSync(context.intentPath, `{${marker}`);
+  const before = calls(item).length;
+  const rejected = output(run(item, ["--prepare", "--handle", context.handle]));
+  assert.equal(rejected.status, "failure");
+  assert.equal(rejected.error.code, "runtime-failure");
+  assert.deepEqual(rejected.error.diagnostics, {
+    kind: "runtime-failure",
+    substep: "intent-read",
+    reasonCode: "unexpected-error",
+    message: "Runtime diagnostics were withheld for privacy.",
+  });
+  assert.equal(
+    rejected.error.message,
+    "Runtime diagnostics were withheld for privacy.",
+  );
+  assert.equal(rejected.recovery.code, "prepare-again");
+  assert.equal(calls(item).length, before);
+  assert.equal(fs.existsSync(directoryFor(context.handle)), false);
+  for (const secret of [marker, context.intentPath, context.handle])
+    assert.equal(JSON.stringify(rejected).includes(secret), false);
+});
+
+test("context-read retains known handle code without revealing handle", () => {
+  const item = fixture();
+  const missing = "0".repeat(64) + "." + "1".repeat(64);
+  const rejected = output(run(item, ["--prepare", "--handle", missing]));
+  assert.equal(rejected.error.code, "handle-missing");
+  assert.equal(
+    rejected.error.message,
+    "Runtime diagnostics were withheld for privacy.",
+  );
+  assert.equal(rejected.error.diagnostics.substep, undefined);
+  assert.equal(JSON.stringify(rejected).includes(missing), false);
+  assert.equal(calls(item).length, 0);
+});
+
 test("runtime intent template preserves operational policy while malformed external intents fail closed", async (t) => {
   await t.test(
     "fresh semantic-only authoring finalizes the complete runtime template",
