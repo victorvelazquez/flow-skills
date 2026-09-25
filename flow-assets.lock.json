@@ -10,7 +10,7 @@
     "sha256": "6593df36caf20f294bd1e521510dd978099e6b2d1e9ca66ce519deff3cb0cb9c"
   },
   "totals": {
-    "bytes": 672076,
+    "bytes": 672577,
     "count": 59
   },
   "files": [
@@ -387,8 +387,8 @@
     },
     {
       "path": "skills/flow-pr/SKILL.md",
-      "sha256": "c9f44f411769ba11bddfd23174388f3eb9959a9a17b453690a0c809d0a162fa3",
-      "bytes": 8723,
+      "sha256": "4d4f05e4059b13a60debecbbf1d1aba718bdc1d3b704cd7cca5ead2e69ad69a5",
+      "bytes": 9224,
       "mode": "100644",
       "executable": false
     },

@@ -1,6 +1,6 @@
 {
   "$schema": "flow-generation-lock/v2",
-  "generationId": "a75e944e5a7e34a7b9b438049ddb9c3ceac90e7019a8aca11b310534804516b7",
+  "generationId": "91d58b51710d9a59e134649991845e357637353fde035804f12c31c59a9de8e1",
   "package": {
     "sha256": "856dfe9779f8a65bda1b3fd831e55fce104dabe3b747ca9ae443df0f7a8d945f"
   },
@@ -87,8 +87,8 @@
     },
     {
       "source": "hosts/opencode/agents/flow-pr-agent.md",
-      "sha256": "d2e76768b4f8e3c081c2d63bd67f3fbcfbaf0838ffc5f9bc1b9691cdc1bd7d97",
-      "bytes": 6403,
+      "sha256": "2dd3202092d2c462ea585488cd0ad9ba667311b03b32c25aac920b7e3d2bed73",
+      "bytes": 6908,
       "mode": "100644",
       "executable": false
     },
@@ -213,8 +213,8 @@
     },
     {
       "source": "hosts/pi/agents/flow-pr.md",
-      "sha256": "6d178eeaf24f9840891a9c15ad6e320fb1e264515c04da7b6e76e527865fcfd9",
-      "bytes": 1803,
+      "sha256": "3e2102dc17444858305316fea57f86a1b2fd25200d2e0b1abace9fae3713c695",
+      "bytes": 2635,
       "mode": "100644",
       "executable": false
     },
@@ -626,8 +626,8 @@
     },
     {
       "source": "skills/flow-pr/SKILL.md",
-      "sha256": "c9f44f411769ba11bddfd23174388f3eb9959a9a17b453690a0c809d0a162fa3",
-      "bytes": 8723,
+      "sha256": "4d4f05e4059b13a60debecbbf1d1aba718bdc1d3b704cd7cca5ead2e69ad69a5",
+      "bytes": 9224,
       "mode": "100644",
       "executable": false
     },

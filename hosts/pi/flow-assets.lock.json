@@ -4,7 +4,7 @@
   "distribution": {
     "kind": "package-resources"
   },
-  "generationId": "a75e944e5a7e34a7b9b438049ddb9c3ceac90e7019a8aca11b310534804516b7",
+  "generationId": "91d58b51710d9a59e134649991845e357637353fde035804f12c31c59a9de8e1",
   "manifest": {
     "sha256": "7f8036a0737c4b7ae1e026862dd94b7c0ae41814fe0489659f0154b9b8faa62b"
   },
@@ -67,8 +67,8 @@
     },
     {
       "source": "hosts/pi/agents/flow-pr.md",
-      "sha256": "6d178eeaf24f9840891a9c15ad6e320fb1e264515c04da7b6e76e527865fcfd9",
-      "bytes": 1803,
+      "sha256": "3e2102dc17444858305316fea57f86a1b2fd25200d2e0b1abace9fae3713c695",
+      "bytes": 2635,
       "mode": "100644",
       "executable": false
     },
@@ -480,8 +480,8 @@
     },
     {
       "source": "skills/flow-pr/SKILL.md",
-      "sha256": "c9f44f411769ba11bddfd23174388f3eb9959a9a17b453690a0c809d0a162fa3",
-      "bytes": 8723,
+      "sha256": "4d4f05e4059b13a60debecbbf1d1aba718bdc1d3b704cd7cca5ead2e69ad69a5",
+      "bytes": 9224,
       "mode": "100644",
       "executable": false
     },
@@ -522,8 +522,8 @@
     }
   ],
   "totals": {
-    "bytes": 722335,
+    "bytes": 723668,
     "count": 73
   },
-  "hostIdentity": "9e8a8385abcdbb63a7bd066d6ed2d000a2bb68ef721b16f2040d9109f576b47e"
+  "hostIdentity": "4e4a9e903b2463279be8f813919a302fc176bd2500607c96dee4c4be44cbc6fe"
 }

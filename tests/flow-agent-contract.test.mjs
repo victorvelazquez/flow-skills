@@ -41,6 +41,25 @@ const permissionFor = (rules, resource, home, options) =>
       ? rule.action
       : action;
   }, undefined);
+test("flow-pr intent authoring preserves JSON structure and checks syntax before finalize", () => {
+  const skill = read("skills/flow-pr/SKILL.md");
+  const pi = read("hosts/pi/agents/flow-pr.md");
+  const opencode = read("hosts/opencode/agents/flow-pr-agent.md");
+  for (const surface of [skill, pi, opencode]) {
+    assert.match(surface, /value-only/i);
+    assert.match(surface, /comma/i);
+    assert.match(surface, /JSON-escap/i);
+    assert.match(surface, /read back/i);
+    assert.match(surface, /--prepare --handle/);
+  }
+  assert.match(pi, /read-only Node/i);
+  assert.match(pi, /constant success marker/i);
+  assert.match(pi, /positional/i);
+  assert.match(opencode, /apply_patch/);
+  assert.match(opencode, /delimiters/i);
+  assert.doesNotMatch(opencode, /node -e|node --input-type/);
+});
+
 test("flow-pr command, agent, and skill expose direct authorized execution", () => {
   const command = read("hosts/opencode/commands/flow-pr.md");
   const agent = read("hosts/opencode/agents/flow-pr-agent.md");
@@ -257,7 +276,7 @@ test("flow-pr agent preserves runtime operational fields during semantic apply_p
   assert.match(agent, /exact returned absolute `intentPath`/);
   assert.match(
     agent,
-    /change only the `title`, `body`, and `draft` value lines/,
+    /value-only changes to the `title`, `body`, and `draft` scalar values/,
   );
   for (const field of [
     "labels",
