@@ -15,7 +15,7 @@ Do not blindly replace an OpenCode host tree. Flow manages only exact declared a
 | Topic | Pi | OpenCode |
 | --- | --- | --- |
 | Discovery | Declared package skills; natural matching or `/skill:flow-*` | Native `/flow-*` command adapters |
-| Clarification and approval | Pi conversation and its native permission/confirmation controls | Adapter-native `question` and exact permission boundaries |
+| Clarification and approval | Native controls for workflows that require them; manual `/flow-commit` and `/flow-pr` authorize their own execution | Native controls for other workflows; manual `/flow-commit` and `/flow-pr` execute directly and PR ambiguity blocks |
 | Installation | `pi install <package-source>` | Repository-local `node install.mjs` preview, then its exact approved apply command |
 | Ownership | Pi/package manager owns placement; Flow writes no Pi settings | Flow deploys only lock-declared adapter paths; host configuration remains untouched |
 | Reconciliation | Not an end-user workflow | Maintainer-only, explicit, repository-local read-only preview before any separately approved correction |
@@ -94,12 +94,12 @@ This order restores canonical Flow resources without copying, modifying, or back
 | `flow-audit-fix` | Added | Use `flow-audit-fix` through package discovery | Use `/flow-audit-fix` | Preview first; each execution requires explicit host-native approval. |
 | `flow-branch` | Retained | Use `flow-branch` | Use `/flow-branch` | Native host clarification retains guarded update/delete approval. |
 | `flow-build` | Retained | Use `flow-build` | Use `/flow-build` | Guided documentation generation remains approval-bound for writes. |
-| `flow-commit` | Retained | Use `flow-commit` | Use `/flow-commit` | Preserve prepare, seal, one approval, execute, and verify. |
+| `flow-commit` | Retained | Use `/flow-commit` | Use `/flow-commit` | Manual invocation authorizes prepare, seal, execute, and verify without a second approval. |
 | `flow-debt` | Retained | Use `flow-debt` | Use `/flow-debt` | Project-local debt changes stop for required approval. |
 | `flow-docs-sync` | Retained | Use `flow-docs-sync` | Use `/flow-docs-sync` | Preview content changes before approval. |
 | `flow-playbook-compare` | Added | Use `flow-playbook-compare` | Use `/flow-playbook-compare` | Read-only comparison returns neutral replacement candidates; it does not invoke `flow-pr` or apply changes. |
 | `flow-playbook-sync` | Retained | Use `flow-playbook-sync` | Use `/flow-playbook-sync` | Compare project and playbook; no automatic PR invocation is implied. |
-| `flow-pr` | Retained | Use `flow-pr` | Use `/flow-pr` | Preserve bounded authoring and one approved immutable execution. |
+| `flow-pr` | Retained | Use `/flow-pr` | Use `/flow-pr` | Manual invocation authorizes bounded authoring and immutable execution without a second question or approval; ambiguity blocks for fresh explicit invocation. |
 | `flow-refactor` | Retained | Use `flow-refactor` | Use `/flow-refactor` | This is a read-only scoped audit. |
 | `flow-request` | Retained | Use `flow-request` | Use `/flow-request` | Preview one configured local target; each cross-repository execute requires host-native approval and unavailable targets use requester-local outbox records. |
 | `flow-ui` | Retained | Use `flow-ui` | Use `/flow-ui` | This is a read-only UI compliance audit. |

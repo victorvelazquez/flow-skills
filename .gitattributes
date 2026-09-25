@@ -8,9 +8,11 @@ core/flow-debt-preparation.mjs -text
 core/workflows.json -text
 hosts/opencode/agents/flow-*.md -text
 hosts/opencode/commands/flow-*.md -text
+hosts/pi/** -text
 scripts/flow-*.mjs -text
 skills/flow-*/** -text
 skills/ui-design-system/** -text
+scripts/lib/*.mjs -text
 scripts/lib/detect-tooling.mjs -text
 scripts/lib/dotnet-format.mjs -text
 scripts/lib/flow-audit-cache.mjs -text

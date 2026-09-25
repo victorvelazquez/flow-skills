@@ -4,7 +4,7 @@
   "distribution": {
     "kind": "managed-deployment"
   },
-  "generationId": "547e8856804623f77ac977a96ff2c39fbea466ceb316c1d13cf2b218080cff00",
+  "generationId": "6d171d512a8dc0984634c1359860d47957c07665ddb2f1eb26896ad87432be44",
   "manifest": {
     "sha256": "85c20a2f70ab39714e5ef8fb7be8ce02c86317c1a861c57f0eb37791e1f70173"
   },
@@ -36,8 +36,8 @@
     {
       "source": "core/workflows.json",
       "destination": "core/workflows.json",
-      "sha256": "d56c1a7a48572d249e3d766f46d6a646039fc7f0af94e207f19a470e2c4220ff",
-      "bytes": 4971,
+      "sha256": "0e2c417ae5426c528f5e874a262925a72e3f79d3f6abfb2e66ade0956304e796",
+      "bytes": 4848,
       "mode": "100644",
       "executable": false
     },
@@ -68,16 +68,16 @@
     {
       "source": "hosts/opencode/agents/flow-git-agent.md",
       "destination": "agents/flow-git-agent.md",
-      "sha256": "83f43ebe6aeb622ae3c7a4051ab273ab3e44f29d12657be28623c6d2cc79f38c",
-      "bytes": 4136,
+      "sha256": "dd4dd64d46b935d618a7af1df108106b919323a9362c69a36ffe6bf9d5241c6b",
+      "bytes": 4069,
       "mode": "100644",
       "executable": false
     },
     {
       "source": "hosts/opencode/agents/flow-pr-agent.md",
       "destination": "agents/flow-pr-agent.md",
-      "sha256": "c5224bdfb5be8bc3d0726102cf8261337764df99ea5afa68c707a60cf5df018e",
-      "bytes": 6572,
+      "sha256": "d2e76768b4f8e3c081c2d63bd67f3fbcfbaf0838ffc5f9bc1b9691cdc1bd7d97",
+      "bytes": 6403,
       "mode": "100644",
       "executable": false
     },
@@ -132,8 +132,8 @@
     {
       "source": "hosts/opencode/commands/flow-commit.md",
       "destination": "commands/flow-commit.md",
-      "sha256": "7c51774c11aabc79218dd8b58db30667db67db77cde2c53223369b89cbe454dd",
-      "bytes": 1220,
+      "sha256": "a0a4107d86ef6ae842ff3e6475cf64c7309d6ed6276519f19576b15b69b2a2b6",
+      "bytes": 1218,
       "mode": "100644",
       "executable": false
     },
@@ -172,8 +172,8 @@
     {
       "source": "hosts/opencode/commands/flow-pr.md",
       "destination": "commands/flow-pr.md",
-      "sha256": "e33550a4aa79c213564a12d5c8806f9a539987a96eab112963d4a3fe4fa53c69",
-      "bytes": 2903,
+      "sha256": "1c20e94a785d4c2c4175a239ff75ce1bf7d64a718257838a5b58c3fa421fc592",
+      "bytes": 2779,
       "mode": "100644",
       "executable": false
     },
@@ -236,8 +236,8 @@
     {
       "source": "scripts/flow-commit.mjs",
       "destination": "scripts/flow-commit.mjs",
-      "sha256": "132f3e04978c5aebe74f3163c0af068c1a79a6dbe736ff36d7493845b797ba6f",
-      "bytes": 67896,
+      "sha256": "d5cd408007aae0234b5965f6cc20d294bbefc929860afd81c743d095fdfca206",
+      "bytes": 67940,
       "mode": "100644",
       "executable": false
     },
@@ -276,8 +276,8 @@
     {
       "source": "scripts/flow-pr.mjs",
       "destination": "scripts/flow-pr.mjs",
-      "sha256": "c844cdd91553995d7d8cfe7da6206fff7563bc83893736c2bbbb3474e7aeee3a",
-      "bytes": 19071,
+      "sha256": "0f6407bd802ea33a63b220f1bf4ab71982384e8ff78b2f5e3b8802a0e64299fa",
+      "bytes": 23409,
       "mode": "100644",
       "executable": false
     },
@@ -588,8 +588,8 @@
     {
       "source": "skills/flow-commit/SKILL.md",
       "destination": "skills/flow-commit/SKILL.md",
-      "sha256": "1174879dc6794b4574c46096311f13f8f99800ea9c1ab9b4084e39013d3360bf",
-      "bytes": 6468,
+      "sha256": "c3abc91c9211b152c1cbc07630059cd52218b19a38b4699496946cea34fd59ef",
+      "bytes": 6483,
       "mode": "100644",
       "executable": false
     },
@@ -628,16 +628,16 @@
     {
       "source": "skills/flow-pr/SKILL.md",
       "destination": "skills/flow-pr/SKILL.md",
-      "sha256": "cffba56ad333bed5ed4f1092312cc4b4251ecc4d16370cf38da7976d44875b61",
-      "bytes": 9600,
+      "sha256": "c9f44f411769ba11bddfd23174388f3eb9959a9a17b453690a0c809d0a162fa3",
+      "bytes": 8723,
       "mode": "100644",
       "executable": false
     },
     {
       "source": "skills/flow-pr/references/output-contract.md",
       "destination": "skills/flow-pr/references/output-contract.md",
-      "sha256": "f38fa19c2f7139e91be25cb437029ee15adf8d42d992856b92f39c50ad253a4a",
-      "bytes": 11561,
+      "sha256": "92c3a69c884f3eb53c26740b29759fb24af6797bf0796ac7c8bcdd6c3f870af4",
+      "bytes": 12107,
       "mode": "100644",
       "executable": false
     },
@@ -675,8 +675,8 @@
     }
   ],
   "totals": {
-    "bytes": 719032,
+    "bytes": 722613,
     "count": 83
   },
-  "hostIdentity": "57543659fb82cee275eb976cd1fe7e825d2a19d16b0eaba65eba33894ec50468"
+  "hostIdentity": "7226696a4f7ee5510240ee53ad1179ad0bda21e8f48831651bf3b421cc9fffb7"
 }
