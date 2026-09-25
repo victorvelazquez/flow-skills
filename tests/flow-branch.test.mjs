@@ -70,6 +70,23 @@ test("bare invocation remains an interactive inventory", () => {
   assert.ok(json.allBranches.length >= json.branches.length);
 });
 
+test("displayed indices can differ from full inventory indices", () => {
+  const { work } = fixture(["feature/remote"]);
+  for (let index = 0; index < 12; index += 1)
+    git(work, ["branch", `local/${String(index).padStart(2, "0")}`]);
+  const { json } = result(work, ["--auto-list"]);
+  const remote = json.branches.find((entry) => entry.name === "feature/remote");
+  assert.ok(remote);
+  assert.match(json.display, new RegExp(`${remote.index}\\. feature/remote`));
+  const wrong = json.allBranches.find((entry) => entry.index === remote.index);
+  assert.ok(wrong);
+  assert.notEqual(wrong.name, remote.name);
+  assert.equal(
+    json.branches.filter((entry) => entry.index === remote.index).length,
+    1,
+  );
+});
+
 test("development aliases follow deterministic fallback while exact protected names never cross-fallback", () => {
   const alias = fixture(["development", "develop", "dev"]);
   for (const requested of ["dev", "develop", "development"]) {
@@ -117,6 +134,44 @@ test("development aliases follow deterministic fallback while exact protected na
   assert.notEqual(missingExact.execution.status, 0);
   assert.match(missingExact.json.error, /not found/i);
   assert.equal(git(noMaster.work, ["branch", "--show-current"]), "main");
+});
+
+test("exact numbered identity bypasses aliases and reuses direct safety checks", () => {
+  const item = fixture(["development", "develop", "dev", "feature/diverged"]);
+  const listed = result(item.work, ["--auto-list"]).json;
+  for (const name of ["dev", "develop"]) {
+    const selected = listed.allBranches.find((entry) => entry.name === name);
+    assert.ok(selected);
+    const { execution, json } = result(item.work, [
+      "--exact-branch",
+      selected.name,
+    ]);
+    assert.equal(execution.status, 0, execution.stderr);
+    assert.equal(json.branch, name);
+    assert.equal(git(item.work, ["branch", "--show-current"]), name);
+    assert.equal(result(item.work, [name]).json.branch, "development");
+  }
+  const missing = result(item.work, ["--exact-branch", "feature/div"]);
+  assert.notEqual(missing.execution.status, 0);
+  assert.match(missing.json.error, /not found/i);
+
+  fs.writeFileSync(path.join(item.work, "untracked.txt"), "preserve\n");
+  const dirty = result(item.work, ["--exact-branch", "dev"]);
+  assert.notEqual(dirty.execution.status, 0);
+  assert.equal(dirty.json.dirty, true);
+  assert.equal(git(item.work, ["branch", "--show-current"]), "development");
+  fs.unlinkSync(path.join(item.work, "untracked.txt"));
+
+  git(item.work, ["checkout", "--track", "origin/feature/diverged"]);
+  commit(item.work, "local advance", "local.txt");
+  git(item.work, ["checkout", "main"]);
+  git(item.seed, ["checkout", "feature/diverged"]);
+  commit(item.seed, "remote advance", "remote.txt");
+  git(item.seed, ["push", "origin", "feature/diverged"]);
+  const diverged = result(item.work, ["--exact-branch", "feature/diverged"]);
+  assert.notEqual(diverged.execution.status, 0);
+  assert.match(diverged.json.error, /diverged/i);
+  assert.equal(git(item.work, ["branch", "--show-current"]), "main");
 });
 
 test("direct resolution prefers exact names, accepts unique prefixes, and blocks ambiguity", () => {

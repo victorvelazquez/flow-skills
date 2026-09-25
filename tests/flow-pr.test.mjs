@@ -517,6 +517,58 @@ test("context-read retains known handle code without revealing handle", () => {
 
 test("runtime intent template preserves operational policy while malformed external intents fail closed", async (t) => {
   await t.test(
+    "comma-loss replacement fails while value-only edit finalizes",
+    () => {
+      const broken = fixture();
+      const first = begin(broken);
+      const template = fs.readFileSync(first.intentPath, "utf8");
+      const bodyLine = template.match(/^ {2}"body": .*,$/m)?.[0];
+      assert.ok(bodyLine);
+      const malformed = template.replace(bodyLine, '  "body": "Safe text"');
+      assert.throws(() => JSON.parse(malformed), SyntaxError);
+      fs.writeFileSync(first.intentPath, malformed);
+      const before = calls(broken).length;
+      const failure = output(
+        run(broken, ["--prepare", "--handle", first.handle]),
+      );
+      assert.equal(failure.status, "failure");
+      assert.equal(failure.error.diagnostics.substep, "intent-read");
+      assert.equal(calls(broken).length, before);
+
+      const safe = fixture();
+      const second = begin(safe);
+      const original = fs.readFileSync(second.intentPath, "utf8");
+      const expected = JSON.parse(original);
+      const body = 'Line one\nQuote "two"';
+      const edited = original
+        .replace(
+          /^ {2}"title": (.*?)(,?)$/m,
+          (_, value, comma) =>
+            `  "title": ${JSON.stringify("feat: contract")}${comma}`,
+        )
+        .replace(
+          /^ {2}"body": (.*?)(,)$/m,
+          (_, value, comma) => `  "body": ${JSON.stringify(body)}${comma}`,
+        )
+        .replace(
+          /^ {2}"draft": (.*?)(,?)$/m,
+          (_, value, comma) => `  "draft": true${comma}`,
+        );
+      const parsed = JSON.parse(edited);
+      assert.deepEqual(Object.keys(parsed), Object.keys(expected));
+      for (const key of Object.keys(expected).filter(
+        (key) => !["title", "body", "draft"].includes(key),
+      ))
+        assert.deepEqual(parsed[key], expected[key]);
+      assert.equal(parsed.body, body);
+      fs.writeFileSync(second.intentPath, edited);
+      assert.equal(
+        output(run(safe, ["--prepare", "--handle", second.handle])).status,
+        "prepared",
+      );
+    },
+  );
+  await t.test(
     "fresh semantic-only authoring finalizes the complete runtime template",
     () => {
       const item = fixture();

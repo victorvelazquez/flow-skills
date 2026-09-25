@@ -41,6 +41,25 @@ const permissionFor = (rules, resource, home, options) =>
       ? rule.action
       : action;
   }, undefined);
+test("flow-pr intent authoring preserves JSON structure and checks syntax before finalize", () => {
+  const skill = read("skills/flow-pr/SKILL.md");
+  const pi = read("hosts/pi/agents/flow-pr.md");
+  const opencode = read("hosts/opencode/agents/flow-pr-agent.md");
+  for (const surface of [skill, pi, opencode]) {
+    assert.match(surface, /value-only/i);
+    assert.match(surface, /comma/i);
+    assert.match(surface, /JSON-escap/i);
+    assert.match(surface, /read back/i);
+    assert.match(surface, /--prepare --handle/);
+  }
+  assert.match(pi, /read-only Node/i);
+  assert.match(pi, /constant success marker/i);
+  assert.match(pi, /positional/i);
+  assert.match(opencode, /apply_patch/);
+  assert.match(opencode, /delimiters/i);
+  assert.doesNotMatch(opencode, /node -e|node --input-type/);
+});
+
 test("flow-pr command, agent, and skill expose direct authorized execution", () => {
   const command = read("hosts/opencode/commands/flow-pr.md");
   const agent = read("hosts/opencode/agents/flow-pr-agent.md");
@@ -257,7 +276,7 @@ test("flow-pr agent preserves runtime operational fields during semantic apply_p
   assert.match(agent, /exact returned absolute `intentPath`/);
   assert.match(
     agent,
-    /change only the `title`, `body`, and `draft` value lines/,
+    /value-only changes to the `title`, `body`, and `draft` scalar values/,
   );
   for (const field of [
     "labels",
@@ -552,6 +571,40 @@ test("flow-branch command delegates arguments as data to its dedicated runtime-o
   assert.match(contract, /explicit confirmation/i);
   assert.match(contract, /specific branch|specifico/i);
   assert.match(contract, /ask-force-delete/);
+});
+
+test("flow-branch explicit and numbered selection use direct update while deletion remains gated", () => {
+  const skill = read("skills/flow-branch/SKILL.md");
+  const agent = read("hosts/opencode/agents/flow-branch-agent.md");
+  const port = read("core/host-adapter-contract.md");
+  for (const text of [skill, agent]) {
+    assert.match(
+      text,
+      /current[^\n]*`branches`[^\n]*`index`[^\n]*exact[^\n]*name/i,
+    );
+    assert.match(text, /`allBranches`[^\n]*not[^\n]*displayed numbers/i);
+    assert.match(
+      text,
+      /numeric delet(?:e|ion)[\s\S]*same displayed[^\n]*`branches`[^\n]*`index`/i,
+    );
+    assert.match(
+      text,
+      /delet[\s\S]*separate confirmation[^\n]*exact[^\n]*names/i,
+    );
+    assert.match(text, /number[\s\S]*--exact-branch <name>/i);
+    assert.match(text, /manual[\s\S]*one-token direct/i);
+    assert.match(
+      text,
+      /never route numbered names through (?:direct )?aliases/i,
+    );
+    assert.match(text, /delet[\s\S]*separate[\s\S]*confirm/i);
+    assert.match(text, /ask-force-delete/);
+    assert.match(text, /(?:specific|that) branch/i);
+  }
+  assert.match(
+    port,
+    /explicit Flow Branch selection[^\n]*Flow Branch deletion[^\n]*separate/i,
+  );
 });
 
 test("flow-branch agent permits its installed runtime with POSIX and Windows separators", () => {

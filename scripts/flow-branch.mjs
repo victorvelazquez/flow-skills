@@ -6,6 +6,7 @@
  * Modes:
  *   --auto-list                                   Fetch + classify branches → JSON
  *   <branch-or-alias>                             Resolve + checkout branch, pulling when applicable → JSON
+ *   --exact-branch <name>                         Checkout exact inventory identity via direct safety path → JSON
  *   --checkout --branch <name> [--pull]           Checkout local/remote branch → JSON
  *   --delete --branch <name>                      Delete local branch → JSON
  *   --delete --branch <name> --force              Force delete local branch → JSON
@@ -541,7 +542,7 @@ function directCheckoutError(branch, outputText) {
   return `Checkout failed: ${outputText}`;
 }
 
-function checkoutDirectBranch(branchOrAlias) {
+function checkoutDirectBranch(branchOrAlias, { exact = false } = {}) {
   const status = runGitSafe([
     "status",
     "--porcelain=v1",
@@ -563,7 +564,16 @@ function checkoutDirectBranch(branchOrAlias) {
   }
 
   const inventory = buildBranchInventory({ requireFetch: true });
-  const resolution = resolveDirectBranch(branchOrAlias, inventory.allBranches);
+  const resolution = exact
+    ? (() => {
+        const match = inventory.allBranches.find(
+          (item) => item.name === branchOrAlias,
+        );
+        return match
+          ? { status: "resolved", branch: match, matches: [match] }
+          : { status: "none", matches: [] };
+      })()
+    : resolveDirectBranch(branchOrAlias, inventory.allBranches);
 
   if (resolution.status !== "resolved") {
     showDirectOptions(branchOrAlias, resolution, inventory);
@@ -675,6 +685,7 @@ function printHelp() {
       "Usage:",
       "  node flow-branch.mjs --auto-list",
       "  node flow-branch.mjs <branch-or-alias>",
+      "  node flow-branch.mjs --exact-branch <name>",
       "  node flow-branch.mjs --checkout --branch <name> [--pull]",
       "  node flow-branch.mjs --delete --branch <name> [--force]",
     ].join("\n") + "\n",
@@ -685,12 +696,21 @@ const rawArgs = process.argv.slice(2);
 const flags = parseArgs();
 const directBranchArg =
   rawArgs.length === 1 && !rawArgs[0].startsWith("--") ? rawArgs[0] : null;
+const exactBranchArg =
+  rawArgs.length === 2 && rawArgs[0] === "--exact-branch" ? rawArgs[1] : null;
 
 try {
   if (flags["auto-list"]) {
     autoList();
   } else if (directBranchArg) {
     checkoutDirectBranch(directBranchArg);
+  } else if (rawArgs[0] === "--exact-branch") {
+    if (
+      !exactBranchArg ||
+      !/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(exactBranchArg)
+    )
+      failJson("direct", "Exact branch requires one valid branch name");
+    checkoutDirectBranch(exactBranchArg, { exact: true });
   } else if (flags["checkout"]) {
     checkoutBranch(flags);
   } else if (flags["delete"]) {
@@ -702,7 +722,7 @@ try {
 } catch (error) {
   const mode = flags["auto-list"]
     ? "auto-list"
-    : directBranchArg
+    : directBranchArg || rawArgs[0] === "--exact-branch"
       ? "direct"
       : flags["checkout"]
         ? "checkout"
