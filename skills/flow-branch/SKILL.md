@@ -27,15 +27,16 @@ Use this workflow to select, update, or delete an existing branch. Resolve the p
 | --- | --- |
 | No input | Run the runtime with `--auto-list`; present `display` and `instructions` verbatim, then request a selection through the host. |
 | One valid branch token | Run the runtime with that single argument and present its structured result. |
-| Interactive checkout | Run `--checkout --branch <name>`. On `ask-pull`, collect one approval, then run the same command with `--pull`. |
-| Delete request | Build candidates from `allBranches`, filter forbidden entries, present the exact local list, and stop for confirmation. |
+| Number selected from bare listing | Map the number only through the current listing's displayed `branches` entry with matching `index` to its exact `name`. `allBranches` may validate name membership, not translate displayed numbers. Reject missing, stale, or ambiguous choices; validate the name as data, then invoke `--exact-branch <name>` once. The runtime fetches fresh inventory and rejects an absent exact identity without alias or prefix fallback. Never treat a number as a branch name. |
+| Legacy interactive checkout | If already in `--checkout --branch <name>` compatibility mode, on `ask-pull` collect approval, then run the same command with `--pull`. Do not enter this mode for explicit selection. |
+| Numeric delete request (`2 eliminar`, ranges or comma-separated numbers) | Map every number through the same displayed `branches` entry by `index` to its exact `name`. Reject missing, stale, duplicated or forbidden entries (protected, current, remote-only or forbidden names); `allBranches` may validate name membership, not translate displayed numbers. Present the exact candidate names and stop for separate confirmation explicitly naming those exact names before any `--delete --branch <name>`. |
 | `ask-force-delete` | Stop and collect approval only for the named unmerged branch; run `--force` only after that approval. |
 | Any other error | Present the runtime error and stop without alternate mutation. |
 
 ## Execution Steps
 
 1. Load this skill before invoking the runtime.
-2. For direct mode, pass exactly one validated argument. The runtime owns fetch, resolution, clean-worktree checks, checkout/tracking, and fast-forward-only update.
+2. For a manual branch token, pass exactly one validated argument through the one-token direct route. For a number resolved by `index` from the current displayed `branches` listing, validate its exact name and pass it with `--exact-branch <name>`; never route numbered names through direct aliases. Do not ask again to pull: explicit selection authorizes this safe checkout/update only. The runtime re-resolves and stale-checks the branch and owns fetch, resolution, clean-worktree checks, checkout/tracking, and fast-forward-only update. Never infer deletion authorization from invocation or number selection; deletion requires separate explicit confirmation.
 3. For interactive mode, follow `nextAction`; never infer success.
 4. Execute confirmed deletions sequentially with `--delete --branch <name>` and preserve per-branch force confirmation.
 

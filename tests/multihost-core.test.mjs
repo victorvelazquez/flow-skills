@@ -315,9 +315,17 @@ test("host adapter contract defines portable analysis and mutation boundaries", 
   );
   assert.match(
     contract,
-    /only manual `\/flow-commit` and `\/flow-pr` invocation.*authoriz/i,
+    /manual `\/flow-commit` and `\/flow-pr` invocation.*authoriz/i,
   );
-  assert.match(contract, /other workflows.*host-native gate/i);
+  assert.match(
+    contract,
+    /Flow Branch selection.*authorizes only.*checkout and fast-forward-only update.*without a second `ask-pull`/i,
+  );
+  assert.match(
+    contract,
+    /Flow Branch deletion.*separate confirmation.*force deletion.*per-branch approval/i,
+  );
+  assert.match(contract, /other operations.*host-native gate/i);
   assert.match(contract, /adapters own interaction and presentation/i);
   assert.match(
     contract,

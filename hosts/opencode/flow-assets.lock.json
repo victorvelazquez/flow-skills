@@ -4,7 +4,7 @@
   "distribution": {
     "kind": "managed-deployment"
   },
-  "generationId": "6d171d512a8dc0984634c1359860d47957c07665ddb2f1eb26896ad87432be44",
+  "generationId": "a75e944e5a7e34a7b9b438049ddb9c3ceac90e7019a8aca11b310534804516b7",
   "manifest": {
     "sha256": "85c20a2f70ab39714e5ef8fb7be8ce02c86317c1a861c57f0eb37791e1f70173"
   },
@@ -52,8 +52,8 @@
     {
       "source": "hosts/opencode/agents/flow-branch-agent.md",
       "destination": "agents/flow-branch-agent.md",
-      "sha256": "b017524d153807e3c548d0285beb0a4cef73904644a020a7303cf60f3b6e7db3",
-      "bytes": 1787,
+      "sha256": "56acbb73e8c5c2c36f4f25a84c2d3e5d8999bd7e094fdd3298cb44a3791ad963",
+      "bytes": 2861,
       "mode": "100644",
       "executable": false
     },
@@ -220,8 +220,8 @@
     {
       "source": "scripts/flow-branch.mjs",
       "destination": "scripts/flow-branch.mjs",
-      "sha256": "ce30eb5ce96c5106fa43a505b2bd7acbbfb29541181ac3f83f59b88027024fc9",
-      "bytes": 19531,
+      "sha256": "be094f70830f7b3d5411689f10d717d81d6f4b9addfb65513de32b5f5f07e5c4",
+      "bytes": 20425,
       "mode": "100644",
       "executable": false
     },
@@ -436,8 +436,8 @@
     {
       "source": "skills/flow-branch/SKILL.md",
       "destination": "skills/flow-branch/SKILL.md",
-      "sha256": "d72a0ce02fd9147dfb4f445946b541932d576508fd8be9b9d7f4ee88b6b4c252",
-      "bytes": 2877,
+      "sha256": "2be43f832987783030fdd1868646a8bae24bdd017ff1b76a8c0da2233b74a0ca",
+      "bytes": 4309,
       "mode": "100644",
       "executable": false
     },
@@ -675,8 +675,8 @@
     }
   ],
   "totals": {
-    "bytes": 722613,
+    "bytes": 726013,
     "count": 83
   },
-  "hostIdentity": "7226696a4f7ee5510240ee53ad1179ad0bda21e8f48831651bf3b421cc9fffb7"
+  "hostIdentity": "141982bf5e1afc839c897970e82fa8c086a54572b97c00ef0232a3cc2cbb8025"
 }
