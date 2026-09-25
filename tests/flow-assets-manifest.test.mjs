@@ -217,7 +217,9 @@ test("manifest and lock define a deterministic, complete, safe mirror", () => {
     "hosts/opencode/flow-assets.lock.json",
     "hosts/pi/flow-assets.json",
     "hosts/pi/flow-assets.lock.json",
+    "hosts/pi/**",
     "package.json",
+    "scripts/lib/*.mjs",
     ...manifest.liveMirrored.patterns.map((entry) => entry.path),
     ...manifest.liveMirrored.libraries.filter(
       (entry) => entry !== "scripts/lib/flow-debt-writer.mjs",

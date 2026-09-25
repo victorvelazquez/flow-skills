@@ -229,22 +229,17 @@ test("OpenCode adapter coverage follows workflow membership rather than source o
   );
 });
 
-test("OpenCode Git and GitHub adapters return unavailable instead of inferring missing approval", () => {
-  for (const [agent, expected] of [
-    [
-      "flow-branch-agent",
-      /approval is unavailable, return `unavailable` without invoking the gated runtime operation/i,
-    ],
-    [
-      "flow-git-agent",
-      /approval is unavailable, return `unavailable` without invoking execute/i,
-    ],
-    [
-      "flow-pr-agent",
-      /question capability is unavailable, return `unavailable` without mutation/i,
-    ],
-  ])
-    assert.match(read(opencodeAgent(agent)), expected);
+test("OpenCode branch retains its native gate while Commit and PR execute on manual invocation", () => {
+  assert.match(
+    read(opencodeAgent("flow-branch-agent")),
+    /approval is unavailable, return `unavailable` without invoking the gated runtime operation/i,
+  );
+  for (const name of ["flow-git-agent", "flow-pr-agent"]) {
+    const agent = read(opencodeAgent(name));
+    assert.match(agent, /--execute --handle \*": allow/);
+    assert.doesNotMatch(agent, /--execute --handle \*": ask/);
+    assert.match(agent, /Manual `\/flow-(?:commit|pr)` invocation authorizes/i);
+  }
 });
 
 test("OpenCode managed mappings include portable core resources, skills, and runtimes", () => {
@@ -315,7 +310,7 @@ test("OpenCode adapter syntax stays outside the Pi package boundary", () => {
   }
 });
 
-test("OpenCode Git adapters retain native argument routing and distinct approval gates", () => {
+test("OpenCode Git adapters retain native argument routing and distinct authorization", () => {
   const branch = read(opencodeCommand("flow-branch"));
   const commit = read(opencodeCommand("flow-commit"));
   const branchAgent = read(opencodeAgent("flow-branch-agent"));
@@ -332,13 +327,12 @@ test("OpenCode Git adapters retain native argument routing and distinct approval
     /approval is unavailable, return `unavailable` without invoking the gated runtime operation/i,
   );
   assert.match(commit, /^agent: flow-git-agent$/m);
-  assert.match(commitAgent, /--execute --handle \*": ask/);
-  assert.match(commitAgent, /one human mutation approval/i);
+  assert.match(commitAgent, /--execute --handle \*": allow/);
+  assert.match(commitAgent, /Manual `\/flow-commit` invocation authorizes/i);
 });
 
-test("OpenCode Git adapters fail closed when approval is unavailable or a sealed plan is stale", () => {
+test("OpenCode Commit fails closed when a sealed plan is stale", () => {
   const commitAgent = read(opencodeAgent("flow-git-agent"));
-  assert.match(commitAgent, /approval.*unavailable.*without invoking execute/i);
   assert.match(commitAgent, /stale.*sealed.*handle.*fresh preparation/i);
   assert.doesNotMatch(
     read("skills/flow-commit/SKILL.md"),
@@ -444,19 +438,16 @@ test("OpenCode audit fix adapter keeps mutation outside the read-only audit", ()
   assert.doesNotMatch(agent, /flow-audit\.mjs --fix/i);
 });
 
-test("OpenCode PR adapter owns native clarification and one execute approval", () => {
+test("OpenCode PR adapter blocks ambiguity and executes without a second question or approval", () => {
   const command = read(opencodeCommand("flow-pr"));
   const agent = read(opencodeAgent("flow-pr-agent"));
-  assert.match(command, /OpenCode's `question` tool/i);
-  assert.match(agent, /^ {2}question: allow$/m);
-  assert.match(agent, /--execute --handle \*": ask/);
+  assert.doesNotMatch(command, /OpenCode's `question` tool/i);
+  assert.doesNotMatch(agent, /^ {2}question: allow$/m);
+  assert.match(agent, /--execute --handle \*": allow/);
+  assert.match(agent, /base-ambiguous.*actionable blocker/i);
   assert.match(
     agent,
-    /question capability is unavailable, return `unavailable` without mutation/i,
-  );
-  assert.match(
-    agent,
-    /Drift, blocked, partial, failure, or unknown effects require fresh preparation/i,
+    /Drift, blocked, partial, failure, or unknown effects require a fresh manual invocation and preparation/i,
   );
   assert.doesNotMatch(
     read("skills/flow-pr/SKILL.md"),

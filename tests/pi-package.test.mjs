@@ -25,8 +25,9 @@ const expectedPiAgents = [
 const expectedPiPrompts = [
   "hosts/pi/prompts/flow-branch.md",
   "hosts/pi/prompts/flow-commit.md",
+  "hosts/pi/prompts/flow-pr.md",
 ];
-const expectedPiExtensions = ["hosts/pi/extensions/flow-pr.js"];
+const expectedPiExtensions = [];
 const requiredCoreResources = [
   "core/flow-debt-backlog.mjs",
   "core/flow-debt-contract.mjs",
@@ -45,7 +46,6 @@ const requiredLibraries = [
   "scripts/lib/flow-pr-drafting.mjs",
   "scripts/lib/flow-pr-executor.mjs",
   "scripts/lib/flow-pr-inspection.mjs",
-  "scripts/lib/flow-pr-pi-extension.mjs",
   "scripts/lib/helpers.mjs",
   "scripts/lib/process-control.mjs",
   "scripts/lib/scope.mjs",
@@ -56,7 +56,6 @@ const requiredPackageFiles = [
   "docs/multihost-migration.md",
   "flow-generation.lock.json",
   "hosts/pi/agents/**",
-  "hosts/pi/extensions/**",
   "hosts/pi/flow-assets.json",
   "hosts/pi/flow-assets.lock.json",
   "hosts/pi/prompts/**",
@@ -219,7 +218,7 @@ test("Pi package metadata declares only the explicit v1 skill resources", () => 
   assert.ok(packageJson.keywords.includes("pi-package"));
   assert.deepEqual(packageJson.pi.skills, expectedSkills);
   assert.deepEqual(packageJson.pi.prompts, expectedPiPrompts);
-  assert.deepEqual(packageJson.pi.extensions, ["hosts/pi/extensions"]);
+  assert.deepEqual(packageJson.pi.extensions, []);
   assert.deepEqual(packageJson.files, requiredPackageFiles);
   assert.deepEqual(
     packageJson.files.filter((entry) => entry.startsWith("core/")),

@@ -19,7 +19,7 @@ Use this workflow to commit current local changes through Flow. Resolve the pack
 - Each unit owns exact disjoint prepared ordinals and uses `type(scope): outcome`, or `type(scope)!: outcome` for a breaking compatibility change. Add an optional exact-preserved body only when useful; it may include a `BREAKING CHANGE: ...` footer.
 - Never use direct Git mutation, push, PR, audit, build, install, sync, generic file writes, shell encoding/substitution/redirection, automatic retries, hook skipping, or global rollback.
 - Raw payloads, snapshots, fingerprints, sealed requests, handles, and temp paths are internal. User output is compact prose.
-- The host's immediate execute approval is the one human mutation approval. Never ask for a separate conversational confirmation.
+- Manual `/flow-commit` invocation authorizes local commit execution. Do not request a second approval or conversational confirmation.
 - Permit only one bounded structured author correction after `invalid-payload`, `invalid-intent`, `coverage-mismatch`, `invalid-branch`, or `protected-branch`. Otherwise stop once on noop, blocker, drift, partial, failure, or unknown effects; a retry requires fresh user action and preparation.
 
 ## Decision Gates
@@ -39,7 +39,7 @@ Never keep a protected branch. Branch creation belongs only to sealed execution.
 4. Construct transport through the read-only runtime helper: `--encode-author-intent --handle <prepare-handle> [--branch-name <name>] --unit <comma-ordinals> --title <title> [--body <body>] ...`. Pass text as individual argument values without shell control syntax; omit an optional body rather than weakening safety. The helper validates semantics and emits one canonical unpadded Base64URL token. The token is limited to 6000 characters; there is no chunking. Never encode mentally.
 5. Run `--author-intent --handle <prepare-handle> --payload-b64url <token>`. The runtime strictly rejects padding, invalid alphabet, non-canonical re-encoding/JSON, malformed UTF-8/JSON/schema, extras, duplicate or out-of-range ordinals, missing coverage, and oversize payloads. One recoverable invalid attempt is non-consuming; correct structured fields and repeat encoder plus author at most once. Successful authoring is exclusive and exact replay is idempotent.
 6. Run `--seal --handle <authored-handle>` once. Present repository basename, current branch/HEAD abbreviation, runtime-derived branch action, ordered titles, exact paths, body presence/byte counts, and totals. Keep opaque handles internal. Seal remains authoritative for repository/content drift, branch conditions, collision, expiry, and authored intent.
-7. Invoke `--execute --handle <sealed-handle>` once after the host-native approval boundary. Report compact verified results; success lists commit OID/title and counts without bodies or repeated path arrays. Partial/failure includes actionable remaining paths and recovery. Seal and execute failures require fresh user action, not retries.
+7. Invoke `--execute --handle <sealed-handle>` once after sealing, under manual command authorization. Report compact verified results; success lists commit OID/title and counts without bodies or repeated path arrays. Partial/failure includes actionable remaining paths and recovery. Seal and execute failures require fresh user action, not retries.
 
 ## Safety Contract
 

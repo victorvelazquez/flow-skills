@@ -41,7 +41,7 @@ const permissionFor = (rules, resource, home, options) =>
       ? rule.action
       : action;
   }, undefined);
-test("flow-pr command, agent, and skill expose prepare, one approval, and execute", () => {
+test("flow-pr command, agent, and skill expose direct authorized execution", () => {
   const command = read("hosts/opencode/commands/flow-pr.md");
   const agent = read("hosts/opencode/agents/flow-pr-agent.md");
   const skill = read("skills/flow-pr/SKILL.md");
@@ -52,17 +52,18 @@ test("flow-pr command, agent, and skill expose prepare, one approval, and execut
   assert.match(contract, /--prepare --handle/);
   assert.match(contract, /intentPath/);
   assert.match(contract, /--execute --handle/);
-  for (const surface of [command, agent, skill]) {
-    assert.match(surface, /one human mutation approval|one approval/i);
-    assert.match(surface, /Never ask for a separate|do not ask separately/i);
-  }
+  for (const surface of [command, agent, skill])
+    assert.doesNotMatch(
+      surface,
+      /(?:is|as|requires|request) (?:the )?(?:one human mutation approval|one approval|second approval)/i,
+    );
   assert.match(agent, /task:\n {4}"\*": deny/);
   assert.match(agent, /git push\*": deny/);
   assert.match(agent, /"gh \*": deny/);
   assert.match(agent, /edit:\n {4}"\*": deny/);
   assert.match(agent, /flow-pr-request-\*\/intent\.json": allow/);
   assert.match(agent, /--prepare\*": allow/);
-  assert.match(agent, /--execute --handle \*": ask/);
+  assert.match(agent, /--execute --handle \*": allow/);
   assert.match(contract, /runtime-created OS-temp|runtime-owned `intentPath`/i);
   assert.match(contract, /no repository edits|Never edit the repository/i);
   assert.match(
@@ -74,89 +75,38 @@ test("flow-pr command, agent, and skill expose prepare, one approval, and execut
     /materialize-request|request-base64|base64url|flow-pr\/request-v1/,
   );
 });
-test("Pi flow-pr command requires native approval and delegation cannot execute", () => {
-  const pkg = JSON.parse(read("package.json"));
-  const extension = read("hosts/pi/extensions/flow-pr.js");
+test("Pi flow-pr prompt delegates complete execution to one named agent", () => {
   const prompt = read("hosts/pi/prompts/flow-pr.md");
   const agent = read("hosts/pi/agents/flow-pr.md");
   const skill = read("skills/flow-pr/SKILL.md");
-  const contract = read("core/host-adapter-contract.md");
+  assert.match(prompt, /skills\/flow-pr\/references\/output-contract\.md/);
 
-  assert.deepEqual(pkg.pi.extensions, ["hosts/pi/extensions"]);
-  assert.ok(pkg.files.includes("hosts/pi/extensions/**"));
-  assert.ok(pkg.files.includes("scripts/lib/flow-pr-pi-extension.mjs"));
-  assert.match(extension, /registerCommand\("flow-pr"/);
-  assert.match(extension, /ctx\.mode !== "tui"\s*\|\|\s*!ctx\.hasUI/);
-  assert.match(
-    extension,
-    /confirm:\s*\(title, message\)\s*=>\s*ctx\.ui\.confirm\(title, message\)/,
-  );
-  assert.match(extension, /directFlowPr\(args/);
-  assert.match(extension, /mode: ctx\.mode/);
-  assert.match(extension, /pi\.exec\(command, commandArgs, options\)/);
-  assert.match(extension, /ctx\.ui\.notify\(result\.text, "info"\)/);
-  assert.match(extension, /FlowPrRuntimeError/);
-  assert.doesNotMatch(extension, /flowPrExecuteGate|tool_call|sendUserMessage/);
-  assert.match(
-    extension,
-    /pi\.sendMessage\([\s\S]*?customType: "flow-pr-verified"/,
-  );
-  assert.match(extension, /display: false/);
-  assert.match(extension, /triggerTurn: true, deliverAs: "followUp"/);
-  assert.match(extension, /fileURLToPath\(import\.meta\.url\)/);
-  assert.match(
-    extension,
-    /packagePath\("skills\/flow-pr\/references\/output-contract\.md"\)/,
-  );
-  assert.doesNotMatch(
-    extension,
-    /Read the packaged skills\/flow-pr\/references\/output-contract\.md/,
-  );
-  assert.doesNotMatch(extension, /sendUserMessage/);
+  assert.doesNotMatch(prompt, /flow_pr_prepare|flow_pr_publish/);
+  assert.match(prompt, /named `flow-pr`/);
+  assert.match(prompt, /mode: "task"/);
+  assert.match(prompt, /JIRA COMMENT/);
+  assert.match(prompt, /subagent_run` exactly once/);
 
-  assert.match(prompt, /extension registers `\/flow-pr` as a command/i);
-  assert.match(prompt, /does not publish by delegation/i);
-  assert.match(prompt, /delegated publication is mechanically disabled/i);
-  assert.doesNotMatch(
-    prompt,
-    /Use `subagent_run` to delegate the complete workflow/i,
-  );
-
-  assert.match(agent, /^tools:\n {2}- read\n---/m);
-  assert.doesNotMatch(agent, /^ {2}- bash$/m);
-  assert.doesNotMatch(agent, /^ {2}- edit$/m);
-  assert.match(agent, /mechanically unable to publish/i);
-  assert.match(agent, /Do not claim a normal delegated approval route exists/i);
+  assert.match(agent, /^tools:\n {2}- read\n {2}- bash\n {2}- edit\n---/m);
+  assert.match(agent, /--execute --handle/);
+  assert.match(agent, /title.*body.*draft/i);
+  assert.match(agent, /Never delegate/i);
+  assert.doesNotMatch(skill, /ctx\.ui\.custom|parent-TUI/i);
   assert.match(
     skill,
-    /one native `ctx\.ui\.confirm` immediately before execute/i,
+    /manual `\/flow-pr` invocation authorizes push and PR create\/update/i,
   );
-  assert.match(skill, /invocation itself is not consent/i);
-  assert.match(
-    skill,
-    /Pi delegated agents and prompt templates must be mechanically unable to execute publication/i,
-  );
-  assert.match(contract, /host-native gate/);
-  assert.match(
-    contract,
-    /invocation, previous answers, and adapter metadata never grant consent/,
-  );
-  assert.doesNotMatch(contract, /trusted Pi extension/);
+  assert.match(skill, /base or fork ambiguity.*actionable blocker/i);
 });
 
-test("flow-pr resolves genuine clarification inside its dedicated child invocation", () => {
+test("flow-pr stops on ambiguity without a question tool", () => {
   const command = read("hosts/opencode/commands/flow-pr.md");
   const agent = read("hosts/opencode/agents/flow-pr-agent.md");
   for (const surface of [command, agent]) {
-    assert.match(surface, /OpenCode(?:'s)? `question` tool/i);
-    assert.match(surface, /wait[^\n]+(?:same|this) child invocation/i);
-    assert.match(surface, /continue preparation/i);
-    assert.match(
-      surface,
-      /never (?:finish or )?return a plain-text clarification question to the parent/i,
-    );
+    assert.doesNotMatch(surface, /OpenCode(?:'s)? `question` tool/i);
+    assert.match(surface, /actionable blocker/i);
   }
-  assert.match(agent, /^ {2}question: allow$/m);
+  assert.doesNotMatch(agent, /^ {2}question: allow$/m);
   assert.doesNotMatch(agent, /^ {2}question: ask$/m);
   assert.doesNotMatch(command, /^\$ARGUMENTS$/m);
 });
@@ -631,7 +581,7 @@ test("flow-branch agent permits its installed runtime with POSIX and Windows sep
     assert.equal(permissionFor(bash, command), "deny");
 });
 
-test("flow-commit exposes prepare, structured authoring, seal, and one approval", () => {
+test("flow-commit exposes prepare, structured authoring, seal, and direct execution", () => {
   const command = read("hosts/opencode/commands/flow-commit.md");
   const agent = read("hosts/opencode/agents/flow-git-agent.md");
   const skill = read("skills/flow-commit/SKILL.md");
@@ -644,13 +594,9 @@ test("flow-commit exposes prepare, structured authoring, seal, and one approval"
   assert.match(contract, /--seal --handle/);
   assert.match(contract, /--execute --handle/);
   for (const surface of [command, agent, skill]) {
-    assert.match(
+    assert.doesNotMatch(
       surface,
-      /one human mutation approval|one human mutation approval|one approval/i,
-    );
-    assert.match(
-      surface,
-      /Never ask for (?:a )?separate|Do not ask for separate/i,
+      /(?:is|as|requires|request) (?:the )?(?:one human mutation approval|one approval|second approval)/i,
     );
     assert.match(
       surface,
@@ -666,7 +612,7 @@ test("flow-commit exposes prepare, structured authoring, seal, and one approval"
     /--author-intent --handle \* --payload-b64url \*": allow/,
   );
   assert.match(agent, /--seal --handle \*": allow/);
-  assert.match(agent, /--execute --handle \*": ask/);
+  assert.match(agent, /--execute --handle \*": allow/);
   assert.match(agent, /git add\*": deny/);
   assert.match(agent, /git commit\*": deny/);
   assert.match(agent, /git push\*": deny/);
@@ -695,6 +641,27 @@ test("flow-commit exposes prepare, structured authoring, seal, and one approval"
   );
 });
 
+test("Pi Flow Commit delegates one complete authorized workflow", () => {
+  const skill = read("skills/flow-commit/SKILL.md");
+  const prompt = read("hosts/pi/prompts/flow-commit.md");
+  const child = read("hosts/pi/agents/flow-commit.md");
+  assert.match(
+    prompt,
+    /subagent_run` exactly once.*named `flow-commit`.*mode: "task"/,
+  );
+  assert.match(child, /^tools:\n {2}- read\n {2}- bash\n---/m);
+  assert.match(child, /--execute --handle/);
+  assert.match(
+    skill,
+    /Manual `\/flow-commit` invocation authorizes local commit execution/,
+  );
+  for (const surface of [prompt, skill, child])
+    assert.doesNotMatch(
+      surface,
+      /flow_commit_prepare|flow_commit_evidence|flow_commit_publish|flow_commit_cancel|ctx\.ui\.custom/,
+    );
+});
+
 test("flow-commit agent permits one bounded structured correction without rereading Git facts", () => {
   const agent = read("hosts/opencode/agents/flow-git-agent.md");
   const command = read("hosts/opencode/commands/flow-commit.md");
@@ -716,7 +683,7 @@ test("flow-commit agent permits one bounded structured correction without reread
   assert.equal(
     bash.filter(
       ({ pattern, action }) =>
-        pattern.includes("--execute --handle") && action === "ask",
+        pattern.includes("--execute --handle") && action === "allow",
     ).length,
     2,
   );

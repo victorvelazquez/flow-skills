@@ -261,6 +261,38 @@ test("canonical provenance changes for package or distributable-source drift", (
   assert.notEqual(sourceDrift.generationId, result.generationLock.generationId);
 });
 
+test("packaged Pi resources and library sources retain canonical bytes across checkout platforms", () => {
+  const paths = [
+    "hosts/pi/agents/flow-branch.md",
+    "hosts/pi/prompts/flow-branch.md",
+    "scripts/lib/flow-debt-writer.mjs",
+  ];
+  const result = spawnSync(
+    "git",
+    ["check-attr", "text", "eol", "--", ...paths],
+    {
+      cwd: root,
+      encoding: "utf8",
+    },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const attributesByPath = new Map();
+  for (const line of result.stdout.trim().split(/\r?\n/)) {
+    const match = /^(.*): (text|eol): (.*)$/.exec(line);
+    assert.ok(match, `unexpected attribute output: ${line}`);
+    const [, relative, attribute, value] = match;
+    if (!attributesByPath.has(relative)) attributesByPath.set(relative, {});
+    attributesByPath.get(relative)[attribute] = value;
+  }
+  for (const relative of paths.slice(0, -1)) {
+    assert.equal(attributesByPath.get(relative)?.text, "unset", relative);
+  }
+  assert.deepEqual(attributesByPath.get(paths.at(-1)), {
+    text: "set",
+    eol: "lf",
+  });
+});
+
 test("Pi provenance locks retain canonical bytes across checkout platforms", () => {
   const attributes = fs.readFileSync(path.join(root, ".gitattributes"), "utf8");
   for (const relative of [

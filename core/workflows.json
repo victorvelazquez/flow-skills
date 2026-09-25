@@ -43,7 +43,7 @@
       "resources": ["skills/flow-commit"],
       "runtime": "scripts/flow-commit.mjs",
       "outcome": "sealed and verified semantic commits",
-      "mutation": "approval-required",
+      "mutation": "invocation-authorized",
       "hosts": { "opencode": "supported", "pi": "supported" }
     },
     {
@@ -88,7 +88,7 @@
       "resources": ["skills/flow-pr"],
       "runtime": "scripts/flow-pr.mjs",
       "outcome": "prepared and verified pull request",
-      "mutation": "approval-required",
+      "mutation": "invocation-authorized",
       "hosts": { "opencode": "supported", "pi": "supported" }
     },
     {

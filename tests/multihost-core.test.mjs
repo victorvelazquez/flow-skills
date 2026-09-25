@@ -158,6 +158,26 @@ test("portable workflow registry is complete, sorted, resource-backed, and host-
   }
 });
 
+test("only Commit and PR registry mutations use invocation authorization", () => {
+  for (const workflow of readRegistry().workflows) {
+    assert.equal(
+      workflow.mutation,
+      ["flow-commit", "flow-pr"].includes(workflow.id)
+        ? "invocation-authorized"
+        : [
+              "flow-audit",
+              "flow-playbook-compare",
+              "flow-refactor",
+              "flow-ui",
+              "ui-design-system",
+            ].includes(workflow.id)
+          ? "read-only"
+          : "approval-required",
+      workflow.id,
+    );
+  }
+});
+
 test("flow-debt registry publishes its existing runtime without changing its contract", () => {
   const debt = readRegistry().workflows.find(({ id }) => id === "flow-debt");
 
@@ -249,7 +269,10 @@ test("branch and commit shared contracts retain safety semantics without host in
   assert.match(branch, /force-delete.*specific branch/i);
   const commit = read(sharedFiles[1]);
   assert.match(commit, /immutable|sealed/i);
-  assert.match(commit, /one human mutation approval/i);
+  assert.match(
+    commit,
+    /Manual `\/flow-commit` invocation authorizes local commit execution/i,
+  );
 });
 
 test("PR shared contract owns workflow outcomes without host interaction implementation", () => {
@@ -258,7 +281,11 @@ test("PR shared contract owns workflow outcomes without host interaction impleme
     source,
     /\$ARGUMENTS|\bopencode\b|~\/\.config|\bapply_patch\b|\bquestion tool\b|(?:^|\n)\s*(?:bash|edit|write|task|question):\s*(?:allow|ask|deny)\b/im,
   );
-  assert.match(source, /prepare, one approval, and execute/i);
+  assert.match(source, /prepare and execute/i);
+  assert.match(
+    source,
+    /Manual `\/flow-pr` invocation authorizes push and PR create\/update/i,
+  );
   assert.match(source, /immutable|stale/i);
   assert.match(source, /lossless relay payload/i);
 });
@@ -286,6 +313,11 @@ test("host adapter contract defines portable analysis and mutation boundaries", 
     contract,
     /mutation.*host-native approval.*revalidat.*workflow-owned immutable input/i,
   );
+  assert.match(
+    contract,
+    /only manual `\/flow-commit` and `\/flow-pr` invocation.*authoriz/i,
+  );
+  assert.match(contract, /other workflows.*host-native gate/i);
   assert.match(contract, /adapters own interaction and presentation/i);
   assert.match(
     contract,

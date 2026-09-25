@@ -34,11 +34,10 @@
     ],
     "prompts": [
       "hosts/pi/prompts/flow-branch.md",
-      "hosts/pi/prompts/flow-commit.md"
+      "hosts/pi/prompts/flow-commit.md",
+      "hosts/pi/prompts/flow-pr.md"
     ],
-    "extensions": [
-      "hosts/pi/extensions"
-    ]
+    "extensions": []
   },
   "files": [
     "README.md",
@@ -49,7 +48,6 @@
     "docs/multihost-migration.md",
     "flow-generation.lock.json",
     "hosts/pi/agents/**",
-    "hosts/pi/extensions/**",
     "hosts/pi/flow-assets.json",
     "hosts/pi/flow-assets.lock.json",
     "hosts/pi/prompts/**",
@@ -78,7 +76,6 @@
     "scripts/lib/flow-pr-drafting.mjs",
     "scripts/lib/flow-pr-executor.mjs",
     "scripts/lib/flow-pr-inspection.mjs",
-    "scripts/lib/flow-pr-pi-extension.mjs",
     "scripts/lib/helpers.mjs",
     "scripts/lib/process-control.mjs",
     "scripts/lib/scope.mjs",

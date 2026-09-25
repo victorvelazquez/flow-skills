@@ -388,7 +388,7 @@ test("invalid or stale branch base config fails closed", async (t) => {
     });
 });
 
-test("missing default metadata and origin HEAD requests an in-child base question", () => {
+test("missing default metadata and origin HEAD reports base ambiguity", () => {
   const item = fixture();
   git(item.directory, [
     "--git-dir",

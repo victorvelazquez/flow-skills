@@ -10,7 +10,7 @@
     "sha256": "6593df36caf20f294bd1e521510dd978099e6b2d1e9ca66ce519deff3cb0cb9c"
   },
   "totals": {
-    "bytes": 664403,
+    "bytes": 664866,
     "count": 59
   },
   "files": [
@@ -44,8 +44,8 @@
     },
     {
       "path": "scripts/flow-commit.mjs",
-      "sha256": "132f3e04978c5aebe74f3163c0af068c1a79a6dbe736ff36d7493845b797ba6f",
-      "bytes": 67896,
+      "sha256": "d5cd408007aae0234b5965f6cc20d294bbefc929860afd81c743d095fdfca206",
+      "bytes": 67940,
       "mode": "100644",
       "executable": false
     },
@@ -352,8 +352,8 @@
     },
     {
       "path": "skills/flow-commit/SKILL.md",
-      "sha256": "1174879dc6794b4574c46096311f13f8f99800ea9c1ab9b4084e39013d3360bf",
-      "bytes": 6468,
+      "sha256": "c3abc91c9211b152c1cbc07630059cd52218b19a38b4699496946cea34fd59ef",
+      "bytes": 6483,
       "mode": "100644",
       "executable": false
     },
@@ -387,8 +387,8 @@
     },
     {
       "path": "skills/flow-pr/SKILL.md",
-      "sha256": "e373d895f54465759c6d89790b008cb66eab4639d254348336764d63130401c2",
-      "bytes": 8319,
+      "sha256": "c9f44f411769ba11bddfd23174388f3eb9959a9a17b453690a0c809d0a162fa3",
+      "bytes": 8723,
       "mode": "100644",
       "executable": false
     },

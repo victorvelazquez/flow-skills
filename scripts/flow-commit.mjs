@@ -1091,7 +1091,7 @@ export function sealHandle(handle, { now = Date.now() } = {}) {
     const prepared = loadPrepared(paths, now);
     if (fs.existsSync(paths.sealed))
       throw new FlowError(
-        "Handle is already sealed; use its existing approval summary or prepare again.",
+        "Handle is already sealed; use its existing execution summary or prepare again.",
         "blocked",
         "handle-sealed",
       );
@@ -1590,7 +1590,8 @@ function preUnitResult(request, error) {
       ...(worktreeChanged === "changed" ? { paths: observed.leftovers } : {}),
     },
     error: { code: error.code || "execution-failed", message: error.message },
-    recovery: "Prepare and approve a fresh handle for all outstanding paths.",
+    recovery:
+      "Start a fresh manual invocation and prepare a handle for all outstanding paths.",
   });
 }
 
@@ -1885,7 +1886,7 @@ function executeUnits(
       },
       error: { code: error.code || "execution-failed", message: error.message },
       recovery:
-        "Preserve completed commits and observed hook effects. Prepare and approve a fresh handle for outstanding paths.",
+        "Preserve completed commits and observed hook effects. Start a fresh manual invocation and prepare a handle for outstanding paths.",
     });
   }
 }
@@ -1901,7 +1902,7 @@ export function executeHandle(
     prepared = loadPrepared(paths, now);
     if (paths.phase !== "s3")
       throw new FlowError(
-        "Execute requires the sealed approval handle; prepare again.",
+        "Execute requires the sealed execution handle; prepare again.",
         "blocked",
         "handle-not-sealed",
       );
