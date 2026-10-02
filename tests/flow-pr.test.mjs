@@ -364,6 +364,26 @@ test("automatic base resolution follows explicit, branch config, GitHub default,
     assert.equal(result.context.base, "development");
     assert.equal(result.context.baseAuthority.source, "explicit");
   });
+  await t.test("origin-qualified explicit base normalizes to target branch", () => {
+    const item = fixture();
+    git(item.cwd, ["branch", "development", "main"]);
+    git(item.cwd, ["push", "-q", "origin", "development"]);
+    const result = output(
+      run(item, ["--prepare", "--base", "origin/development", "--push-remote", "origin"]),
+    );
+    assert.equal(result.status, "prepared");
+    assert.equal(result.context.base, "development");
+    assert.equal(result.context.baseAuthority.source, "explicit");
+  });
+  await t.test("literal remote branch makes qualified base ambiguous", () => {
+    const item = fixture();
+    git(item.cwd, ["branch", "development", "main"]);
+    git(item.cwd, ["push", "-q", "origin", "development"]);
+    git(item.cwd, ["push", "-q", "origin", "main:refs/heads/origin/development"]);
+    const result = output(run(item, ["--prepare", "--base", "origin/development"]));
+    assert.equal(result.status, "failure");
+    assert.equal(result.error.code, "base-ambiguous");
+  });
   await t.test("origin HEAD fallback", () => {
     const item = fixture();
     const result = autoBegin(item, { FLOW_PR_FAIL_REPO_VIEW: "1" });
@@ -372,6 +392,37 @@ test("automatic base resolution follows explicit, branch config, GitHub default,
       evidence: "origin/HEAD",
     });
   });
+});
+
+test("qualified origin base publishes same-named task branch to unqualified target", () => {
+  const item = fixture();
+  git(item.cwd, ["branch", "development", "main"]);
+  git(item.cwd, ["push", "-q", "origin", "development"]);
+  const extra = {
+    FLOW_PR_BASE: git(item.cwd, ["rev-parse", "development"]),
+  };
+  const context = output(
+    run(item, ["--prepare", "--base", "origin/development", "--push-remote", "origin"], extra),
+  );
+  const plan = finalize(item, context, intent(), extra);
+  assert.equal(plan.status, "prepared");
+  const result = execute(item, plan, extra);
+  assert.equal(result.status, "success");
+  assert.equal(result.publication.base, "development");
+  assert.equal(
+    git(item.cwd, ["ls-remote", "origin", "refs/heads/feat/contract"]).split(/\s+/)[0],
+    git(item.cwd, ["rev-parse", "HEAD"]),
+  );
+  const create = calls(item).find((entry) => entry[0] === "pr" && entry[1] === "create");
+  assert.equal(create[create.indexOf("--base") + 1], "development");
+});
+
+test("missing explicit base retains actionable remote-ref-missing code", () => {
+  const item = fixture();
+  const result = output(run(item, ["--prepare", "--base", "nonexistent"]));
+  assert.equal(result.status, "failure");
+  assert.equal(result.error.code, "remote-ref-missing");
+  assert.equal(result.error.message, "Runtime diagnostics were withheld for privacy.");
 });
 
 test("invalid or stale branch base config fails closed", async (t) => {

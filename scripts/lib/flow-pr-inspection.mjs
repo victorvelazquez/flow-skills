@@ -129,9 +129,21 @@ function originHeadBase(cwd, env) {
   catch { return null; }
 }
 
+function explicitTargetBase(cwd, explicitBase, env) {
+  const ref = validateRef(explicitBase, "base ref");
+  if (!ref.startsWith("origin/")) return ref;
+  const branch = validateRef(ref.slice("origin/".length), "base branch");
+  if (branch === "HEAD") throw new ContractError("origin/HEAD is not a branch name.", "base-ambiguous");
+  // A literal branch named origin/<name> would make the qualified spelling ambiguous.
+  const literal = run("git", ["ls-remote", "--heads", "origin", `refs/heads/${ref}`], { cwd, env });
+  if (!literal.ok) throw new ContractError("Could not inspect the qualified base ref.", "remote-unavailable");
+  if (literal.stdout.trim()) throw new ContractError("Qualified base matches a literal remote branch.", "base-ambiguous");
+  return branch;
+}
+
 function resolveBase(cwd, repo, branch, pr, explicitBase, env) {
   if (pr.exact) return { ref: pr.exact.base.ref, source: "existing-pr", evidence: `pr:${pr.exact.number}` };
-  if (explicitBase !== undefined) return { ref: validateRef(explicitBase, "base ref"), source: "explicit", evidence: "--base" };
+  if (explicitBase !== undefined) return { ref: explicitTargetBase(cwd, explicitBase, env), source: "explicit", evidence: "--base" };
   const configured = branchConfigBase(cwd, branch); if (configured) return configured;
   const githubDefault = githubDefaultBase(cwd, repo, env); if (githubDefault) return githubDefault;
   const originHead = originHeadBase(cwd, env); if (originHead) return originHead;

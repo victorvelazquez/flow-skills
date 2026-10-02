@@ -105,6 +105,9 @@ test("Pi flow-pr prompt delegates complete execution to one named agent", () => 
   assert.match(prompt, /mode: "task"/);
   assert.match(prompt, /JIRA COMMENT/);
   assert.match(prompt, /subagent_run` exactly once/);
+  assert.match(prompt, /only when the user explicitly supplied it/);
+  assert.match(prompt, /Never invent `origin\/<branch>`/);
+  assert.match(agent, /do not synthesize that spelling/);
 
   assert.match(agent, /^tools:\n {2}- read\n {2}- bash\n {2}- edit\n---/m);
   assert.match(agent, /--execute --handle/);
