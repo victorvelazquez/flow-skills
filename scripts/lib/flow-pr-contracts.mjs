@@ -227,6 +227,53 @@ export function snapshotWithIdentity(snapshot) {
   return { ...normalized, identity: identity(normalized) };
 }
 
+export function validateWorkingTree(value) {
+  exact(
+    value,
+    ["version", "statusSha256", "indexSha256", "normalizationSha256", "files"],
+    "snapshot.workingTree",
+  );
+  const digest = (entry) =>
+    typeof entry === "string" && /^[0-9a-f]{64}$/.test(entry);
+  if (
+    value.version !== 1 ||
+    !digest(value.statusSha256) ||
+    !digest(value.normalizationSha256) ||
+    (value.indexSha256 !== null && !digest(value.indexSha256)) ||
+    !Array.isArray(value.files)
+  )
+    throw new ContractError(
+      "Working tree authority version or evidence is invalid.",
+    );
+  let previous = "";
+  for (const file of value.files) {
+    exact(
+      file,
+      ["path", "mode", "sha256", "indexSha256", "attributesSha256"],
+      "working tree file",
+    );
+    text(file.path, "working tree path");
+    if (
+      file.path <= previous ||
+      file.path.includes("\\") ||
+      file.path.startsWith("/") ||
+      /^[A-Za-z]:/.test(file.path) ||
+      file.path
+        .split("/")
+        .some((part) => !part || [".", "..", ".git"].includes(part)) ||
+      !digest(file.indexSha256) ||
+      !digest(file.attributesSha256) ||
+      (file.sha256 !== null && !digest(file.sha256)) ||
+      (file.mode !== null &&
+        (!Number.isSafeInteger(file.mode) || file.mode < 0)) ||
+      (file.mode === null) !== (file.sha256 === null)
+    )
+      throw new ContractError("Working tree file authority is invalid.");
+    previous = file.path;
+  }
+  return value;
+}
+
 export function validateSnapshot(value) {
   exact(
     value,
@@ -249,6 +296,7 @@ export function validateSnapshot(value) {
       "root",
       "target",
       "upstream",
+      "workingTree",
     ],
     "snapshot",
   );
@@ -276,6 +324,13 @@ export function validateSnapshot(value) {
     ].includes(value.mergeState)
   )
     throw new ContractError("snapshot state is invalid.");
+  validateWorkingTree(value.workingTree);
+  if (
+    value.clean &&
+    (value.workingTree.indexSha256 === null ||
+      value.workingTree.files.some((file) => file.sha256 === null))
+  )
+    throw new ContractError("Clean working tree authority is incomplete.");
   validateRepo(value.target, "snapshot.target");
   exact(value.push, ["remote", "remoteHeadOid", "repository"], "snapshot.push");
   text(value.push.remote, "snapshot.push.remote");
