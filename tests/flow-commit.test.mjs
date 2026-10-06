@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync, spawn, spawnSync } from "node:child_process";
+import childProcess, {
+  execFileSync,
+  spawn,
+  spawnSync,
+} from "node:child_process";
+import { syncBuiltinESMExports } from "node:module";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
@@ -191,6 +196,274 @@ function asyncRun(cwd, args) {
     child.on("close", (status) => resolve({ status, stdout, stderr }));
   });
 }
+
+// Interpose only porcelain: Git can refresh a stat-only M away. Every diff,
+// clean conversion, index operation and commit still runs against real Git.
+function ghostFixture(action, { diffError = false } = {}) {
+  const cwd = repo();
+  const originalSpawn = childProcess.spawnSync;
+  const ghost = path.join(cwd, "base.txt");
+  const control = { visible: true, staged: false };
+  try {
+    git(cwd, ["config", "core.autocrlf", "true"]);
+    fs.writeFileSync(ghost, "base\r\n");
+    assert.equal(git(cwd, ["diff", "HEAD", "--", "base.txt"]), "");
+    childProcess.spawnSync = (command, args, options) => {
+      const result = originalSpawn(command, args, options);
+      if (command === "git" && options?.cwd === fs.realpathSync.native(cwd)) {
+        if (args[0] === "status") {
+          const fields = result.stdout
+            .split("\0")
+            .filter((field) => field && field.slice(3) !== "base.txt");
+          if (control.visible)
+            fields.push(`${control.staged ? "M " : " M"} base.txt`);
+          if (
+            control.extra &&
+            !fields.some((field) => field.slice(3) === control.extra)
+          )
+            fields.push(` M ${control.extra}`);
+          return {
+            ...result,
+            stdout: fields.length ? `${fields.join("\0")}\0` : "",
+          };
+        }
+        if (diffError && args[0] === "diff" && args.includes("--name-only"))
+          return { ...result, status: 128, stderr: "injected diff failure" };
+      }
+      return result;
+    };
+    syncBuiltinESMExports();
+    action(cwd, ghost, control);
+  } finally {
+    childProcess.spawnSync = originalSpawn;
+    syncBuiltinESMExports();
+    fs.rmSync(cwd, { recursive: true, force: true });
+  }
+}
+
+function ghostPlan(cwd) {
+  const prepared = prepareRepository({ cwd });
+  assert.deepEqual(
+    prepared.changes.map((change) => change.path),
+    ["real.txt"],
+  );
+  const encoded = output(
+    run(cwd, [
+      "--encode-author-intent",
+      "--handle",
+      prepared.handle,
+      "--unit",
+      "0",
+      "--title",
+      "fix(test): retain only effective changes",
+    ]),
+  );
+  const authored = authorIntent(prepared.handle, encoded.payloadB64url);
+  return { prepared, authored };
+}
+
+test("status-only CRLF artifacts are non-authorable and mixed execution preserves them", () => {
+  ghostFixture((cwd, ghost) => {
+    assert.equal(prepareRepository({ cwd }).status, "noop");
+    const bytes = fs.readFileSync(ghost);
+    const mode = fs.statSync(ghost).mode;
+    const config = fs.readFileSync(path.join(cwd, ".git", "config"));
+    const baseIndex = git(cwd, ["ls-files", "--stage", "--", "base.txt"]);
+    fs.writeFileSync(path.join(cwd, "real.txt"), "real\n");
+    const { authored } = ghostPlan(cwd);
+    const sealed = sealHandle(authored.authoredHandle);
+    const result = executeHandle(sealed.executeHandle);
+    assert.equal(result.status, "success", JSON.stringify(result));
+    assert.deepEqual(result.leftovers, ["base.txt"]);
+    assert.equal(
+      git(cwd, ["diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"]),
+      "real.txt",
+    );
+    assert.deepEqual(fs.readFileSync(ghost), bytes);
+    assert.equal(fs.statSync(ghost).mode, mode);
+    assert.deepEqual(fs.readFileSync(path.join(cwd, ".git", "config")), config);
+    assert.equal(
+      git(cwd, ["ls-files", "--stage", "--", "base.txt"]),
+      baseIndex,
+    );
+    assert.equal(git(cwd, ["diff", "HEAD", "--", "base.txt"]), "");
+  });
+});
+
+test("status-only artifacts remain bound at seal and execute", () => {
+  for (const phase of ["seal", "execute"]) {
+    for (const content of ["changed\n", "base\n"]) {
+      ghostFixture((cwd, ghost) => {
+        fs.writeFileSync(path.join(cwd, "real.txt"), "real\n");
+        const { authored } = ghostPlan(cwd);
+        const sealed =
+          phase === "execute" ? sealHandle(authored.authoredHandle) : null;
+        const head = git(cwd, ["rev-parse", "HEAD"]);
+        fs.writeFileSync(ghost, content);
+        if (content === "base\n")
+          assert.equal(git(cwd, ["diff", "HEAD", "--", "base.txt"]), "");
+        if (phase === "seal")
+          assert.throws(() => sealHandle(authored.authoredHandle), /drift/i);
+        else {
+          const result = executeHandle(sealed.executeHandle);
+          assert.equal(result.status, "drift");
+          assert.equal(result.effects.worktree.state, "changed");
+        }
+        assert.equal(git(cwd, ["rev-parse", "HEAD"]), head);
+        assert.equal(git(cwd, ["diff", "--cached", "--name-only"]), "");
+      });
+    }
+  }
+});
+
+test("disappearing status-only observations block seal and execute before mutation", () => {
+  for (const phase of ["seal", "execute"]) {
+    ghostFixture((cwd, ghost, control) => {
+      fs.writeFileSync(path.join(cwd, "real.txt"), "real\n");
+      const { authored } = ghostPlan(cwd);
+      const sealed =
+        phase === "execute" ? sealHandle(authored.authoredHandle) : null;
+      const head = git(cwd, ["rev-parse", "HEAD"]);
+      control.visible = false;
+      // Missing observed authority is itself drift, even before a later edit.
+      if (phase === "seal")
+        assert.throws(() => sealHandle(authored.authoredHandle), /drift/i);
+      else {
+        fs.writeFileSync(ghost, "later meaningful edit\n");
+        assert.equal(executeHandle(sealed.executeHandle).status, "drift");
+      }
+      assert.equal(git(cwd, ["rev-parse", "HEAD"]), head);
+      assert.equal(git(cwd, ["diff", "--cached", "--name-only"]), "");
+    });
+  }
+});
+
+test("ignored artifact hook edits reject and roll back only the runtime commit", () => {
+  ghostFixture((cwd, ghost) => {
+    fs.writeFileSync(path.join(cwd, "real.txt"), "real\n");
+    const { authored } = ghostPlan(cwd);
+    const sealed = sealHandle(authored.authoredHandle);
+    const head = git(cwd, ["rev-parse", "HEAD"]);
+    hook(cwd, "post-commit", "printf 'base\\n' > base.txt");
+    const result = executeHandle(sealed.executeHandle);
+    assert.equal(result.status, "drift", JSON.stringify(result));
+    assert.equal(git(cwd, ["rev-parse", "HEAD"]), head);
+    assert.equal(fs.readFileSync(ghost, "utf8"), "base\n");
+    assert.equal(git(cwd, ["diff", "HEAD", "--", "base.txt"]), "");
+    assert.equal(git(cwd, ["diff", "--cached", "--name-only"]), "");
+  });
+});
+
+test("completed-path normalized hook drift rolls back while unchanged bytes remain valid", () => {
+  for (const changed of [true, false]) {
+    ghostFixture((cwd, _ghost, control) => {
+      fs.writeFileSync(path.join(cwd, "real.txt"), "new\n");
+      const { authored } = ghostPlan(cwd);
+      const sealed = sealHandle(authored.authoredHandle);
+      const head = git(cwd, ["rev-parse", "HEAD"]);
+      const index = git(cwd, ["ls-files", "--stage"]);
+      hook(
+        cwd,
+        "post-commit",
+        "git rev-parse HEAD > .git/runtime-commit\n" +
+          (changed ? "printf 'new\\r\\n' > real.txt" : "true") +
+          "\ngit diff HEAD -- real.txt > .git/runtime-diff",
+      );
+      const result = executeHandle(sealed.executeHandle, {
+        onContentRead: () => {
+          control.extra = "real.txt";
+        },
+      });
+      const commit = fs
+        .readFileSync(path.join(cwd, ".git", "runtime-commit"), "utf8")
+        .trim();
+      assert.equal(git(cwd, ["show", `${commit}:real.txt`]), "new");
+      assert.equal(
+        fs.readFileSync(path.join(cwd, ".git", "runtime-diff"), "utf8"),
+        "",
+      );
+      assert.equal(
+        fs.readFileSync(path.join(cwd, "real.txt"), "utf8"),
+        changed ? "new\r\n" : "new\n",
+      );
+      assert.equal(
+        result.status,
+        changed ? "drift" : "success",
+        JSON.stringify(result),
+      );
+      assert.equal(
+        result.effects.worktree.state,
+        changed ? "changed" : "unchanged",
+      );
+      if (changed) {
+        assert.equal(result.completed.length, 0);
+        assert.equal(git(cwd, ["rev-parse", "HEAD"]), head);
+        assert.equal(git(cwd, ["ls-files", "--stage"]), index);
+      }
+    });
+  }
+});
+
+test("status-only mode and type drift is sealed", {
+  skip:
+    process.platform === "win32" &&
+    "Windows fixture cannot reliably create POSIX modes and symlinks.",
+}, () => {
+  for (const mutate of [
+    (ghost) => fs.chmodSync(ghost, 0o755),
+    (ghost) => {
+      fs.unlinkSync(ghost);
+      fs.symlinkSync("base", ghost);
+    },
+  ]) {
+    ghostFixture((cwd, ghost) => {
+      fs.writeFileSync(path.join(cwd, "real.txt"), "real\n");
+      const { authored } = ghostPlan(cwd);
+      mutate(ghost);
+      assert.throws(() => sealHandle(authored.authoredHandle), /drift/i);
+    });
+  }
+});
+
+test("unexpected status-only paths after hooks remain drift, not exclusions", () => {
+  ghostFixture((cwd, _ghost, control) => {
+    fs.writeFileSync(path.join(cwd, "other.txt"), "other\n");
+    git(cwd, ["add", "other.txt"]);
+    git(cwd, ["commit", "-qm", "fixture other"]);
+    fs.writeFileSync(path.join(cwd, "real.txt"), "real\n");
+    const { authored } = ghostPlan(cwd);
+    const sealed = sealHandle(authored.authoredHandle);
+    const head = git(cwd, ["rev-parse", "HEAD"]);
+    // Introduce an extra observation only after the pre-mutation full check.
+    const result = executeHandle(sealed.executeHandle, {
+      onContentRead: () => {
+        control.extra = "other.txt";
+      },
+    });
+    assert.equal(result.status, "drift", JSON.stringify(result));
+    assert.equal(git(cwd, ["rev-parse", "HEAD"]), head);
+  });
+});
+
+test("normalized-empty staged status remains a blocker", () => {
+  ghostFixture((cwd, _ghost, control) => {
+    control.staged = true;
+    assert.equal(git(cwd, ["diff", "--cached", "--name-only"]), "");
+    assert.throws(() => prepareRepository({ cwd }), /index must be empty/i);
+  });
+});
+
+test("effective selection fails closed on diff errors and staged paths retain priority", () => {
+  ghostFixture(
+    (cwd) => {
+      assert.throws(() => prepareRepository({ cwd }), /diff/i);
+      fs.writeFileSync(path.join(cwd, "real.txt"), "real\n");
+      git(cwd, ["add", "real.txt"]);
+      assert.throws(() => prepareRepository({ cwd }), /index must be empty/i);
+    },
+    { diffError: true },
+  );
+});
 
 test("prepare is compact, NUL-safe, and covers hostile, untracked, and deleted paths", () => {
   const cwd = repo();
