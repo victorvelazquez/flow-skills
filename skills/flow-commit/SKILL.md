@@ -33,7 +33,7 @@ Never keep a protected branch. Branch creation belongs only to sealed execution.
 
 ## Workflow
 
-1. Run `../../scripts/flow-commit.mjs --prepare` through the resolved runtime. It returns compact ordered changes and an opaque prepare handle, never a writable path. `noop` ends the workflow.
+1. Run `../../scripts/flow-commit.mjs --prepare` through the resolved runtime. It returns compact ordered effective Git changes and an opaque prepare handle, never a writable path. Regular-file status-only modifications with no Git-normalized delta receive no authorable ordinal; their observed raw bytes and mode remain drift-bound. A staged index still blocks preparation. `noop` ends the workflow when no effective changes remain.
 2. Read only necessary `git diff`, `git log`, `git show`, and `git status` information in this same workflow session.
 3. Define strict `flow-commit/author-intent-v1` semantics. Units reference only zero-based prepared ordinals, in unit order, with every ordinal covered exactly once and no duplicates. Supply `branchName` only when prepare reports `protected: true`.
 4. Construct transport through the read-only runtime helper: `--encode-author-intent --handle <prepare-handle> [--branch-name <name>] --unit <comma-ordinals> --title <title> [--body <body>] ...`. Pass text as individual argument values without shell control syntax; omit an optional body rather than weakening safety. The helper validates semantics and emits one canonical unpadded Base64URL token. The token is limited to 6000 characters; there is no chunking. Never encode mentally.
@@ -52,7 +52,7 @@ Commits retain normal hooks, exact staging, write-tree, parent/tree/path/message
 ## Output Contract
 
 - Before execute: repository basename, current branch/HEAD abbreviation, current/create branch action, ordered titles, exact paths, body presence/bytes, and file/commit totals.
-- Success: status, branch effect, OID/title per commit, counts, empty leftovers.
+- Success: status, branch effect, OID/title per commit, counts, observed leftovers (including any remaining non-authorable status-only paths).
 - Every result distinguishes verified `completed` commits, active `stoppedAt` unit or null, later `notAttempted` units, exact intended `outstandingPaths`, and broader observed `leftovers`.
 - Partial/failure: report those concepts, observed effects, and fresh-prepare recovery without implying that an unattempted unit failed.
 - Never repeat bodies or expose payload/request/snapshot/fingerprint internals.

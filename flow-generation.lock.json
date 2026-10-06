@@ -1,6 +1,6 @@
 {
   "$schema": "flow-generation-lock/v2",
-  "generationId": "91d58b51710d9a59e134649991845e357637353fde035804f12c31c59a9de8e1",
+  "generationId": "6f8e4cd0ccf25305de6c3a7c4741615258e9445521146e308ace00fcf18db796",
   "package": {
     "sha256": "856dfe9779f8a65bda1b3fd831e55fce104dabe3b747ca9ae443df0f7a8d945f"
   },
@@ -213,8 +213,8 @@
     },
     {
       "source": "hosts/pi/agents/flow-pr.md",
-      "sha256": "3e2102dc17444858305316fea57f86a1b2fd25200d2e0b1abace9fae3713c695",
-      "bytes": 2635,
+      "sha256": "cb75c7c57101b02e781ff82ce2de8c006d52e5c7e43617b965cc88e977e03266",
+      "bytes": 2850,
       "mode": "100644",
       "executable": false
     },
@@ -241,8 +241,8 @@
     },
     {
       "source": "hosts/pi/prompts/flow-pr.md",
-      "sha256": "b2ab1eeec0ff941fa7d5e6245a31c83550c65fde0dd21b2dbbd937c2deebad4e",
-      "bytes": 928,
+      "sha256": "0ce4a5156a0f77e311fae5d4a2a144d4e43388431303f4d349eab33d15a60b6f",
+      "bytes": 1146,
       "mode": "100644",
       "executable": false
     },
@@ -283,8 +283,8 @@
     },
     {
       "source": "scripts/flow-commit.mjs",
-      "sha256": "d5cd408007aae0234b5965f6cc20d294bbefc929860afd81c743d095fdfca206",
-      "bytes": 67940,
+      "sha256": "48be86ee157b788cbcda1b8ec3471517d95ca01ed30b248d2caed17d9a1339a4",
+      "bytes": 70882,
       "mode": "100644",
       "executable": false
     },
@@ -318,8 +318,8 @@
     },
     {
       "source": "scripts/flow-pr.mjs",
-      "sha256": "0f6407bd802ea33a63b220f1bf4ab71982384e8ff78b2f5e3b8802a0e64299fa",
-      "bytes": 23409,
+      "sha256": "58d4cf81bc249bff9ccb73c95d51be54dd889971fdd1ffba25ab15d35129f0f5",
+      "bytes": 23767,
       "mode": "100644",
       "executable": false
     },
@@ -395,8 +395,8 @@
     },
     {
       "source": "scripts/lib/flow-pr-contracts.mjs",
-      "sha256": "042a88efcb16667ae23a27233ccb3a14eeff8fcec7a618c4e6e54890ae5e0e7b",
-      "bytes": 15865,
+      "sha256": "5688a2e12536cf5bbdbfa395dc2bf3fe21a1723af6d8d0da8c30ca411a382efb",
+      "bytes": 17618,
       "mode": "100644",
       "executable": false
     },
@@ -409,15 +409,15 @@
     },
     {
       "source": "scripts/lib/flow-pr-executor.mjs",
-      "sha256": "b39c8a7ab44a4596cbfb92df4273dbf46c82935777660c74ea994829d567d415",
-      "bytes": 33955,
+      "sha256": "57a305ea04f960ae1b07735fe446a788fd4a474c616a3ad6df372b39be172cf3",
+      "bytes": 34068,
       "mode": "100644",
       "executable": false
     },
     {
       "source": "scripts/lib/flow-pr-inspection.mjs",
-      "sha256": "3c5abf6d1d0745363654a80d791a2ecccd366b4884d3ff90246c73562009306d",
-      "bytes": 16045,
+      "sha256": "5de0b11007d97d88f8fb366c0fa16a4db02097c0ef51a373ea24adaf825caba9",
+      "bytes": 23197,
       "mode": "100644",
       "executable": false
     },
@@ -591,8 +591,8 @@
     },
     {
       "source": "skills/flow-commit/SKILL.md",
-      "sha256": "c3abc91c9211b152c1cbc07630059cd52218b19a38b4699496946cea34fd59ef",
-      "bytes": 6483,
+      "sha256": "ffe74b7f13cde21b36ca323f63abb9f9cde4a9e524bfaf73ebd125d870dbfeab",
+      "bytes": 6786,
       "mode": "100644",
       "executable": false
     },
@@ -626,8 +626,8 @@
     },
     {
       "source": "skills/flow-pr/SKILL.md",
-      "sha256": "4d4f05e4059b13a60debecbbf1d1aba718bdc1d3b704cd7cca5ead2e69ad69a5",
-      "bytes": 9224,
+      "sha256": "37d6ea08c03b7848a090443f04d279ac95b9360f9babce65ff22ce55ebcbf658",
+      "bytes": 10351,
       "mode": "100644",
       "executable": false
     },

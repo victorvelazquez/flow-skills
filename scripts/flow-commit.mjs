@@ -183,6 +183,38 @@ function statusSnapshot(root) {
   return { changes, stagedPaths };
 }
 
+function effectiveChanges(root, status) {
+  // Staged entries are blockers, even when their normalized delta is empty.
+  if (status.stagedPaths.length) return status.changes;
+  const result = git(
+    [
+      "diff",
+      "--name-only",
+      "--no-renames",
+      "--no-ext-diff",
+      "--no-textconv",
+      "-z",
+      "HEAD",
+      "--",
+    ],
+    { cwd: root },
+  );
+  if (!result.ok)
+    throw new FlowError(
+      `Could not inspect effective Git diff: ${result.stderr}`,
+      "blocked",
+      "diff-failed",
+    );
+  const paths = new Set(parseNullDelimitedPaths(result.stdout));
+  return status.changes.filter(
+    (change) =>
+      change.indexStatus !== " " ||
+      change.worktreeStatus !== "M" ||
+      paths.has(change.path) ||
+      !fs.lstatSync(path.resolve(root, change.path)).isFile(),
+  );
+}
+
 function operationState(commonDir) {
   const names = [
     "MERGE_HEAD",
@@ -291,7 +323,8 @@ function currentState(
     head,
     protected: PROTECTED_BRANCHES.has(branch),
     operations,
-    changes: status.changes,
+    changes: effectiveChanges(context.root, status),
+    observedChanges: status.changes,
     stagedPaths: status.stagedPaths,
     contentFacts: facts,
     contentFingerprint: contentFactsFingerprint(facts),
@@ -646,11 +679,7 @@ function loadPrepared(paths, now = Date.now()) {
     !/^[a-f0-9]{64}$/.test(document.fingerprint)
   )
     preparedError("Prepared repository identity is inconsistent.");
-  if (
-    !Array.isArray(document.changes) ||
-    !Array.isArray(document.contentFacts) ||
-    document.changes.length !== document.contentFacts.length
-  )
+  if (!Array.isArray(document.changes) || !Array.isArray(document.contentFacts))
     preparedError("Prepared change facts are invalid.");
   document.changes.forEach((change, index) =>
     validatePreparedChange(change, `prepared change ${index + 1}`),
@@ -661,8 +690,22 @@ function loadPrepared(paths, now = Date.now()) {
   if (
     new Set(document.changes.map((change) => change.path)).size !==
       document.changes.length ||
-    canonical(document.contentFacts.map(changeFromFact)) !==
-      canonical(document.changes)
+    new Set(document.contentFacts.map((fact) => fact.path)).size !==
+      document.contentFacts.length ||
+    canonical(
+      document.contentFacts
+        .filter((fact) =>
+          document.changes.some((change) => change.path === fact.path),
+        )
+        .map(changeFromFact),
+    ) !== canonical(document.changes) ||
+    document.contentFacts.some(
+      (fact) =>
+        !document.changes.some((change) => change.path === fact.path) &&
+        (fact.indexStatus !== " " ||
+          fact.worktreeStatus !== "M" ||
+          fact.kind !== "file"),
+    )
   )
     preparedError("Prepared change and content facts are inconsistent.");
   const authority = {
@@ -1556,7 +1599,10 @@ function resultDocument({
 function safeObserved(root, factPaths) {
   try {
     const state = currentState(repositoryContext(root), { factPaths });
-    return { state, leftovers: state.changes.map((change) => change.path) };
+    return {
+      state,
+      leftovers: state.observedChanges.map((change) => change.path),
+    };
   } catch {
     return { state: null, leftovers: [] };
   }
@@ -1568,11 +1614,14 @@ function preUnitResult(request, error) {
     request.intent.units.flatMap((unit) => unit.paths),
   );
   const outstandingPathSet = new Set(outstandingPaths);
-  const expectedFacts = request.preparedContentFacts.filter((fact) =>
-    outstandingPathSet.has(fact.path),
+  const expectedFacts = request.preparedContentFacts;
+  const observed = safeObserved(
+    request.root,
+    new Set(expectedFacts.map((fact) => fact.path)),
   );
-  const observed = safeObserved(request.root, outstandingPathSet);
-  const expectedChanges = expectedFacts.map(changeFromFact);
+  const expectedChanges = expectedFacts
+    .filter((fact) => outstandingPathSet.has(fact.path))
+    .map(changeFromFact);
   const worktreeChanged =
     observed.state &&
     canonical(observed.state.changes) === canonical(expectedChanges) &&
@@ -1601,6 +1650,43 @@ function executeUnits(
   { onContentRead, onProvenanceRecorded } = {},
 ) {
   const units = request.intent.units;
+  const authoredPaths = new Set(units.flatMap((unit) => unit.paths));
+  const statusOnlyFacts = request.preparedContentFacts.filter(
+    (fact) => !authoredPaths.has(fact.path),
+  );
+  // Read the bound scope directly: Git may refresh these porcelain entries away.
+  const observedScope = new Set(
+    request.preparedContentFacts.map((fact) => fact.path),
+  );
+  const finishedPaths = new Set();
+  const assertStatusOnlyContent = (observed) => {
+    if (
+      observed.observedChanges.some((change) => !observedScope.has(change.path))
+    )
+      throw new FlowError(
+        "Unexpected worktree path appeared.",
+        "drift",
+        "content-drift",
+      );
+    const reobservedFinishedFacts = request.preparedContentFacts.filter(
+      (fact) =>
+        finishedPaths.has(fact.path) &&
+        observed.observedChanges.some((change) => change.path === fact.path),
+    );
+    for (const fact of [...statusOnlyFacts, ...reobservedFinishedFacts]) {
+      const actual = pathFact(
+        request.root,
+        changeFromFact(fact),
+        onContentRead,
+      );
+      if (!sameContentFact(actual, fact))
+        throw new FlowError(
+          "Observed content drifted.",
+          "drift",
+          "content-drift",
+        );
+    }
+  };
   const completed = [];
   let branchEffect =
     request.intent.branch.action === "keep" ? "kept" : "not-attempted";
@@ -1672,6 +1758,7 @@ function executeUnits(
           "drift",
           "unit-precondition-drift",
         );
+      assertStatusOnlyContent(state);
       const expectedRemainingFacts = request.preparedContentFacts.filter(
         (fact) => remainingPaths.includes(fact.path),
       );
@@ -1810,6 +1897,8 @@ function executeUnits(
             expectedAfter,
             "Observable worktree path/status postconditions changed after hooks.",
           );
+          unit.paths.forEach((file) => finishedPaths.add(file));
+          assertStatusOnlyContent(after);
           state = after;
         } catch (error) {
           if (!retained) rollbackHead(request.root, activeHead, createdHead);
@@ -1846,7 +1935,7 @@ function executeUnits(
       branch: state.branch,
       branchEffect,
       completed,
-      leftovers: [],
+      leftovers: state.observedChanges.map((change) => change.path),
       worktree: { state: "unchanged" },
     });
   } catch (error) {
@@ -1860,11 +1949,17 @@ function executeUnits(
       units.slice(completed.length).flatMap((unit) => unit.paths),
     );
     const outstandingPathSet = new Set(outstandingPaths);
-    const expectedFacts = request.preparedContentFacts.filter((fact) =>
-      outstandingPathSet.has(fact.path),
+    const expectedFacts = request.preparedContentFacts.filter(
+      (fact) =>
+        outstandingPathSet.has(fact.path) || !authoredPaths.has(fact.path),
     );
-    const observed = safeObserved(request.root, outstandingPathSet);
-    const expectedChanges = expectedFacts.map(changeFromFact);
+    const observed = safeObserved(
+      request.root,
+      new Set(expectedFacts.map((fact) => fact.path)),
+    );
+    const expectedChanges = expectedFacts
+      .filter((fact) => outstandingPathSet.has(fact.path))
+      .map(changeFromFact);
     const worktreeChanged =
       observed.state &&
       canonical(observed.state.changes) === canonical(expectedChanges) &&

@@ -307,6 +307,9 @@ function inspectNow(request, cwd, env, inspector) {
             ? { baseRef: expectedBase.ref }
             : {}),
         pushRemote: request.delivery.push.remote,
+        boundPaths: request.expected.snapshot.workingTree.files.map(
+            (file) => file.path,
+        ),
         env,
     });
     return response.status === "inspect"

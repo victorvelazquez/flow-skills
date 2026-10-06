@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
   identity,
@@ -287,6 +287,193 @@ async function waitForFile(file, timeout = 5000) {
   }
 }
 
+function ghostFixture() {
+  const item = fixture();
+  git(item.cwd, ["config", "core.autocrlf", "true"]);
+  const file = path.join(item.cwd, "feature.txt");
+  const original = fs.readFileSync(file);
+  const backup = path.join(item.directory, "original.bytes");
+  fs.writeFileSync(backup, original);
+  const control = path.join(item.directory, "ghost-enabled");
+  fs.writeFileSync(control, "yes");
+  const preload = path.join(item.directory, "porcelain.mjs");
+  fs.writeFileSync(
+    preload,
+    `import cp from "node:child_process";
+import fs from "node:fs";
+import {syncBuiltinESMExports} from "node:module";
+const real=cp.spawnSync;
+cp.spawnSync=(command,args,options)=>{
+  const result=real(command,args,options);
+  if(command==="git"&&args.includes("status")&&fs.readFileSync(${JSON.stringify(control)},"utf8")==="yes"&&result.status===0){
+    const entries=result.stdout.split("\\0").filter(Boolean);
+    if(!entries.some(entry=>entry.slice(3)==="feature.txt"))entries.push(" M feature.txt");
+    return {...result,stdout:entries.join("\\0")+"\\0"};
+  }
+  return result;
+};
+syncBuiltinESMExports();`,
+  );
+  const extra = {
+    NODE_OPTIONS: `--import=${JSON.stringify(pathToFileURL(preload).href)}`,
+  };
+  return { ...item, file, backup, original, control, extra };
+}
+
+test("normalized-empty PR authority permits only tracked unstaged ghosts", async (t) => {
+  await t.test(
+    "own push preserves raw bytes and permits upstream config",
+    () => {
+      const item = ghostFixture();
+      assert.equal(
+        git(item.cwd, ["diff", "--no-ext-diff", "--no-textconv"]),
+        "",
+      );
+      const context = begin(item, item.extra, true);
+      assert.equal(context.status, "prepared");
+      assert.equal(context.diagnostics.snapshot.clean, true);
+      const plan = finalize(item, context, intent(), item.extra);
+      assert.equal(plan.status, "prepared");
+      const result = execute(item, plan, item.extra);
+      assert.equal(result.status, "success");
+      assert.equal(result.effects.push, "confirmed");
+      assert.equal(result.effects.upstream, "confirmed");
+      assert.deepEqual(
+        fs.readFileSync(item.file),
+        fs.readFileSync(item.backup),
+      );
+      const legacy = structuredClone(context.diagnostics.snapshot);
+      delete legacy.workingTree;
+      assert.throws(() => validateSnapshot(snapshotWithIdentity(legacy)));
+      for (const mutation of [
+        (value) => {
+          value.workingTree.version = 0;
+        },
+        (value) => {
+          value.workingTree.extra = true;
+        },
+        (value) => {
+          delete value.workingTree.normalizationSha256;
+        },
+        (value) => {
+          value.workingTree.files[0].sha256 = "invalid";
+        },
+        (value) => {
+          value.workingTree.files[0].path = "../outside";
+        },
+        (value) => {
+          value.workingTree.files[0].extra = true;
+        },
+      ]) {
+        const invalid = structuredClone(context.diagnostics.snapshot);
+        mutation(invalid);
+        assert.throws(() => validateSnapshot(snapshotWithIdentity(invalid)));
+      }
+    },
+  );
+  for (const [name, mutate] of [
+    ["content", (item) => fs.writeFileSync(item.file, "different\n")],
+    [
+      "untracked",
+      (item) => fs.writeFileSync(path.join(item.cwd, "new.txt"), "new\n"),
+    ],
+    [
+      "staged",
+      (item) => {
+        fs.writeFileSync(item.file, "staged\n");
+        git(item.cwd, ["add", "feature.txt"]);
+      },
+    ],
+    ["deleted", (item) => fs.unlinkSync(item.file)],
+    [
+      "type",
+      (item) => {
+        fs.renameSync(item.file, path.join(item.directory, "moved"));
+        fs.mkdirSync(item.file);
+      },
+    ],
+    ["rename", (item) => git(item.cwd, ["mv", "feature.txt", "renamed.txt"])],
+  ])
+    await t.test(name, () => {
+      const item = ghostFixture();
+      mutate(item);
+      assert.equal(begin(item, item.extra).error.code, "unsafe-local-state");
+      assert.ok(
+        !calls(item).some((entry) =>
+          ["create", "edit", "ready"].includes(entry[1]),
+        ),
+      );
+    });
+});
+
+test("normalized-empty PR authority rejects raw, config, index and status races", async (t) => {
+  const mutations = {
+    raw: (item) => fs.writeFileSync(item.file, "feature\r\n"),
+    config: (item) => git(item.cwd, ["config", "core.autocrlf", "input"]),
+    attributes: (item) =>
+      fs.writeFileSync(
+        path.join(item.cwd, ".git", "info", "attributes"),
+        "feature.txt text eol=lf\n",
+      ),
+    index: (item) =>
+      git(item.cwd, ["update-index", "--assume-unchanged", "initial.txt"]),
+    vanished: (item) => fs.writeFileSync(item.control, "no"),
+    newDirty: (item) =>
+      fs.writeFileSync(path.join(item.cwd, "race.txt"), "race\n"),
+  };
+  for (const phase of ["finalize", "execute", "post-push"])
+    for (const [name, mutate] of Object.entries(mutations))
+      await t.test(`${phase} ${name}`, () => {
+        const item = ghostFixture();
+        const context = begin(item, item.extra);
+        assert.equal(context.status, "prepared");
+        const plan =
+          phase === "finalize"
+            ? null
+            : finalize(item, context, intent(), item.extra);
+        if (plan) assert.equal(plan.status, "prepared");
+        if (phase === "post-push") {
+          const source =
+            name === "raw"
+              ? `import fs from "node:fs";fs.writeFileSync(${JSON.stringify(item.file)},"feature\\r\\n");`
+              : name === "attributes"
+                ? `import fs from "node:fs";fs.writeFileSync(${JSON.stringify(path.join(item.cwd, ".git", "info", "attributes"))},"feature.txt text eol=lf\\n");`
+                : name === "vanished" || name === "newDirty"
+                  ? `import fs from "node:fs";fs.writeFileSync(${JSON.stringify(name === "vanished" ? item.control : path.join(item.cwd, "race.txt"))},${JSON.stringify(name === "vanished" ? "no" : "race\n")});`
+                  : `import{spawnSync}from"node:child_process";const r=spawnSync("git",${JSON.stringify(name === "config" ? ["config", "core.autocrlf", "input"] : ["update-index", "--assume-unchanged", "initial.txt"])},{cwd:${JSON.stringify(item.cwd)}});process.exit(r.status??1);`;
+          installPrePushHook(item, source);
+        } else mutate(item);
+        const result =
+          phase === "finalize"
+            ? finalize(item, context, intent(), item.extra)
+            : execute(item, plan, item.extra);
+        assert.ok(
+          ["failure", "blocked", "drift", "partial"].includes(result.status),
+        );
+        if (phase === "post-push") {
+          assert.equal(result.status, "partial");
+          assert.equal(result.effects.push, "confirmed");
+          assert.equal(result.blocker.code, "post-push-authority-drift");
+        } else if (phase === "execute") {
+          assert.ok(
+            Object.values(result.effects).every(
+              (state) => state === "not-attempted",
+            ),
+          );
+          assert.equal(
+            git(item.cwd, ["ls-remote", "origin", "refs/heads/feat/contract"]),
+            "",
+          );
+        }
+        assert.deepEqual(fs.readFileSync(item.backup), item.original);
+        assert.ok(
+          !calls(item).some((entry) =>
+            ["create", "edit", "ready"].includes(entry[1]),
+          ),
+        );
+      });
+});
+
 test("prepare keeps canonical snapshot and identity internal while exposing compact drafting facts", () => {
   const item = fixture();
   const compact = begin(item);
@@ -364,23 +551,39 @@ test("automatic base resolution follows explicit, branch config, GitHub default,
     assert.equal(result.context.base, "development");
     assert.equal(result.context.baseAuthority.source, "explicit");
   });
-  await t.test("origin-qualified explicit base normalizes to target branch", () => {
-    const item = fixture();
-    git(item.cwd, ["branch", "development", "main"]);
-    git(item.cwd, ["push", "-q", "origin", "development"]);
-    const result = output(
-      run(item, ["--prepare", "--base", "origin/development", "--push-remote", "origin"]),
-    );
-    assert.equal(result.status, "prepared");
-    assert.equal(result.context.base, "development");
-    assert.equal(result.context.baseAuthority.source, "explicit");
-  });
+  await t.test(
+    "origin-qualified explicit base normalizes to target branch",
+    () => {
+      const item = fixture();
+      git(item.cwd, ["branch", "development", "main"]);
+      git(item.cwd, ["push", "-q", "origin", "development"]);
+      const result = output(
+        run(item, [
+          "--prepare",
+          "--base",
+          "origin/development",
+          "--push-remote",
+          "origin",
+        ]),
+      );
+      assert.equal(result.status, "prepared");
+      assert.equal(result.context.base, "development");
+      assert.equal(result.context.baseAuthority.source, "explicit");
+    },
+  );
   await t.test("literal remote branch makes qualified base ambiguous", () => {
     const item = fixture();
     git(item.cwd, ["branch", "development", "main"]);
     git(item.cwd, ["push", "-q", "origin", "development"]);
-    git(item.cwd, ["push", "-q", "origin", "main:refs/heads/origin/development"]);
-    const result = output(run(item, ["--prepare", "--base", "origin/development"]));
+    git(item.cwd, [
+      "push",
+      "-q",
+      "origin",
+      "main:refs/heads/origin/development",
+    ]);
+    const result = output(
+      run(item, ["--prepare", "--base", "origin/development"]),
+    );
     assert.equal(result.status, "failure");
     assert.equal(result.error.code, "base-ambiguous");
   });
@@ -402,7 +605,11 @@ test("qualified origin base publishes same-named task branch to unqualified targ
     FLOW_PR_BASE: git(item.cwd, ["rev-parse", "development"]),
   };
   const context = output(
-    run(item, ["--prepare", "--base", "origin/development", "--push-remote", "origin"], extra),
+    run(
+      item,
+      ["--prepare", "--base", "origin/development", "--push-remote", "origin"],
+      extra,
+    ),
   );
   const plan = finalize(item, context, intent(), extra);
   assert.equal(plan.status, "prepared");
@@ -410,10 +617,14 @@ test("qualified origin base publishes same-named task branch to unqualified targ
   assert.equal(result.status, "success");
   assert.equal(result.publication.base, "development");
   assert.equal(
-    git(item.cwd, ["ls-remote", "origin", "refs/heads/feat/contract"]).split(/\s+/)[0],
+    git(item.cwd, ["ls-remote", "origin", "refs/heads/feat/contract"]).split(
+      /\s+/,
+    )[0],
     git(item.cwd, ["rev-parse", "HEAD"]),
   );
-  const create = calls(item).find((entry) => entry[0] === "pr" && entry[1] === "create");
+  const create = calls(item).find(
+    (entry) => entry[0] === "pr" && entry[1] === "create",
+  );
   assert.equal(create[create.indexOf("--base") + 1], "development");
 });
 
@@ -422,7 +633,10 @@ test("missing explicit base retains actionable remote-ref-missing code", () => {
   const result = output(run(item, ["--prepare", "--base", "nonexistent"]));
   assert.equal(result.status, "failure");
   assert.equal(result.error.code, "remote-ref-missing");
-  assert.equal(result.error.message, "Runtime diagnostics were withheld for privacy.");
+  assert.equal(
+    result.error.message,
+    "Runtime diagnostics were withheld for privacy.",
+  );
 });
 
 test("invalid or stale branch base config fails closed", async (t) => {

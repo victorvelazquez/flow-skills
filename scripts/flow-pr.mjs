@@ -13,6 +13,7 @@ import {
   repoIdentity,
   validateIntent,
   validateRequest,
+  validateSnapshot,
 } from "./lib/flow-pr-contracts.mjs";
 import {
   commitDraftingHints,
@@ -333,8 +334,8 @@ function compactContext(snapshot) {
   };
 }
 
-function inspectFacts(base, pushRemote) {
-  const response = inspect({ baseRef: base, pushRemote });
+function inspectFacts(base, pushRemote, boundPaths = []) {
+  const response = inspect({ baseRef: base, pushRemote, boundPaths });
   if (response.status !== "inspect")
     throw Object.assign(
       new Error(response.error?.message || "Preparation inspection failed."),
@@ -480,7 +481,12 @@ function finalize(handle, verbose) {
       JSON.parse(fs.readFileSync(intentPath, "utf8")),
     );
     substep = "repository-reinspection";
-    const snapshot = inspectFacts(context.base, context.pushRemote);
+    validateSnapshot(context.snapshot);
+    const snapshot = inspectFacts(
+      context.base,
+      context.pushRemote,
+      context.snapshot.workingTree.files.map((file) => file.path),
+    );
     if (snapshot.identity !== context.snapshot.identity)
       throw Object.assign(
         new Error(
