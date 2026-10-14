@@ -37,7 +37,7 @@ const legacyNames = [
   "flow-figma",
   "flow-skills-sync",
 ];
-const addedNames = ["flow-audit-fix", "flow-playbook-compare"];
+const addedNames = ["flow-audit-fix", "flow-avance", "flow-playbook-compare"];
 const removedNames = ["flow-auto-deliver", "flow-figma", "flow-skills-sync"];
 const read = (file) =>
   fs.readFileSync(path.join(root, ...file.split("/")), "utf8");
@@ -104,7 +104,7 @@ test("the migration matrix assigns a disposition and transition to every prior c
   assert.match(guide, /never .*blindly replace|Do not .*blindly replace/i);
 });
 
-test("registry workflows have correct retained or added semantics on both hosts", () => {
+test("registry workflows have correct retained or added semantics on supported hosts", () => {
   const guide = read(migrationGuide);
   const registry = readJson("core/workflows.json");
   const piManifest = readJson("hosts/pi/flow-assets.json");
@@ -119,10 +119,11 @@ test("registry workflows have correct retained or added semantics on both hosts"
       ),
     );
     assert.equal(workflow.hosts.pi, "supported");
-    assert.equal(workflow.hosts.opencode, "supported");
     assert.ok(piManifest.workflows.includes(workflow.id));
-    if (workflow.id !== "ui-design-system")
-      assert.ok(openCodeManifest.workflows.includes(workflow.id));
+    assert.equal(
+      openCodeManifest.workflows.includes(workflow.id),
+      workflow.id !== "ui-design-system" && workflow.hosts.opencode === "supported",
+    );
   }
   for (const name of removedNames)
     assert.match(guide, migrationRowPattern(name, "Removed"));

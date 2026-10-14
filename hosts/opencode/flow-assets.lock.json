@@ -4,7 +4,7 @@
   "distribution": {
     "kind": "managed-deployment"
   },
-  "generationId": "6f8e4cd0ccf25305de6c3a7c4741615258e9445521146e308ace00fcf18db796",
+  "generationId": "ca980849a500336087606ebec816fe58bc813474ea1bcf16690027c49485d381",
   "manifest": {
     "sha256": "85c20a2f70ab39714e5ef8fb7be8ce02c86317c1a861c57f0eb37791e1f70173"
   },
@@ -36,8 +36,8 @@
     {
       "source": "core/workflows.json",
       "destination": "core/workflows.json",
-      "sha256": "0e2c417ae5426c528f5e874a262925a72e3f79d3f6abfb2e66ade0956304e796",
-      "bytes": 4848,
+      "sha256": "e157263b65e851aac85509e631900f199f94cde753b190878cff98a654c58961",
+      "bytes": 5150,
       "mode": "100644",
       "executable": false
     },
@@ -675,8 +675,8 @@
     }
   ],
   "totals": {
-    "bytes": 740767,
+    "bytes": 741069,
     "count": 83
   },
-  "hostIdentity": "02bd7d3b4418fa222a972ec52f12655cb6ff45a513679ce67323875bc72beefc"
+  "hostIdentity": "42aff62c008698dbafbec010fa940612af1bd75f4b6c9d09801499f295f20e78"
 }

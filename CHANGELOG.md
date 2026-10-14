@@ -8,6 +8,10 @@ Format: [Conventional Commits](https://www.conventionalcommits.org/) — `feat`,
 
 ## Unreleased
 
+### Added
+
+- Pi-only `/flow-avance` prompt and skill: read-only objective progress from existing scoped conversation, memory, and task records, without creating progress files or changing task state.
+
 ### Changed
 
 - Multihost migration: Pi package resources are the primary Flow Skills experience; OpenCode remains supported through its native adapter.

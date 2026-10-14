@@ -16,6 +16,12 @@ Pi discovers only the explicitly declared `flow-*` resources in `package.json`. 
 
 The package supplies the native `/flow-commit`, `/flow-pr`, and `/flow-branch` prompt entrypoints. Their canonical supervised-agent definitions remain repository-owned in `hosts/pi/agents/` and are installed separately into the local Pi agent directory; this keeps package resources, agent discovery, and model-routing snapshots distinct. See [Pi agent installation and recovery](docs/multihost-migration.md) before installing or restoring those definitions.
 
+### Pi-only progress report
+
+Use `/flow-avance` with no parameters to see the active objective, achieved results, current task, pending work, decisions, next step, and source limitations. The prompt loads the packaged `flow-avance` skill in the current conversation; it needs no supervised agent or extension.
+
+The report reads relevant existing conversation, scoped Engram memory when available, and linked ODD/project records. It covers preparation before implementation and does not create progress files, initialize tracking, update Todo or memory records, run checks, or continue implementation. Missing or ambiguous context is reported, not fabricated; it is not an automatic monitor. Host-owned memory capture remains independent. Install/update through Pi and verify prompt discovery before use; this repository change does not install globally.
+
 ### OpenCode (supported compatibility path)
 
 OpenCode continues to use the repository-local preview-first installer:
@@ -34,6 +40,7 @@ The command is a read-only preview whose JSON identifies `host: "opencode"`. Run
 | --- | --- |
 | `flow-audit` | Read-only code-quality evidence with separate advisory recommendations |
 | `flow-audit-fix` | Separately invoked, host-approved configured audit fixes |
+| `flow-avance` | Pi-only, read-only objective progress from existing evidence; no parameters |
 | `flow-branch` | Safe existing-branch selection, updates, and guarded cleanup |
 | `flow-build` | Guided project documentation generation |
 | `flow-commit` | Prepared, sealed, and verified semantic commits |

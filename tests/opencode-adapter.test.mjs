@@ -277,7 +277,10 @@ test("OpenCode managed mappings include portable core resources, skills, and run
     },
   );
 
-  for (const skill of readJson("package.json").pi.skills) {
+  const supportedWorkflows = readJson("core/workflows.json").workflows.filter(
+    ({ hosts }) => hosts.opencode === "supported",
+  );
+  for (const skill of supportedWorkflows.map(({ id }) => `skills/${id}`)) {
     assert.deepEqual(
       portable.find(({ source }) => source === `${skill}/**`),
       {
@@ -287,8 +290,8 @@ test("OpenCode managed mappings include portable core resources, skills, and run
       },
     );
   }
-  for (const runtime of readJson("core/workflows.json")
-    .workflows.map(({ runtime }) => runtime)
+  for (const runtime of supportedWorkflows
+    .map(({ runtime }) => runtime)
     .filter(Boolean))
     assert.deepEqual(
       portable.find(({ source }) => source === runtime),

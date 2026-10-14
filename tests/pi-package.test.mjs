@@ -11,6 +11,7 @@ const registry = JSON.parse(
   fs.readFileSync(path.join(root, "core", "workflows.json"), "utf8"),
 );
 const expectedSkills = registry.workflows
+  .filter(({ hosts }) => hosts.pi === "supported")
   .map(({ id }) => `skills/${id}`)
   .sort();
 const expectedRuntimes = registry.workflows
@@ -23,6 +24,7 @@ const expectedPiAgents = [
   "hosts/pi/agents/flow-pr.md",
 ];
 const expectedPiPrompts = [
+  "hosts/pi/prompts/flow-avance.md",
   "hosts/pi/prompts/flow-branch.md",
   "hosts/pi/prompts/flow-commit.md",
   "hosts/pi/prompts/flow-pr.md",
@@ -231,7 +233,9 @@ test("Pi package metadata declares only the explicit v1 skill resources", () => 
   assert.equal(manifest.distribution.kind, "package-resources");
   assert.deepEqual(
     manifest.workflows,
-    registry.workflows.map(({ id }) => id),
+    registry.workflows
+      .filter(({ hosts }) => hosts.pi === "supported")
+      .map(({ id }) => id),
   );
   assert.equal(Object.hasOwn(manifest, "destination"), false);
   assert.doesNotMatch(

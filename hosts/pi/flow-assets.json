@@ -7,6 +7,7 @@
   "workflows": [
     "flow-audit",
     "flow-audit-fix",
+    "flow-avance",
     "flow-branch",
     "flow-build",
     "flow-commit",
@@ -66,6 +67,7 @@
     "scripts/lib/scope.mjs",
     "skills/flow-audit-fix/**",
     "skills/flow-audit/**",
+    "skills/flow-avance/**",
     "skills/flow-branch/**",
     "skills/flow-build/**",
     "skills/flow-commit/**",

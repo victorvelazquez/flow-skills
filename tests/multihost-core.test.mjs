@@ -10,6 +10,7 @@ const read = (file) =>
 const expectedIds = [
   "flow-audit",
   "flow-audit-fix",
+  "flow-avance",
   "flow-branch",
   "flow-build",
   "flow-commit",
@@ -117,7 +118,12 @@ function validateRegistry(registry, { adapters = supportedHosts } = {}) {
       workflow.runtime === null ||
         /^scripts\/flow-[a-z0-9-]+\.mjs$/.test(workflow.runtime),
     );
-    assert.deepEqual(Object.keys(workflow.hosts).sort(), ["opencode", "pi"]);
+    assert.ok(Object.keys(workflow.hosts).length > 0);
+    for (const host of Object.keys(workflow.hosts))
+      assert.ok(
+        supportedHosts.has(host),
+        `${workflow.id} has unknown host ${host}`,
+      );
     for (const [host, claim] of Object.entries(workflow.hosts)) {
       assert.equal(claim, "supported");
       assert.ok(
@@ -166,6 +172,7 @@ test("only Commit and PR registry mutations use invocation authorization", () =>
         ? "invocation-authorized"
         : [
               "flow-audit",
+              "flow-avance",
               "flow-playbook-compare",
               "flow-refactor",
               "flow-ui",
