@@ -8,8 +8,13 @@ Format: [Conventional Commits](https://www.conventionalcommits.org/) — `feat`,
 
 ## Unreleased
 
+### Added
+
+- Pi-only `/flow-avance` prompt and skill: read-only objective progress from existing scoped conversation, memory, and task records, without creating progress files or changing task state.
+
 ### Changed
 
+- `/flow-avance` now offers an eligible next step through Pi's existing native selector after its Spanish read-only report. Explicit **Sí** starts only that step under normal workflows and delegation; **No**, cancellation, errors, or unavailable UI start no work. Specific authorization gates remain intact.
 - Multihost migration: Pi package resources are the primary Flow Skills experience; OpenCode remains supported through its native adapter.
 - Published the retained/replaced/removed migration matrix for all prior Flow commands and skills. `flow-auto-deliver`, `flow-figma`, and end-user `flow-skills-sync` are removed; no release, installation, deployment, or host-tree replacement is implied by this documentation.
 

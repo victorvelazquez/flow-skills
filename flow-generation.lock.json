@@ -1,8 +1,8 @@
 {
   "$schema": "flow-generation-lock/v2",
-  "generationId": "6f8e4cd0ccf25305de6c3a7c4741615258e9445521146e308ace00fcf18db796",
+  "generationId": "c45bb0dea8f4b98851475521aba7cc307a1959aaa70d3ff32f19d965eebb1b34",
   "package": {
-    "sha256": "856dfe9779f8a65bda1b3fd831e55fce104dabe3b747ca9ae443df0f7a8d945f"
+    "sha256": "951e011a90bafb76c8f766100ae0e8ae87bc29a260516be57c662886c5934d70"
   },
   "hosts": [
     {
@@ -11,14 +11,14 @@
     },
     {
       "host": "pi",
-      "sha256": "7f8036a0737c4b7ae1e026862dd94b7c0ae41814fe0489659f0154b9b8faa62b"
+      "sha256": "a7e71988ba35788bd547b67bf70ece2a3d700554c15f8fe917403aa995751520"
     }
   ],
   "sources": [
     {
       "source": "README.md",
-      "sha256": "d3fe28b21fddc98a868af4c1b64b89dc0b802deae84c0ad6a9711b732f49e28f",
-      "bytes": 4165,
+      "sha256": "39d984bd7c64755116ed0b78c47c185ff0bd39a1dcd63c727a5e404159cc4afc",
+      "bytes": 5965,
       "mode": "100644",
       "executable": false
     },
@@ -45,15 +45,15 @@
     },
     {
       "source": "core/workflows.json",
-      "sha256": "0e2c417ae5426c528f5e874a262925a72e3f79d3f6abfb2e66ade0956304e796",
-      "bytes": 4848,
+      "sha256": "25cc3c702c0bfbf75b1c4b81b489be02a08b96f6f29c41313901aa6f22b2d149",
+      "bytes": 5162,
       "mode": "100644",
       "executable": false
     },
     {
       "source": "docs/multihost-migration.md",
-      "sha256": "a90cfbfa6839f74ed850ac21e08a9ac342b21db59ad1be961d8dc5a673097951",
-      "bytes": 11179,
+      "sha256": "db60ceb22115f14b2c1ca002a2d993145dc7077a7ce13858df7a57b8fe9bdd11",
+      "bytes": 13649,
       "mode": "100644",
       "executable": false
     },
@@ -220,8 +220,15 @@
     },
     {
       "source": "hosts/pi/flow-assets.json",
-      "sha256": "bb5f129f6fbb078b91d02587e2f46292db13fea3a7340c29a798f2fa85098c4c",
-      "bytes": 2322,
+      "sha256": "7d20728fdbd45c8018a34dc243fca8fa44a9293f1e0a2591e61475870b869a5c",
+      "bytes": 2370,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "hosts/pi/prompts/flow-avance.md",
+      "sha256": "873dc295ad970a7cd401ef079b7b903625e2116f6cc398dfb5857b8337d26fed",
+      "bytes": 1211,
       "mode": "100644",
       "executable": false
     },
@@ -248,8 +255,8 @@
     },
     {
       "source": "package.json",
-      "sha256": "e4444da4c5fca653034adadbdc3bf5415d10f7a38d987cdf3687e401dff58704",
-      "bytes": 2729,
+      "sha256": "6fbb324e808df742d661c00ef57f905eb265f8e525bc18f1d7e01bfdcf50c516",
+      "bytes": 2827,
       "mode": "100644",
       "executable": false
     },
@@ -453,6 +460,20 @@
       "source": "skills/flow-audit/SKILL.md",
       "sha256": "d2529fa1771370a58ea57f45609f679efc572a00eb711d393888a836626840cd",
       "bytes": 1905,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "skills/flow-avance/SKILL.md",
+      "sha256": "845a10626f5d87378c5f1a1337a29f8783a009c5999db79dd2336d0e510b77c4",
+      "bytes": 4049,
+      "mode": "100644",
+      "executable": false
+    },
+    {
+      "source": "skills/flow-avance/references/reporting.md",
+      "sha256": "d4eb0a20cb76f492e51978c3e0f567ee5ae88bda910a91d5d5875ee880d4d6d7",
+      "bytes": 12687,
       "mode": "100644",
       "executable": false
     },

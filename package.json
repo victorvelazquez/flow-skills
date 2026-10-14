@@ -19,6 +19,7 @@
     "skills": [
       "skills/flow-audit",
       "skills/flow-audit-fix",
+      "skills/flow-avance",
       "skills/flow-branch",
       "skills/flow-build",
       "skills/flow-commit",
@@ -33,6 +34,7 @@
       "skills/ui-design-system"
     ],
     "prompts": [
+      "hosts/pi/prompts/flow-avance.md",
       "hosts/pi/prompts/flow-branch.md",
       "hosts/pi/prompts/flow-commit.md",
       "hosts/pi/prompts/flow-pr.md"
@@ -81,6 +83,7 @@
     "scripts/lib/scope.mjs",
     "skills/flow-audit-fix/**",
     "skills/flow-audit/**",
+    "skills/flow-avance/**",
     "skills/flow-branch/**",
     "skills/flow-build/**",
     "skills/flow-commit/**",

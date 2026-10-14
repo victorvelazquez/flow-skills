@@ -205,8 +205,10 @@ export function collectManagedFiles(root, manifest) {
     for (const entry of fs.readdirSync(skills, { withFileTypes: true })) {
       const relative = `skills/${entry.name}`;
       validateFileKind(relative, entry);
+      // The v1 mirror is OpenCode-only; use the same exclusion in both roots.
       if (
         entry.isDirectory() &&
+        entry.name !== "flow-avance" &&
         (entry.name.startsWith("flow-") || entry.name === "ui-design-system")
       ) {
         walkFiles(root, path.join(skills, entry.name), output);

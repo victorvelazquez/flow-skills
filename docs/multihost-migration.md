@@ -1,6 +1,6 @@
 # Migrate Flow Skills to Pi-first multihost support
 
-Pi package resources are the primary Flow Skills experience. OpenCode remains supported through native adapters, but both hosts use the same v1 workflow outcomes and safety posture.
+Pi package resources are the primary Flow Skills experience. OpenCode remains supported through native adapters for shared workflows, with the same v1 outcomes and safety posture. Explicit Pi-only workflows are not exported to OpenCode.
 
 ## Quick path
 
@@ -84,14 +84,25 @@ For backup and recovery, retain the Flow repository checkout (or its immutable c
 
 This order restores canonical Flow resources without copying, modifying, or backing up `gentle-pi` itself. It also makes the repository, not a machine-local agent edit, the recoverable source of truth.
 
+## Pi-only progress reporting
+
+`/flow-avance` takes no parameters and loads `skills/flow-avance/SKILL.md` through `hosts/pi/prompts/flow-avance.md` in the current conversation. It has no executable runtime, supervised agent, or extension. Its report phase only presents existing scoped evidence without delegation; it does not create per-objective files, write progress memory, modify Todo/ODD records, activate objectives, run tests, or deliver work. Existing host memory bookkeeping remains outside this workflow.
+
+After the report, an eligible concrete next step can be offered through the existing `ask_user_choice` tool and Pi's native selector. **Sí** starts only the displayed step in a separate ordinary workflow, where delegation is allowed; **No**, cancellation, unavailable UI, errors, or unknown responses start no work. No selector is offered for completed/paused objectives, user-only actions, unresolved decisions, or steps missing special authorization. The choice preserves provider consent, destructive-operation gates, and manual delivery-invocation requirements. It never starts the whole backlog or creates an automatic follow-up loop. The registry's `mutation: read-only` describes the report, not the separately authorized task; no new runtime or Flow extension is added.
+
+Preparation without ODD is supported through relevant conversation and memory. With ODD, read its linked task record rather than maintaining another checklist. If memory is unavailable or sources conflict, report the gap; if the active objective is ambiguous, ask. The title is inferred from a clear request, not supplied as a parameter. Report source freshness rather than promising automatic synchronization or proven completion.
+
+Pi package discovery and provenance cover the skill, local reporting reference, and prompt. `core/workflows.json` declares only Pi support for this workflow; no OpenCode adapter, mapping, or installer target is added. Common provenance regeneration updates both host lock identities but does not export the Pi-only resources. No global installation is performed by authoring these repository resources.
+
 ## Complete migration matrix
 
-`Retained` means a legacy v1 workflow remains available through both declared Pi resources and the OpenCode adapter. `Added` means a new v1 workflow is available through both hosts but has no legacy surface. `Removed` means there is no hidden alias or automatic substitute.
+`Retained` means a legacy v1 workflow remains available through both declared Pi resources and the OpenCode adapter. `Added` means a new v1 workflow is available through its declared hosts but has no legacy surface; Pi-only entries are marked explicitly. `Removed` means there is no hidden alias or automatic substitute.
 
 | Flow surface | Status | Pi transition | OpenCode transition | Guidance |
 | --- | --- | --- | --- | --- |
 | `flow-audit` | Retained | Use `flow-audit` through package discovery | Use `/flow-audit` | Read-only advisory evidence and recommendations; it rejects `--fix`. |
 | `flow-audit-fix` | Added | Use `flow-audit-fix` through package discovery | Use `/flow-audit-fix` | Preview first; each execution requires explicit host-native approval. |
+| `flow-avance` | Added | Pi only: use `/flow-avance` without parameters | Not supported; no adapter | Read-only progress report; optional native confirmation hands off one next step to its ordinary workflow. No new tracking store. |
 | `flow-branch` | Retained | Use `flow-branch` | Use `/flow-branch` | Native host clarification retains guarded update/delete approval. |
 | `flow-build` | Retained | Use `flow-build` | Use `/flow-build` | Guided documentation generation remains approval-bound for writes. |
 | `flow-commit` | Retained | Use `/flow-commit` | Use `/flow-commit` | Manual invocation authorizes prepare, seal, execute, and verify without a second approval. |

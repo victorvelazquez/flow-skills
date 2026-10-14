@@ -67,6 +67,7 @@ test("Pi provenance covers canonical agents and prompts without claiming OpenCod
     "hosts/pi/agents/flow-branch.md",
     "hosts/pi/agents/flow-commit.md",
     "hosts/pi/agents/flow-pr.md",
+    "hosts/pi/prompts/flow-avance.md",
     "hosts/pi/prompts/flow-branch.md",
     "hosts/pi/prompts/flow-commit.md",
     "hosts/pi/prompts/flow-pr.md",
