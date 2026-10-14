@@ -29,9 +29,9 @@ Do not run tests, builds, installs, external services, reviews, or delivery work
 
 ## Presentation
 
-Respond in the user's language. Use bold standalone labels with blank lines between groups. Do not use Markdown headings, HTML tags, or tables in the report: they can leave visible markup or obscure grouping in Pi's terminal. Use ordinary bullets for tasks and `---` only between the objective, status groups, and closing block. Emojis are supplementary cues; the text label must identify each group without them.
+Always respond in Spanish, including reports, clarifications, and limitations, regardless of the conversation or source language. Preserve technical identifiers and paths unchanged; explain source evidence in Spanish without changing its meaning. Use bold standalone labels with blank lines between groups. Do not use Markdown headings, HTML tags, or tables in the report: they can leave visible markup or obscure grouping in Pi's terminal. Use ordinary bullets for tasks and `---` only between the objective, status groups, and closing block. Emojis are supplementary cues; the text label must identify each group without them.
 
-Always show **OBJETIVO**, **→ PRÓXIMO PASO**, and **Evidencia y límites**. Place these status groups between them in the following order, translating labels when appropriate:
+Always show **OBJETIVO**, **→ PRÓXIMO PASO**, and **Evidencia y límites**. Place these status groups between them in the following order, keeping these Spanish labels:
 
 - **OBJETIVO:** short result-oriented title and scope on separate lines. Identify preparation, implementation, verification, completion, or pause from evidence, not a forced lifecycle.
 - **✅ COMPLETADO:** meaningful achieved results. Label accepted decisions, implementation, and verification distinctly. An implemented change may be complete as implementation while its functional verification remains under POR CONFIRMAR; do not imply the whole objective is verified.

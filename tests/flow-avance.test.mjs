@@ -90,6 +90,24 @@ test("Pi prompt loads the matching skill in the parent without parameters or del
   );
 });
 
+test("flow-avance always responds in Spanish regardless of conversation language", () => {
+  for (const file of [
+    "hosts/pi/prompts/flow-avance.md",
+    "skills/flow-avance/SKILL.md",
+    "skills/flow-avance/references/reporting.md",
+  ]) {
+    const content = read(file);
+    assert.match(content, /Always respond in Spanish/i, file);
+    assert.match(content, /clarifications.*limitations/i, file);
+    assert.match(content, /Preserve.*technical identifiers.*paths/i, file);
+    assert.doesNotMatch(
+      content,
+      /user's language|translat(?:e|ing) labels/i,
+      file,
+    );
+  }
+});
+
 test("skill uses complete concise metadata and the skill-creator section order", () => {
   const skill = read("skills/flow-avance/SKILL.md");
   assert.match(skill, /^name: flow-avance$/m);
