@@ -4,15 +4,15 @@
   "distribution": {
     "kind": "package-resources"
   },
-  "generationId": "c45bb0dea8f4b98851475521aba7cc307a1959aaa70d3ff32f19d965eebb1b34",
+  "generationId": "45e49cb156f45809d0815ae1885743a43efeee5baa7cb8f51a15d12dade05a15",
   "manifest": {
     "sha256": "a7e71988ba35788bd547b67bf70ece2a3d700554c15f8fe917403aa995751520"
   },
   "records": [
     {
       "source": "README.md",
-      "sha256": "39d984bd7c64755116ed0b78c47c185ff0bd39a1dcd63c727a5e404159cc4afc",
-      "bytes": 5965,
+      "sha256": "3d603dfa267f5cac5aaf14fcdd9d81d14ca14a65e032707257a0d227dc7ebd38",
+      "bytes": 6614,
       "mode": "100644",
       "executable": false
     },
@@ -81,8 +81,8 @@
     },
     {
       "source": "hosts/pi/prompts/flow-avance.md",
-      "sha256": "873dc295ad970a7cd401ef079b7b903625e2116f6cc398dfb5857b8337d26fed",
-      "bytes": 1211,
+      "sha256": "afff5912682a8dacb65517252348d7612c3af2333b567ac44c19b427e79da19d",
+      "bytes": 1597,
       "mode": "100644",
       "executable": false
     },
@@ -319,15 +319,15 @@
     },
     {
       "source": "skills/flow-avance/SKILL.md",
-      "sha256": "845a10626f5d87378c5f1a1337a29f8783a009c5999db79dd2336d0e510b77c4",
-      "bytes": 4049,
+      "sha256": "4082558cca70e298627b9a4937ed8ce4cefeddfc073c9aeed3e901007b98e337",
+      "bytes": 4165,
       "mode": "100644",
       "executable": false
     },
     {
       "source": "skills/flow-avance/references/reporting.md",
-      "sha256": "d4eb0a20cb76f492e51978c3e0f567ee5ae88bda910a91d5d5875ee880d4d6d7",
-      "bytes": 12687,
+      "sha256": "a0332724158b73d0e92589a0eab05f4e539ffb6ff7230123d68256fa66277d3c",
+      "bytes": 17785,
       "mode": "100644",
       "executable": false
     },
@@ -543,8 +543,8 @@
     }
   ],
   "totals": {
-    "bytes": 760526,
+    "bytes": 766775,
     "count": 76
   },
-  "hostIdentity": "045d6948f8e6f99e2723c5f5ef1905fe73fc47791ff15a6885f05d34180592e5"
+  "hostIdentity": "fc9ea34373b188e5d0bd061a25b373ef247027ce69731bcceb2c0086376db3da"
 }
