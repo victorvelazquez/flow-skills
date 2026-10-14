@@ -120,7 +120,7 @@ test("skill uses complete concise metadata and the skill-creator section order",
   assert.match(skill, /^description: "Trigger: \/flow-avance\..+"$/m);
   assert.match(skill, /^license: MIT$/m);
   assert.match(skill, /^ {2}author: .+$/m);
-  assert.match(skill, /^ {2}version: "1\.0\.0"$/m);
+  assert.match(skill, /^ {2}version: "1\.1\.0"$/m);
   assert.match(skill, /^compatibility: .+Pi.+$/m);
   const sections = [
     "Activation Contract",
@@ -177,25 +177,26 @@ test("report handles preparation, ambiguity, conflicting evidence and descriptiv
     "Preparation without ODD",
     "ODD available",
     "No recoverable context",
-    "Multiple objectives",
+    "Clean session or multiple objectives",
     "Conflicting or stale evidence",
     "Objective completed or paused",
   ])
     assert.ok(guide.includes(scenario), scenario);
   for (const heading of [
-    "OBJETIVO",
+    "PROYECTO Y META DE CIERRE",
+    "BALANCE DE TAREAS",
     "COMPLETADO",
     "POR CONFIRMAR",
     "EN CURSO",
-    "PENDIENTE",
+    "RUTA PENDIENTE · EN ORDEN",
     "DECISIONES NECESARIAS",
     "PRÓXIMO PASO",
-    "Evidencia y límites",
+    "EVIDENCIA Y LÍMITES",
   ])
     assert.ok(guide.includes(heading), heading);
-  assert.match(guide, /action and intended result/i);
+  assert.match(guide, /action, scope and intended result/i);
   assert.match(guide, /decision is not implementation/i);
-  assert.match(guide, /Do not infer the active objective from the newest/i);
+  assert.match(guide, /Do not infer.*priority.*newest/i);
   assert.match(guide, /Do not invent remaining tasks/i);
   assert.match(guide, /Do not silently switch objectives/i);
   assert.match(guide, /no percentages/i);
@@ -273,16 +274,61 @@ test("presentation uses TUI-friendly groups, item outcomes and no empty sections
   assert.match(guide, /Omit empty status groups/i);
   assert.match(guide, /absence is not completion/i);
   assert.match(guide, /bold action title.*separate.*result/i);
+  assert.match(guide, /route.*short titles.*exceptions/i);
   assert.match(guide, /Criterio/);
   assert.match(guide, /COMPLETADO.*POR CONFIRMAR/s);
   assert.match(
     guide,
-    /Always show.*OBJETIVO.*PRÓXIMO PASO.*Evidencia y límites/i,
+    /Always show.*PROYECTO Y META DE CIERRE.*BALANCE DE TAREAS.*PRÓXIMO PASO.*EVIDENCIA Y LÍMITES/i,
   );
   const example = guide.split("```text\n")[1]?.split("```")[0];
   assert.ok(example, "include a rendering example");
   assert.doesNotMatch(example, /^#{1,6}\s|<\/?[a-z][^>]*>|\|/im);
   assert.match(example, /\*\*✅ COMPLETADO\*\*/);
-  assert.match(example, /\*\*🔎 POR CONFIRMAR\*\*/);
+  assert.match(example, /\*\*🔵 EN CURSO\*\*/);
+  for (const label of ["🎯 PROYECTO Y META DE CIERRE", "📊 BALANCE DE TAREAS", "📋 RUTA PENDIENTE · EN ORDEN", "🚀 PRÓXIMO PASO", "🔎 EVIDENCIA Y LÍMITES"])
+    assert.ok(example.includes(`**${label}**`), label);
+  assert.doesNotMatch(example, /^- \*\*(?:🎯|📊|✅|🔵|📋|🚀|🔎)/m);
   assert.doesNotMatch(example, /Ninguna|No hay trabajo|No hay otras tareas/);
+});
+
+test("clean sessions report the whole project without requiring objective selection", () => {
+  for (const file of ["hosts/pi/prompts/flow-avance.md", "skills/flow-avance/SKILL.md", "skills/flow-avance/references/reporting.md"]) {
+    const content = read(file);
+    assert.match(content, /whole current project's approved scope/i, file);
+    assert.match(content, /clean sessions/i, file);
+    assert.doesNotMatch(content, /Use an explicitly selected objective; otherwise ask|Several objectives, none selected/i, file);
+  }
+  const guide = read("skills/flow-avance/references/reporting.md");
+  assert.match(guide, /read the master roadmap.*linked task authorities/i);
+  assert.match(guide, /Missing conversation history alone is not a reason to stop/i);
+  assert.match(guide, /not a full code audit or ecosystem-wide inspection/i);
+});
+
+test("balance counts distinct deliverable tasks without inventing unknown totals", () => {
+  const guide = read("skills/flow-avance/references/reporting.md");
+  assert.match(guide, /Deduplicate aliases.*parent fronts and technical subtasks are not extra tasks/i);
+  assert.match(guide, /Remaining defined tasks include the current task exactly once/i);
+  assert.match(guide, /Tasks implemented but not delivered remain in this count/i);
+  assert.match(guide, /undefined fronts separately.*unknown task quantity, unknown scope, or both/i);
+  assert.match(guide, /Total restante: todavía indeterminado/);
+  assert.match(guide, /never add fronts to task totals/i);
+  assert.match(guide, /Show completed-task counts only if authoritative history supports them/i);
+  assert.match(guide, /source-reported, not verified/i);
+  assert.match(guide, /other projects' documented delivery workflows/i);
+});
+
+test("route preserves approved order and explains exceptions rather than every dependency", () => {
+  const guide = read("skills/flow-avance/references/reporting.md");
+  assert.match(guide, /Order the route by current approved dependencies and priority/i);
+  assert.match(guide, /Numbering conveys sequence/i);
+  assert.match(guide, /Route numbering is a position, not a delivery-task count/i);
+  assert.match(guide, /A blocked task does not authorize selecting a later independent task/i);
+  assert.match(guide, /identify exactly how many are omitted when known/i);
+  assert.match(guide, /No repetitive dependency prose or per-item result paragraphs/i);
+  const example = guide.split("```text\n")[1].split("```")[0];
+  assert.match(example, /Pendientes definidas: 3, incluida 1 en curso/);
+  assert.match(example, /3\. Integración.*🔒 bloqueada:/);
+  assert.match(example, /4\. Idiomas — sin desglosar; no cuenta como tareas/);
+  assert.doesNotMatch(example, /después de/i);
 });
