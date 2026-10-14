@@ -18,9 +18,11 @@ The package supplies the native `/flow-commit`, `/flow-pr`, and `/flow-branch` p
 
 ### Pi-only progress report
 
-Use `/flow-avance` with no parameters to see the active objective, achieved results, current task, pending work, decisions, next step, and source limitations. The prompt loads the packaged `flow-avance` skill in the current conversation; it needs no supervised agent or extension.
+Use `/flow-avance` with no parameters to see the active objective, achieved results, current task, pending work, decisions, next step, and source limitations. The prompt loads the packaged `flow-avance` skill in the principal conversation, without delegating the report. It adds no supervised agent or extension.
 
-The report reads relevant existing conversation, scoped Engram memory when available, and linked ODD/project records. It covers preparation before implementation and does not create progress files, initialize tracking, update Todo or memory records, run checks, or continue implementation. Missing or ambiguous context is reported, not fabricated; it is not an automatic monitor. Host-owned memory capture remains independent. Install/update through Pi and verify prompt discovery before use; this repository change does not install globally.
+The report reads relevant existing conversation, scoped Engram memory when available, and linked ODD/project records. Its reporting phase covers preparation before implementation and does not create progress files, initialize tracking, update Todo or memory records, run checks, or start work. Missing or ambiguous context is reported, not fabricated; it is not an automatic monitor. Host-owned memory capture remains independent.
+
+After displaying the full Spanish report, it can offer **¿Avanzamos con el próximo paso?** through the existing `ask_user_choice` tool (Gentle's selector using Pi's native UI), with **Sí** and **No**. It only offers a concrete, unblocked step within agreed scope that the principal can execute. **Sí** ends reporting and starts only that step through its ordinary workflow, with delegation allowed and safety gates preserved. **No**, cancellation, an unavailable selector, or an error starts no work. Completed/paused objectives, user-only actions, and missing decisions or special authorizations produce no continuation prompt. The choice is not a manual `/flow-commit` or `/flow-pr` invocation or blanket permission to deliver or perform destructive operations. No automatic backlog traversal occurs. Install/update through Pi and verify prompt discovery before use; this repository change does not install globally.
 
 ### OpenCode (supported compatibility path)
 
@@ -40,7 +42,7 @@ The command is a read-only preview whose JSON identifies `host: "opencode"`. Run
 | --- | --- |
 | `flow-audit` | Read-only code-quality evidence with separate advisory recommendations |
 | `flow-audit-fix` | Separately invoked, host-approved configured audit fixes |
-| `flow-avance` | Pi-only, read-only objective progress from existing evidence; no parameters |
+| `flow-avance` | Pi-only progress report with optional confirmed next-step handoff; no parameters |
 | `flow-branch` | Safe existing-branch selection, updates, and guarded cleanup |
 | `flow-build` | Guided project documentation generation |
 | `flow-commit` | Prepared, sealed, and verified semantic commits |

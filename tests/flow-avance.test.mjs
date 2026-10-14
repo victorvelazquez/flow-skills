@@ -14,7 +14,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const json = (file) => JSON.parse(read(file));
 
-test("flow-avance is a Pi-only read-only workflow without an executable runtime", () => {
+test("flow-avance publishes a read-only report with optional confirmed workflow handoff", () => {
   const workflow = json("core/workflows.json").workflows.find(
     ({ id }) => id === "flow-avance",
   );
@@ -23,7 +23,8 @@ test("flow-avance is a Pi-only read-only workflow without an executable runtime"
     contract: "skills/flow-avance/SKILL.md",
     resources: ["skills/flow-avance"],
     runtime: null,
-    outcome: "read-only objective progress from existing scoped evidence",
+    outcome:
+      "read-only objective progress with optional confirmed next-step handoff",
     mutation: "read-only",
     hosts: { pi: "supported" },
   });
@@ -77,13 +78,18 @@ test("legacy mirror excludes flow-avance without losing unknown historical flow 
   }
 });
 
-test("Pi prompt loads the matching skill in the parent without parameters or delegation", () => {
+test("Pi prompt loads the skill in the parent and scopes delegation to confirmed work", () => {
   const prompt = read("hosts/pi/prompts/flow-avance.md");
   assert.match(prompt, /^description: .+$/m);
   assert.match(prompt, /Read.*`flow-avance`.*SKILL\.md/i);
   assert.match(prompt, /current Pi conversation/i);
   assert.match(prompt, /no parameters/i);
-  assert.match(prompt, /Do not delegate/i);
+  assert.match(prompt, /Do not delegate.*report/i);
+  assert.match(prompt, /ask_user_choice/);
+  assert.match(
+    prompt,
+    /Only after.*start_next_step.*normal workflow.*delegation/i,
+  );
   assert.doesNotMatch(
     prompt,
     /\$ARGUMENTS|argument-hint:|subagent_run|scripts\//,
@@ -147,7 +153,7 @@ test("skill uses complete concise metadata and the skill-creator section order",
   }
 });
 
-test("contract preserves read-only boundaries and treats ODD as an existing source", () => {
+test("report phase preserves read-only boundaries and treats ODD as an existing source", () => {
   const skill = read("skills/flow-avance/SKILL.md");
   const guide = read("skills/flow-avance/references/reporting.md");
   assert.match(skill, /Pi only/i);
@@ -193,6 +199,69 @@ test("report handles preparation, ambiguity, conflicting evidence and descriptiv
   assert.match(guide, /Do not invent remaining tasks/i);
   assert.match(guide, /Do not silently switch objectives/i);
   assert.match(guide, /no percentages/i);
+});
+
+test("continuation offers one native choice after the report and fails closed", () => {
+  const skill = read("skills/flow-avance/SKILL.md");
+  const guide = read("skills/flow-avance/references/reporting.md");
+  assert.match(skill, /report phase/i);
+  assert.match(skill, /confirmed execution phase/i);
+  assert.match(skill, /ordinary.*delegation/i);
+  assert.match(guide, /commentary.*before.*ask_user_choice/i);
+  assert.match(guide, /not.*final.*before.*selector/i);
+  const choice = JSON.parse(guide.split("```json\n")[1]?.split("```")[0]);
+  assert.deepEqual(Object.keys(choice).sort(), [
+    "allowCustomResponse",
+    "options",
+    "question",
+  ]);
+  assert.equal(
+    choice.question,
+    "¿Avanzamos con el próximo paso? <paso concreto>",
+  );
+  assert.equal(choice.allowCustomResponse, false);
+  assert.deepEqual(
+    choice.options.map(({ label, value }) => [label, value]),
+    [
+      ["Sí", "start_next_step"],
+      ["No", "stop_after_report"],
+    ],
+  );
+  for (const option of choice.options) assert.ok(option.description.length > 0);
+  assert.match(guide, /model-facing.*value.*start_next_step/);
+  assert.doesNotMatch(
+    guide,
+    /Continue only if this call explicitly returns `details\.selection\.value`/,
+  );
+  assert.match(guide, /User selected:.*\(value: start_next_step\)/);
+  assert.match(guide, /without a cancellation or error/);
+  assert.match(
+    guide,
+    /No, cancellation, missing tool, UI error, or unknown response/i,
+  );
+  assert.match(guide, /Never infer consent from.*label.*index.*source/i);
+  assert.match(guide, /Do not automatically.*backlog.*selector/i);
+});
+
+test("continuation eligibility and execution retain scope and authorization boundaries", () => {
+  const guide = read("skills/flow-avance/references/reporting.md");
+  for (const condition of [
+    "one concrete, current step",
+    "within the agreed scope",
+    "executable by the principal agent",
+    "no unresolved decision or external blocker",
+    "complete or paused",
+    "requires the user to act",
+    "merely proposed or ambiguous",
+  ])
+    assert.ok(guide.includes(condition), condition);
+  assert.match(guide, /normal workflow.*delegation/i);
+  assert.match(guide, /only the displayed step/i);
+  assert.match(guide, /not.*manual.*\/flow-commit.*\/flow-pr/i);
+  assert.match(guide, /provider-owned consent.*destructive.*publication/i);
+  assert.match(guide, /Recheck.*preconditions.*changed.*stop/i);
+  assert.match(guide, /pause.*do not.*resume/i);
+  assert.match(guide, /No selector is required.*no eligible step/i);
 });
 
 test("presentation uses TUI-friendly groups, item outcomes and no empty sections", () => {

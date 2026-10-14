@@ -24,7 +24,7 @@
       "contract": "skills/flow-avance/SKILL.md",
       "resources": ["skills/flow-avance"],
       "runtime": null,
-      "outcome": "read-only objective progress from existing scoped evidence",
+      "outcome": "read-only objective progress with optional confirmed next-step handoff",
       "mutation": "read-only",
       "hosts": { "pi": "supported" }
     },
