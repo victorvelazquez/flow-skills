@@ -98,22 +98,39 @@ function expiresAt(createdAt) {
 function compactRepo(repo) {
   return `${repo.owner}/${repo.name}`;
 }
+const WINDOWS_TEMP = /^[A-Za-z]:\/Users\/[^/]+\/AppData\/Local\/Temp$/i;
+function isSupportedTempRoot(root) {
+  const portable = root.replaceAll("\\", "/");
+  return process.platform === "win32"
+    ? WINDOWS_TEMP.test(portable)
+    : portable === "/tmp" || /^\/var\/folders\/[^/]+\/[^/]+\/T$/.test(portable);
+}
+// Session-scoped hosts point os.tmpdir() at a subfolder of the standard Windows
+// Temp. Fall back to the standard directory itself, never to a custom one.
+function standardWindowsTemp() {
+  if (process.platform !== "win32" || !process.env.LOCALAPPDATA) return "";
+  const candidate = path.resolve(process.env.LOCALAPPDATA, "Temp");
+  if (!isSupportedTempRoot(candidate)) return "";
+  try {
+    if (!fs.lstatSync(candidate).isDirectory()) return "";
+    if (fs.realpathSync(candidate) !== candidate) return "";
+    fs.accessSync(candidate, fs.constants.R_OK | fs.constants.W_OK);
+  } catch {
+    return "";
+  }
+  return candidate;
+}
 function tempRoot() {
   const root = path.resolve(os.tmpdir());
-  const portable = root.replaceAll("\\", "/");
-  const supported =
-    process.platform === "win32"
-      ? /^[A-Za-z]:\/Users\/[^/]+\/AppData\/Local\/Temp$/i.test(portable)
-      : portable === "/tmp" ||
-        /^\/var\/folders\/[^/]+\/[^/]+\/T$/.test(portable);
-  if (!supported)
-    throw Object.assign(
-      new Error(
-        `Unsupported OS temp root '${root}'. Use standard Windows LocalAppData Temp, Linux /tmp, or macOS /var/folders/.../T so Flow PR can retain narrow intent-file permissions.`,
-      ),
-      { code: "temp-root-unsupported" },
-    );
-  return root;
+  if (isSupportedTempRoot(root)) return root;
+  const standard = standardWindowsTemp();
+  if (standard) return standard;
+  throw Object.assign(
+    new Error(
+      `Unsupported OS temp root '${root}'. Use standard Windows LocalAppData Temp, Linux /tmp, or macOS /var/folders/.../T so Flow PR can retain narrow intent-file permissions.`,
+    ),
+    { code: "temp-root-unsupported" },
+  );
 }
 function safeSnapshot(snapshot) {
   if (
