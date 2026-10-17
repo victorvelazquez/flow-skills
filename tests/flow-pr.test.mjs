@@ -187,8 +187,17 @@ function execute(item, preparation, extra = {}, verbose = false) {
     ),
   );
 }
+// The runtime normalizes session-scoped Windows temp folders to the standard Temp.
+function runtimeTempRoot() {
+  return process.platform === "win32" && process.env.LOCALAPPDATA
+    ? path.join(process.env.LOCALAPPDATA, "Temp")
+    : os.tmpdir();
+}
 function directoryFor(handle) {
-  return path.join(os.tmpdir(), `flow-pr-request-${handle.split(".")[0]}`);
+  return path.join(
+    runtimeTempRoot(),
+    `flow-pr-request-${handle.split(".")[0]}`,
+  );
 }
 function calls(item) {
   return fs.existsSync(item.calls)
@@ -1676,7 +1685,12 @@ test("unsupported custom temp roots fail preparation early and actionably", () =
   const item = fixture();
   const custom = path.join(item.directory, "custom-temp");
   fs.mkdirSync(custom);
-  const result = begin(item, { TMPDIR: custom, TMP: custom, TEMP: custom });
+  const result = begin(item, {
+    TMPDIR: custom,
+    TMP: custom,
+    TEMP: custom,
+    LOCALAPPDATA: custom,
+  });
   assert.equal(result.status, "failure");
   assert.equal(result.error.code, "temp-root-unsupported");
   assert.equal(
@@ -1685,6 +1699,55 @@ test("unsupported custom temp roots fail preparation early and actionably", () =
   );
   assert.equal(calls(item).length, 0);
 });
+
+const windowsOnly = { skip: process.platform !== "win32" };
+
+test(
+  "session-scoped Windows temp folders normalize to the standard Temp",
+  windowsOnly,
+  () => {
+    const item = fixture();
+    const standard = path.join(process.env.LOCALAPPDATA, "Temp");
+    const session = fs.mkdtempSync(path.join(standard, "flow-pr-session-"));
+    try {
+      const result = begin(item, { TMP: session, TEMP: session });
+      assert.equal(result.status, "prepared");
+      assert.equal(path.dirname(path.dirname(result.intentPath)), standard);
+      assert.equal(fs.readdirSync(session).length, 0);
+    } finally {
+      fs.rmSync(session, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  "session-scoped temp without a usable standard Temp stays unsupported",
+  windowsOnly,
+  () => {
+    const item = fixture();
+    const standard = path.join(process.env.LOCALAPPDATA, "Temp");
+    const session = fs.mkdtempSync(path.join(standard, "flow-pr-session-"));
+    try {
+      const missing = path.join(item.directory, "no-local-app-data");
+      const result = begin(item, {
+        TMP: session,
+        TEMP: session,
+        LOCALAPPDATA: missing,
+      });
+      assert.equal(result.status, "failure");
+      assert.equal(result.error.code, "temp-root-unsupported");
+      assert.equal(calls(item).length, 0);
+      const noVariable = begin(item, {
+        TMP: session,
+        TEMP: session,
+        LOCALAPPDATA: "",
+      });
+      assert.equal(noVariable.error.code, "temp-root-unsupported");
+    } finally {
+      fs.rmSync(session, { recursive: true, force: true });
+    }
+  },
+);
 
 test("default output is compact and verbose diagnostics are explicit", () => {
   const compactItem = fixture();
