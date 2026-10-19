@@ -21,7 +21,8 @@ import {
 } from "./lib/helpers.mjs";
 
 const PROTECTED_BRANCHES = new Set(PROTECTED_BRANCH_NAMES);
-const DEVELOPMENT_FALLBACK = ["development", "develop", "dev"];
+const DEVELOPMENT_FALLBACK = ["dev", "develop", "development"];
+const DEFAULT_BRANCH_ORDER = [...DEVELOPMENT_FALLBACK, "main", "master"];
 
 function output(obj) {
   process.stdout.write(JSON.stringify(obj, null, 2) + "\n");
@@ -245,8 +246,7 @@ function resolveDirectBranch(branchOrAlias, branches) {
   };
 }
 
-function autoList() {
-  const inventory = buildBranchInventory();
+function autoList(inventory = buildBranchInventory()) {
   output({
     success: true,
     mode: "auto-list",
@@ -542,7 +542,10 @@ function directCheckoutError(branch, outputText) {
   return `Checkout failed: ${outputText}`;
 }
 
-function checkoutDirectBranch(branchOrAlias, { exact = false } = {}) {
+function checkoutDirectBranch(
+  branchOrAlias,
+  { exact = false, inferDefault = false } = {},
+) {
   const status = runGitSafe([
     "status",
     "--porcelain=v1",
@@ -564,16 +567,28 @@ function checkoutDirectBranch(branchOrAlias, { exact = false } = {}) {
   }
 
   const inventory = buildBranchInventory({ requireFetch: true });
-  const resolution = exact
-    ? (() => {
-        const match = inventory.allBranches.find(
-          (item) => item.name === branchOrAlias,
-        );
-        return match
-          ? { status: "resolved", branch: match, matches: [match] }
-          : { status: "none", matches: [] };
-      })()
-    : resolveDirectBranch(branchOrAlias, inventory.allBranches);
+  if (inferDefault) {
+    const name = DEFAULT_BRANCH_ORDER.find((candidate) =>
+      inventory.allBranches.some((item) => item.name === candidate),
+    );
+    if (!name) {
+      autoList(inventory);
+      return;
+    }
+    branchOrAlias = name;
+  }
+
+  const resolution =
+    exact || inferDefault
+      ? (() => {
+          const match = inventory.allBranches.find(
+            (item) => item.name === branchOrAlias,
+          );
+          return match
+            ? { status: "resolved", branch: match, matches: [match] }
+            : { status: "none", matches: [] };
+        })()
+      : resolveDirectBranch(branchOrAlias, inventory.allBranches);
 
   if (resolution.status !== "resolved") {
     showDirectOptions(branchOrAlias, resolution, inventory);
@@ -683,6 +698,8 @@ function printHelp() {
       "flow-branch.mjs — Branch listing / checkout / deletion helper",
       "",
       "Usage:",
+      "  node flow-branch.mjs --default   (dev, develop, development, main, master; else list)",
+      "  node flow-branch.mjs list",
       "  node flow-branch.mjs --auto-list",
       "  node flow-branch.mjs <branch-or-alias>",
       "  node flow-branch.mjs --exact-branch <name>",
@@ -700,8 +717,10 @@ const exactBranchArg =
   rawArgs.length === 2 && rawArgs[0] === "--exact-branch" ? rawArgs[1] : null;
 
 try {
-  if (flags["auto-list"]) {
+  if (flags["auto-list"] || rawArgs[0] === "list") {
     autoList();
+  } else if (flags["default"]) {
+    checkoutDirectBranch("", { inferDefault: true });
   } else if (directBranchArg) {
     checkoutDirectBranch(directBranchArg);
   } else if (rawArgs[0] === "--exact-branch") {
@@ -720,14 +739,15 @@ try {
     process.exit(1);
   }
 } catch (error) {
-  const mode = flags["auto-list"]
-    ? "auto-list"
-    : directBranchArg || rawArgs[0] === "--exact-branch"
-      ? "direct"
-      : flags["checkout"]
-        ? "checkout"
-        : flags["delete"]
-          ? "delete"
-          : "unknown";
+  const mode =
+    flags["auto-list"] || rawArgs[0] === "list"
+      ? "auto-list"
+      : flags["default"] || directBranchArg || rawArgs[0] === "--exact-branch"
+        ? "direct"
+        : flags["checkout"]
+          ? "checkout"
+          : flags["delete"]
+            ? "delete"
+            : "unknown";
   failJson(mode, error.message || String(error));
 }

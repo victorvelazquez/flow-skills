@@ -8,7 +8,11 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const workflows = [
   { id: "flow-commit", tools: ["read", "bash"], hint: "[instructions]" },
   { id: "flow-pr", tools: ["read", "bash", "edit"], hint: "[instructions]" },
-  { id: "flow-branch", tools: ["read", "bash"], hint: "[branch-or-alias]" },
+  {
+    id: "flow-branch",
+    tools: ["read", "bash"],
+    hint: "[branch-or-alias | list]",
+  },
 ];
 
 function read(relative) {
