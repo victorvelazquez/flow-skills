@@ -89,14 +89,19 @@ test("displayed indices can differ from full inventory indices", () => {
 
 test("development aliases follow deterministic fallback while exact protected names never cross-fallback", () => {
   const alias = fixture(["development", "develop", "dev"]);
-  for (const requested of ["dev", "develop", "development"]) {
+  for (const [requested, expected] of [
+    ["dev", "dev"],
+    ["develop", "dev"],
+    ["development", "development"],
+  ]) {
     const { execution, json } = result(alias.work, [requested]);
     assert.equal(execution.status, 0, execution.stderr);
-    assert.equal(json.branch, "development");
+    assert.equal(json.branch, expected);
   }
 
   for (const [available, expected] of [
     ["develop", "develop"],
+    ["development", "development"],
     ["dev", "dev"],
   ]) {
     const fallback = fixture([available]);
@@ -149,7 +154,7 @@ test("exact numbered identity bypasses aliases and reuses direct safety checks",
     assert.equal(execution.status, 0, execution.stderr);
     assert.equal(json.branch, name);
     assert.equal(git(item.work, ["branch", "--show-current"]), name);
-    assert.equal(result(item.work, [name]).json.branch, "development");
+    assert.equal(result(item.work, [name]).json.branch, "dev");
   }
   const missing = result(item.work, ["--exact-branch", "feature/div"]);
   assert.notEqual(missing.execution.status, 0);
@@ -159,7 +164,7 @@ test("exact numbered identity bypasses aliases and reuses direct safety checks",
   const dirty = result(item.work, ["--exact-branch", "dev"]);
   assert.notEqual(dirty.execution.status, 0);
   assert.equal(dirty.json.dirty, true);
-  assert.equal(git(item.work, ["branch", "--show-current"]), "development");
+  assert.equal(git(item.work, ["branch", "--show-current"]), "dev");
   fs.unlinkSync(path.join(item.work, "untracked.txt"));
 
   git(item.work, ["checkout", "--track", "origin/feature/diverged"]);
@@ -354,5 +359,67 @@ test("direct checkout refuses an ambiguous upstream instead of guessing", () => 
   assert.notEqual(execution.status, 0);
   assert.match(json.error, /multiple remote branches/i);
   assert.equal(json.trackingConfigured, false);
+  assert.equal(git(work, ["branch", "--show-current"]), "main");
+});
+
+test("default mode infers dev, develop, development, main, master in that order", () => {
+  const all = fixture(["dev", "develop", "development", "master"]);
+  const first = result(all.work, ["--default"]);
+  assert.equal(first.execution.status, 0, first.execution.stderr);
+  assert.equal(first.json.mode, "direct");
+  assert.equal(first.json.branch, "dev");
+
+  for (const [available, expected] of [
+    [["develop", "development"], "develop"],
+    [["development", "master"], "development"],
+    [["master"], "main"],
+  ]) {
+    const item = fixture(available);
+    const { execution, json } = result(item.work, ["--default"]);
+    assert.equal(execution.status, 0, execution.stderr);
+    assert.equal(json.branch, expected);
+  }
+
+  const onlyMaster = fixture(["master"]);
+  git(onlyMaster.work, ["checkout", "--track", "origin/master"]);
+  git(onlyMaster.work, ["branch", "-D", "main"]);
+  git(onlyMaster.remote, ["symbolic-ref", "HEAD", "refs/heads/master"]);
+  git(onlyMaster.remote, ["update-ref", "-d", "refs/heads/main"]);
+  git(onlyMaster.work, ["update-ref", "-d", "refs/remotes/origin/main"]);
+  const { execution, json } = result(onlyMaster.work, ["--default"]);
+  assert.equal(execution.status, 0, execution.stderr);
+  assert.equal(json.branch, "master");
+});
+
+test("default mode falls back to the interactive inventory when no candidate exists", () => {
+  const item = fixture(["feature/one"]);
+  git(item.work, ["checkout", "-b", "feature/one", "origin/feature/one"]);
+  git(item.work, ["branch", "-D", "main"]);
+  git(item.remote, ["symbolic-ref", "HEAD", "refs/heads/feature/one"]);
+  git(item.remote, ["update-ref", "-d", "refs/heads/main"]);
+  git(item.work, ["update-ref", "-d", "refs/remotes/origin/main"]);
+  const { execution, json } = result(item.work, ["--default"]);
+  assert.equal(execution.status, 0, execution.stderr);
+  assert.equal(json.mode, "auto-list");
+  assert.equal(json.nextAction, "select-branch");
+  assert.match(json.display, /feature\/one/);
+  assert.equal(git(item.work, ["branch", "--show-current"]), "feature/one");
+});
+
+test("default mode keeps the clean-worktree guard", () => {
+  const { work } = fixture(["dev"]);
+  fs.writeFileSync(path.join(work, "dirty.txt"), "x");
+  const { execution, json } = result(work, ["--default"]);
+  assert.notEqual(execution.status, 0);
+  assert.equal(json.dirty, true);
+  assert.equal(git(work, ["branch", "--show-current"]), "main");
+});
+
+test("the list token shows the interactive inventory without switching branches", () => {
+  const { work } = fixture(["dev", "feature/one"]);
+  const { execution, json } = result(work, ["list"]);
+  assert.equal(execution.status, 0, execution.stderr);
+  assert.equal(json.mode, "auto-list");
+  assert.match(json.display, /dev/);
   assert.equal(git(work, ["branch", "--show-current"]), "main");
 });
