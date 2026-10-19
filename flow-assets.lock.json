@@ -10,7 +10,7 @@
     "sha256": "6593df36caf20f294bd1e521510dd978099e6b2d1e9ca66ce519deff3cb0cb9c"
   },
   "totals": {
-    "bytes": 687360,
+    "bytes": 688457,
     "count": 59
   },
   "files": [
@@ -30,8 +30,8 @@
     },
     {
       "path": "scripts/flow-branch.mjs",
-      "sha256": "be094f70830f7b3d5411689f10d717d81d6f4b9addfb65513de32b5f5f07e5c4",
-      "bytes": 20425,
+      "sha256": "9967bbafcc86830660124def434284eeb5c976a0d58dc773bf522310c5c5aede",
+      "bytes": 21118,
       "mode": "100644",
       "executable": false
     },
@@ -219,8 +219,8 @@
     },
     {
       "path": "skills/flow-branch/SKILL.md",
-      "sha256": "2be43f832987783030fdd1868646a8bae24bdd017ff1b76a8c0da2233b74a0ca",
-      "bytes": 4309,
+      "sha256": "b40da954f5add513fc25fb486251a202bd612259e62f6f4958d21dfad9b8cde4",
+      "bytes": 4713,
       "mode": "100644",
       "executable": false
     },
