@@ -11,7 +11,7 @@ The only vault write in this mode is the queue line of the studied topic, set or
 | Invocation | Action |
 | --- | --- |
 | `-l`, queue empty or missing | Say the queue is empty, suggest `/flow-learn <topic>`, stop. |
-| `-l`, queue with lines | Show the numbered list, ask the number through the selector, then start. |
+| `-l`, queue with lines | Show the numbered list as the final message and wait for a typed number (H11). |
 | `-l <n>` | Skip the list and the selector; start with line `n`. |
 | `-l <n>`, `n` not an integer in `1..total` | Reject, show the valid range, start nothing. |
 | `-n <topic>` | Start now; the topic need not be queued first. |
@@ -19,7 +19,7 @@ The only vault write in this mode is the queue line of the studied topic, set or
 
 Read `_pendientes.md` before listing. Number lines by position, as `-l` defines in the conventions. Show per line: number, topic, context if present, and `[~]` lines marked as studied but not saved. Chat output only, no Markdown headings or tables.
 
-Ask for the choice with `ask_user_choice`, `allowCustomResponse: true`, options such as `Empezar con el #1` and `Cancelar`; a typed number selects that line, a number outside the range is rejected and asked again once. If the selector is unavailable, end the turn asking the user to reply with a number or to run `/flow-learn -l <n>`. Never pick a topic for the user.
+End the message with `Escribí el número (1-N), o "cancelar"`. A typed number selects that line; a number outside the range is rejected and asked again once. Do not use `ask_user_choice` here (H11). Never pick a topic for the user.
 
 ## Start
 
@@ -59,23 +59,27 @@ Use exactly this order and these labels:
 
 Keep examples generic: no secrets, credentials or company-internal identifiers (H6). Do not invent claims the sources do not support (H7).
 
-## Profundizar menu
+## Deepening (typed replies)
 
-After the lesson, ask through `ask_user_choice` with `allowCustomResponse: true`: 3 relevant subtopics of the lesson plus `Listo por ahora`. A chosen subtopic or a typed question gets an expansion of at most 300 words, same terminal-safe format and same source discipline; then show the menu again. Repeat until the user picks `Listo por ahora` or ends the session.
+The lesson message is the FINAL message of its turn (H11); no selector follows it. Its last block is:
 
-If the selector is unavailable, list the 3 subtopics as plain text and end the turn.
+**➡️ Cómo seguir** (one line saying why: the lesson is the base; go deeper only where you need to), then 3 numbered subtopics, then the line `Escribí un número para profundizar, tu propia pregunta, o "listo" para revisar lo que se guardaría.`
 
-Follow-up questions and expansions are part of the studied material that `-s` can save. Do not save them here.
+A typed number or question gets an expansion of at most 300 words, same terminal-safe format and source discipline, again as the final message, ending with the same block (remaining or new subtopics plus the "listo" line). Repeat until the user types `listo` or stops.
 
-## Close
+Follow-up questions and expansions are part of the studied material that the review below distills.
 
-Finish with these lines, in order:
+## Close and review (`listo`)
 
-1. Files written: `_pendientes.md` (line `[~]`), or none if it was already `[~]`.
-2. Pending count: how many `[ ]` lines remain, plus the `-l` hint.
-3. Exactly one closing line: `Cuando termines: /flow-learn -s`.
+The user typing `listo` (or equivalent: "guardar", "terminar") starts the review. The request for review-before-save belongs to this flow, so no new command is needed; nothing is written without the user's typed approval.
 
-Do not start `-s`, `-g` or another study on your own; the invocation authorized only this mode.
+1. Build the distilled note(s) for this study session only (the topic, its expansions and Q&A) following `references/save.md` (split rule, classification, glossary terms, queue changes).
+2. Show the plan exactly as `save.md` defines it, including the FULL text of each note so the user can re-read it, as the final message ending with the typed gate options.
+3. `guardar` runs the write order of `save.md`. `cancelar`, silence or any non-approval writes nothing; the queue line stays `[~]` and the message says `/flow-learn -s` saves it later.
+
+If the user ends the session without typing `listo`, nothing more happens: the line stays `[~]`.
+
+Do not start `-g` or another study on your own; the invocation authorized only this mode and its review.
 
 ## Scenarios
 
@@ -88,5 +92,5 @@ Do not start `-s`, `-g` or another study on your own; the invocation authorized 
 | `-n keycloak`, note exists | Tell where; offer view / update via `-u` / cancel. |
 | `-n` topic matches several technologies | Up to 2 short questions, then proceed. |
 | No web tool | Say so; continue only if the user accepts unverified, marked. |
-| Selector unavailable at `-l` | End the turn asking for a number or `-l <n>`. |
+| User types `listo` after the lesson | Build the distilled note, show it in full with the typed gate; write only on `guardar`. |
 | Queue write fails | Stop before teaching and report; nothing else was written (H9). |

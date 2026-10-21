@@ -26,6 +26,7 @@ Use on explicit `/flow-learn` invocation only, in Pi or Gentle Shell, in the pri
 - H8 Never delete notes. Only queue lines may be removed, after confirmation showing the exact line.
 - H9 Report partial failures honestly and list what was written. Read written files back before claiming success.
 - H10 Do not delegate.
+- H11 Visible content: anything the user must read before deciding (lesson, expansion, queue list, plan, note preview, draft) is the FINAL message of its turn, and the user answers by typing. Never call `ask_user_choice` after such content in the same turn: the selector can cover it. Use `ask_user_choice` only for short decisions whose full context fits in the question text.
 
 ## Decision Gates
 
@@ -57,7 +58,7 @@ An unknown flag shows help and runs nothing. Every mode except help needs a vali
 
 ## Output Contract
 
-Terminal-safe chat: bold standalone labels, visible icons and blank lines; no Markdown headings or tables in chat. Mermaid and tables appear only inside vault files. Stay concise. Always state the files written and what remains pending.
+Terminal-safe chat: bold standalone labels, visible icons and blank lines; no Markdown headings or tables in chat. Mermaid and tables appear only inside vault files. Stay concise. Always state the files written and what remains pending. When a reply is expected, end the message with one line listing the exact words the user can type.
 
 ## References
 

@@ -14,7 +14,7 @@ Loaded for `-g` / `--glossary`. Shared rules (H1-H10) and config/vault conventio
 2. For each term, verify with 1-2 authoritative sources (official docs, specs, vendor pages) using the available web tools. No web tool or no source found -> mark the entry `(sin verificar)` after the definition and say so (H7). Never invent URLs.
 3. Propose entries (format below) with the target category. Show them in chat, one block per term.
 4. A term that already has an entry -> show the existing entry next to the proposed change and offer: update it, keep it, skip. Update edits only that entry (H5).
-5. Ask for confirmation through `ask_user_choice`: "Guardar todo", "Revisar una por una", "Cancelar"; a custom answer = adjustments (re-propose, no write).
+5. The proposed entries are the FINAL message of the turn (H11), ending with `Respondé: guardar · ajustar <qué> · saltar <término> · cancelar`. Nothing is written until a typed `guardar`; `ajustar` re-proposes.
 6. Write (see Writing), read the files back, report.
 
 ## Flow for `-g` alone
@@ -22,7 +22,7 @@ Loaded for `-g` / `--glossary`. Shared rules (H1-H10) and config/vault conventio
 1. Scan the visible conversation (state when it looks compacted or truncated) for technical vocabulary: acronyms and terms not yet defined. Skip terms already in the glossary by heading or alias. Keep max 10 by relevance.
 2. Nothing found -> say so and stop; never invent terms.
 3. Show a numbered list: term, proposed category, one-line gist.
-4. Ask which ones: accept `1,3`, `todos` or `ninguno` (typed answer, or `ask_user_choice` with `allowCustomResponse: true`). Out-of-range numbers are rejected. `ninguno` -> stop, write nothing.
+4. Ask which ones: accept `1,3`, `todos` or `ninguno` (typed answer; the list is the final message of the turn, H11). Out-of-range numbers are rejected. `ninguno` -> stop, write nothing.
 5. Continue from step 2 of the `-g <terms>` flow with the selected terms. Terms that came only from the conversation and have no verified source are marked `(sin verificar)` and the origin is stated.
 
 ## Entry format

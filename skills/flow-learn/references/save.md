@@ -34,17 +34,17 @@ For each note: category (fixed list), type, slug (H3), aliases, related existing
 
 Terminal-safe output, no headings or tables. Show:
 
-- **📝 Notas:** per note `NEW|UPDATE`, path, TL;DR, origin and verification state.
+- **📝 Notas:** per note `NEW|UPDATE`, path, origin and verification state, then the FULL text exactly as it will be written (frontmatter and Mermaid included: this is a preview of a file, so the chat formatting rule does not apply to it) so the user can re-read everything. With more than 2 notes, show the first two in full and the rest as TL;DR + outline; the user types `ver <slug>` to see another in full.
 - **📖 Glosario:** proposed terms by name with their category (included by default).
 - **📌 Cola:** lines to remove (resolved topics, `[~]` lines resolved), concepts to add as `desde [[slug]]`.
 - **📂 Archivos a tocar:** exact paths (notes, backlink targets, indexes, glossary files, `_pendientes.md`).
 
 ## Gate
 
-Ask through `ask_user_choice`: "Guardar todo", "Verificar con fuentes y guardar" (offered only when something is conversation-origin), "Revisar una por una", "Cancelar". A custom answer means adjustments: re-plan, no write. Selector unavailable -> end the turn asking for the choice.
+The plan is the FINAL message of its turn (H11); no selector follows it. End with: `Respondé: guardar · verificar (solo si hay contenido de conversación) · ajustar <qué> · saltar <slug> · ver <slug> · cancelar`. `ajustar` re-plans and shows the plan again; nothing is written until a typed `guardar` (or `verificar`).
 
 - Verificar: research sources per H7 (official docs first, URL + access date), update `origen`/`sources`, show the changed plan lines, then write without a second gate unless the plan changed beyond verification. No web tool -> say so; continue only if the user accepts unverified content.
-- Revisar una por una: per note show a compact preview (TL;DR, outline, word count), then ask Guardar / Ver completa / Ajustar / Saltar. Skipped notes are not written and their glossary and queue changes are dropped.
+- Saltar `<slug>`: that note is not written and its glossary and queue changes are dropped; show the updated plan.
 - Cancelar: write nothing.
 
 ## Write order

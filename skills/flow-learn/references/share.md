@@ -47,7 +47,7 @@ Language is the configured one unless the user asks otherwise. Respect the lengt
 ### Show and save
 
 1. Show the draft in chat (terminal-safe: bold labels, no Markdown headings or tables), with the word count and the note it came from.
-2. Offer saving through `ask_user_choice`: "Guardar en _publicar" / "No guardar" (custom answer = adjustments; revise the draft, no write).
+2. The draft is the FINAL message of its turn (H11), ending with `Respondé: guardar · ajustar <qué> · no guardar`. `ajustar` revises the draft with no write; nothing is written until a typed `guardar`.
 3. After confirmation write `{vault}/_publicar/<slug>-<format>.md`, where `<format>` is `linkedin`, `blog` or `video`. Create `_publicar/` when missing. Frontmatter: `type: borrador`, `format`, `source: [[slug]]`, `language`, `date`. Body = the draft. The path stays inside the vault (H3).
 4. Read the file back before claiming success (H9); report the path.
 

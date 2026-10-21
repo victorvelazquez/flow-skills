@@ -39,7 +39,7 @@ Gate: reading and quizzing are free; the only write is `status` and `reviewed` i
 2. Read the note. No `## 🧠 Para fijar` section -> say so, offer `-u` to add content, write nothing, stop.
 3. Quiz from `Para fijar`, one question at a time. Never reveal an answer before the user replies. Compare the reply with the callout answer and grade briefly: ✓ correct, ≈ partial (say what is missing), ✗ wrong (give the answer in one line). Skipped question = ✗.
 4. Optionally add up to 2 glossary terms of the same category (from `Glosario/<Category>.md`) as extra questions; skip silently when the file is missing.
-5. Close with a short tally and ask the new `status` through `ask_user_choice`, offering the statuses defined in [note structure](note-structure.md) plus "No cambiar". After confirmation edit only `status` and `reviewed` (today) in the frontmatter; read back to confirm (H9). "No cambiar" or cancellation -> write nothing.
+5. Close by asking the new `status` through `ask_user_choice`, with the short tally inside the question text (H11), offering the statuses defined in [note structure](note-structure.md) plus "No cambiar". After confirmation edit only `status` and `reviewed` (today) in the frontmatter; read back to confirm (H9). "No cambiar" or cancellation -> write nothing.
 
 Edge cases:
 - Quiz abandoned midway -> no write.
