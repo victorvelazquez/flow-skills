@@ -27,7 +27,7 @@ Gate: the note must exist; reading and web research are free, every write needs 
 7. Read the note back before claiming success (H9); report sections changed and sources added.
 
 Edge cases:
-- Note structure does not match the convention -> stop and report (H5).
+- Note structure does not match the convention -> stop and report (H5). Exception: a legacy note (no `status` field, written before flow-learn): the plan also adds the missing frontmatter fields (`aliases`, `sources`, `updated`, `depth`, `status: aprendiendo`, `origen`) and offers the missing `## 🧠 Para fijar` and `## 📣 Para compartir` sections; it never restructures or rewrites existing sections.
 - Note has `origen: conversación` -> the update is the verification: replace with sourced claims only after confirmation and update the `origen` field accordingly.
 - Web partially fails -> apply only what was verified and list what was not.
 
