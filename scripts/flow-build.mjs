@@ -23,7 +23,7 @@ import { detectTooling } from "./lib/detect-tooling.mjs";
 import process from "process";
 import path from "path";
 import fs from "fs";
-import os from "os";
+import { fileURLToPath } from "url";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -213,10 +213,9 @@ function modeDetect() {
 }
 
 function modePhaseFiles() {
-  const skillDir = path.join(
-    os.homedir(),
-    ".config",
-    "opencode",
+  const skillDir = path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "..",
     "skills",
     "flow-build",
     "phases",

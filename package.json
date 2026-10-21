@@ -7,7 +7,6 @@
   "keywords": [
     "pi-package",
     "pi",
-    "opencode",
     "skills",
     "git",
     "workflow"
@@ -46,14 +45,10 @@
     "core/flow-debt-backlog.mjs",
     "core/flow-debt-contract.mjs",
     "core/flow-debt-preparation.mjs",
-    "core/workflows.json",
-    "docs/multihost-migration.md",
-    "flow-generation.lock.json",
     "hosts/pi/agents/**",
-    "hosts/pi/flow-assets.json",
-    "hosts/pi/flow-assets.lock.json",
     "hosts/pi/prompts/**",
     "package.json",
+    "playbook/**",
     "scripts/flow-audit-fix.mjs",
     "scripts/flow-audit.mjs",
     "scripts/flow-branch.mjs",
