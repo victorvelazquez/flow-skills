@@ -60,10 +60,14 @@ Header `# 📌 Pendientes de estudiar`, one blockquote line, then one line per t
 
 ## Indexes (maintained on save)
 
-- Category `_index.md`: title, quote, `## Temas estudiados` with `- [[slug|Title]] — one line`, footer `← [[_index|Volver al índice general]]`.
+- Category `_index.md`: title, quote, `## Temas estudiados` with `- [[slug|Title]] — one line`, footer `← [[_index|Volver al índice general]]`. A legacy `## Temas investigados` heading is accepted and kept as is; a legacy `## 📌 Sugeridos para investigar` section is left untouched, never extended.
 - Global `_index.md`: ONLY the `## 🗂️ Categorías` table (columns Categoría | Temas), plus links to `[[_pendientes|Pendientes]]` and `[[Glosario/_index|Glosario]]`. In table cells escape the wikilink pipe as `\|`; replace the `—` placeholder on the first topic, otherwise append `, [[Cat/slug\|Title]]`.
 - No A-Z list and no "Sugeridos" sections.
 - Per save, three places change: category index, global table cell, `_pendientes.md`.
+
+## Backlinks
+
+Add `- [[slug|Title]] — why` to the end of the existing `## 🔗 Relacionados` list of each related note. When that section holds a `### Ya investigados` or `### Ya estudiados` subsection, append to the end of that subsection, before any `### 📌 Sugeridos` subsection. When the note has no `## 🔗 Relacionados`, create it before the footer. Never edit any other line (H5).
 
 ## Links
 
