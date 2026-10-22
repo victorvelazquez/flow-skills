@@ -24,6 +24,7 @@
       "skills/flow-commit",
       "skills/flow-debt",
       "skills/flow-docs-sync",
+      "skills/flow-learn",
       "skills/flow-playbook-compare",
       "skills/flow-playbook-sync",
       "skills/flow-pr",
@@ -36,6 +37,7 @@
       "hosts/pi/prompts/flow-avance.md",
       "hosts/pi/prompts/flow-branch.md",
       "hosts/pi/prompts/flow-commit.md",
+      "hosts/pi/prompts/flow-learn.md",
       "hosts/pi/prompts/flow-pr.md"
     ],
     "extensions": []
@@ -84,6 +86,7 @@
     "skills/flow-commit/**",
     "skills/flow-debt/**",
     "skills/flow-docs-sync/**",
+    "skills/flow-learn/**",
     "skills/flow-playbook-compare/**",
     "skills/flow-playbook-sync/**",
     "skills/flow-pr/**",

@@ -1,6 +1,6 @@
 # flow-skills
 
-Flow Skills is a collection of portable `flow-*` AI workflows for **Pi** (and Gentle Shell, which is built on Pi). Each skill is a `SKILL.md` that drives a deterministic Node runtime under `scripts/`.
+Flow Skills is a collection of portable `flow-*` AI workflows for **Pi** (and Gentle Shell, which is built on Pi). Each skill is a `SKILL.md` that drives a deterministic Node runtime under `scripts/`, except `flow-avance` and `flow-learn`, which are instruction-only.
 
 ## Layout
 
@@ -26,18 +26,20 @@ Pi reads the package in place; nothing is copied. Register this folder as a pack
     "hosts/pi/prompts/flow-avance.md",
     "hosts/pi/prompts/flow-branch.md",
     "hosts/pi/prompts/flow-commit.md",
+    "hosts/pi/prompts/flow-learn.md",
     "hosts/pi/prompts/flow-pr.md"
   ],
   "skills": [
     "skills/flow-avance",
     "skills/flow-branch",
     "skills/flow-commit",
+    "skills/flow-learn",
     "skills/flow-pr"
   ]
 }
 ```
 
-The `prompts` and `skills` lists are filters: only what you list is loaded. Omit them to load everything `package.json` declares. A skill gets a `/flow-*` slash command only if it has a prompt in `hosts/pi/prompts/`; today that is `flow-avance`, `flow-branch`, `flow-commit` and `flow-pr`.
+The `prompts` and `skills` lists are filters: only what you list is loaded. Omit them to load everything `package.json` declares. A skill gets a `/flow-*` slash command only if it has a prompt in `hosts/pi/prompts/`; today that is `flow-avance`, `flow-branch`, `flow-commit`, `flow-learn` and `flow-pr`.
 
 ### Agents (manual step)
 
@@ -65,6 +67,7 @@ Model routing (`model:` and `thinking:` lines) is local configuration added to t
 | `flow-commit` | Prepared, sealed, and verified semantic commits |
 | `flow-debt` | Project-local technical-debt lifecycle guidance |
 | `flow-docs-sync` | Previewed incremental documentation updates |
+| `flow-learn` | Study queue, concise lessons, Obsidian notes and glossary; slash command only |
 | `flow-playbook-compare` | Read-only neutral playbook replacement candidates |
 | `flow-playbook-sync` | Previewed project/playbook comparison |
 | `flow-pr` | Prepared and verified pull-request workflow |
@@ -72,6 +75,39 @@ Model routing (`model:` and `thinking:` lines) is local configuration added to t
 | `flow-request` | Single-target local contract-request preview and host-approved execution |
 | `flow-ui` | Read-only UI compliance audit |
 | `ui-design-system` | Support resource used by `flow-ui` and `flow-refactor`; not an end-user workflow |
+
+## flow-learn
+
+Instruction-only: no runtime script, and it never runs unless you call `/flow-learn`. It keeps a single study queue in your Obsidian vault, teaches a topic in a short lesson, and saves distilled notes and glossary terms.
+
+| Command | What it does |
+| --- | --- |
+| `/flow-learn keycloak, auth` | Add topics to the study queue |
+| `/flow-learn -l [n]` | List pending topics, pick one and study it |
+| `/flow-learn -n topic` | Study a topic now, without queueing it first |
+| `/flow-learn -s [topic]` | Save what was studied as notes (split by topic and category) |
+| `/flow-learn -g [terms]` | Add technical terms to the glossary |
+| `/flow-learn -d n\|topic` | Remove a queue line (with confirmation) |
+| `/flow-learn -f text` | Search notes, glossary and queue |
+| `/flow-learn -u topic` | Update an existing note with what changed |
+| `/flow-learn -r [topic]` | Quiz yourself on a note |
+| `/flow-learn -p topic` | Draft a LinkedIn post, blog article or video script from a note |
+| `/flow-learn -h` | Show help |
+
+Config lives in `~/.config/flow-skills/learn.json` (no environment variable); the first run asks for the vault path and writes it after you confirm:
+
+```json
+{"vault": "<absolute path>", "language": "es"}
+```
+
+Vault layout:
+
+```
+_pendientes.md          single queue ([ ] pending, [~] studied, not saved)
+_index.md               category table
+<Category>/<slug>.md    notes, with a per-category _index.md
+Glosario/<Category>.md  glossary, one file per category
+```
 
 ## Requirements
 
