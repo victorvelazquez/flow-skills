@@ -7,6 +7,7 @@
  *   --auto-list                                   Fetch + classify branches → JSON
  *   <branch-or-alias>                             Resolve + checkout branch, pulling when applicable → JSON
  *   --exact-branch <name>                         Checkout exact inventory identity via direct safety path → JSON
+ *   --stash [<branch-or-alias>]                   Direct switch carrying a dirty worktree: stash (incl. untracked) → switch → update → pop
  *   --checkout --branch <name> [--pull]           Checkout local/remote branch → JSON
  *   --delete --branch <name>                      Delete local branch → JSON
  *   --delete --branch <name> --force              Force delete local branch → JSON
@@ -542,9 +543,45 @@ function directCheckoutError(branch, outputText) {
   return `Checkout failed: ${outputText}`;
 }
 
+function assessFinishedCycle(target) {
+  const cur = runGitSafe(["branch", "--show-current"]);
+  const current = cur.ok ? cur.output.trim() : "";
+  if (!current) return { ok: false, reason: "detached-head" };
+  const count = runGitSafe(["rev-list", "--count", `${target}..HEAD`]);
+  if (!count.ok) return { ok: false, reason: "unknown", detail: count.output };
+  const commits = Number.parseInt(count.output, 10);
+  if (commits === 0) return { ok: true, reason: "no-own-commits", current };
+  const cherry = runGitSafe(["cherry", target, "HEAD"]);
+  if (cherry.ok && !/^\+/m.test(cherry.output))
+    return { ok: true, reason: "merged-equivalent", current };
+  runGitSafe(["fetch", "--prune", "origin"]);
+  const track = runGitSafe([
+    "for-each-ref",
+    "--format=%(upstream:track)",
+    `refs/heads/${current}`,
+  ]);
+  if (track.ok && track.output.trim() === "[gone]")
+    return { ok: true, reason: "upstream-deleted", current };
+  return { ok: false, reason: "unmerged-commits", current, commits };
+}
+
+function stashRef() {
+  const result = runGitSafe(["rev-parse", "-q", "--verify", "refs/stash"]);
+  return result.ok ? result.output : null;
+}
+
+function popStash(sha) {
+  if (stashRef() !== sha)
+    return {
+      ok: false,
+      output: "The saved stash is no longer the latest entry; pop it manually",
+    };
+  return runGitSafe(["stash", "pop", "--index"]);
+}
+
 function checkoutDirectBranch(
   branchOrAlias,
-  { exact = false, inferDefault = false } = {},
+  { exact = false, inferDefault = false, stash = false } = {},
 ) {
   const status = runGitSafe([
     "status",
@@ -555,13 +592,15 @@ function checkoutDirectBranch(
     failJson("direct", `Could not inspect worktree: ${status.output}`, {
       requestedBranch: branchOrAlias,
     });
-  if (status.output) {
+  const dirty = Boolean(status.output);
+  if (dirty && !stash) {
     failJson(
       "direct",
-      "Direct branch switching requires a clean worktree; no changes were discarded",
+      "Direct branch switching requires a clean worktree; no changes were discarded. Tip: rerun with --stash to carry your local changes (stash, switch, update, restore).",
       {
         requestedBranch: branchOrAlias,
         dirty: true,
+        hint: "/flow-branch --stash",
       },
     );
   }
@@ -624,16 +663,65 @@ function checkoutDirectBranch(
     );
   }
 
+  if (dirty) {
+    const target = entry.type === "local" ? branch : upstream;
+    const cycle = assessFinishedCycle(target);
+    if (!cycle.ok) {
+      failJson(
+        "direct",
+        cycle.reason === "unmerged-commits"
+          ? `--stash refused: '${cycle.current}' has ${cycle.commits} commit(s) not in ${target} (not merged yet). Finish that cycle (PR and merge) or switch manually; no changes were discarded`
+          : cycle.reason === "detached-head"
+            ? "--stash refused: HEAD is detached, so there is no finished branch cycle to leave; no changes were discarded"
+            : `--stash refused: could not verify the current branch against ${target}: ${cycle.detail}`,
+        {
+          requestedBranch: branchOrAlias,
+          branch,
+          dirty: true,
+          stashRefused: cycle.reason,
+        },
+      );
+    }
+  }
+
+  let stashSha = null;
+  if (dirty) {
+    const before = stashRef();
+    const saved = runGitSafe([
+      "stash",
+      "push",
+      "--include-untracked",
+      "-m",
+      `flow-branch --stash before switching to ${branch}`,
+    ]);
+    if (!saved.ok)
+      failJson("direct", `Could not stash local changes: ${saved.output}`, {
+        requestedBranch: branchOrAlias,
+        branch,
+        dirty: true,
+      });
+    const after = stashRef();
+    if (after && after !== before) stashSha = after;
+  }
+  const stashExtras = () =>
+    stashSha ? { stashed: true, stashKept: true, stashRef: stashSha } : {};
+
   const checkoutResult =
     entry.type === "remote only"
       ? runGitSafe(["checkout", "--track", `origin/${branch}`])
       : runGitSafe(["checkout", branch]);
   if (!checkoutResult.ok) {
+    const restored = stashSha ? popStash(stashSha) : null;
     failJson("direct", directCheckoutError(branch, checkoutResult.output), {
       requestedBranch: branchOrAlias,
       branch,
       type: entry.type,
       trackingConfigured: false,
+      ...(stashSha
+        ? restored.ok
+          ? { stashed: true, stashRestored: true }
+          : { ...stashExtras(), stashRestoreError: restored.output }
+        : {}),
     });
   }
 
@@ -647,6 +735,7 @@ function checkoutDirectBranch(
         branch,
         type: entry.type,
         trackingConfigured: false,
+        ...stashExtras(),
       });
     }
   }
@@ -663,11 +752,31 @@ function checkoutDirectBranch(
           branch,
           trackingConfigured: tracking.trackingConfigured,
           ...relation,
+          ...stashExtras(),
         },
         "update-error",
       );
     }
     updated = true;
+  }
+
+  let stashResult = {};
+  if (stashSha) {
+    const popped = popStash(stashSha);
+    if (!popped.ok) {
+      failJson(
+        "direct",
+        `Switched to '${branch}' but restoring your changes failed; they remain in the stash: ${popped.output}`,
+        {
+          requestedBranch: branchOrAlias,
+          branch,
+          updated,
+          ...stashExtras(),
+        },
+        "stash-conflict",
+      );
+    }
+    stashResult = { stashed: true, stashRestored: true };
   }
 
   output({
@@ -688,6 +797,7 @@ function checkoutDirectBranch(
         : entry.type === "remote only"
           ? "tracking-checkout"
           : "none",
+    ...stashResult,
     nextAction: "done",
   });
 }
@@ -703,14 +813,24 @@ function printHelp() {
       "  node flow-branch.mjs --auto-list",
       "  node flow-branch.mjs <branch-or-alias>",
       "  node flow-branch.mjs --exact-branch <name>",
+      "  node flow-branch.mjs --stash [<branch-or-alias>]   (carry local changes: stash -u, switch, update, pop; default branch when omitted)",
       "  node flow-branch.mjs --checkout --branch <name> [--pull]",
       "  node flow-branch.mjs --delete --branch <name> [--force]",
     ].join("\n") + "\n",
   );
 }
 
-const rawArgs = process.argv.slice(2);
+const argv = process.argv.slice(2);
+const stashMode = argv.includes("--stash");
+const rawArgs = argv.filter((arg) => arg !== "--stash");
 const flags = parseArgs();
+if (stashMode && !rawArgs.includes("--default")) {
+  const carriable =
+    rawArgs.length === 0 ||
+    (rawArgs.length === 1 && !rawArgs[0].startsWith("--") && rawArgs[0] !== "list") ||
+    (rawArgs.length === 2 && rawArgs[0] === "--exact-branch");
+  if (!carriable) failJson("direct", "--stash only combines with a branch, --exact-branch <name> or no argument");
+}
 const directBranchArg =
   rawArgs.length === 1 && !rawArgs[0].startsWith("--") ? rawArgs[0] : null;
 const exactBranchArg =
@@ -719,17 +839,17 @@ const exactBranchArg =
 try {
   if (flags["auto-list"] || rawArgs[0] === "list") {
     autoList();
-  } else if (flags["default"]) {
-    checkoutDirectBranch("", { inferDefault: true });
+  } else if (flags["default"] || (stashMode && rawArgs.length === 0)) {
+    checkoutDirectBranch("", { inferDefault: true, stash: stashMode });
   } else if (directBranchArg) {
-    checkoutDirectBranch(directBranchArg);
+    checkoutDirectBranch(directBranchArg, { stash: stashMode });
   } else if (rawArgs[0] === "--exact-branch") {
     if (
       !exactBranchArg ||
       !/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(exactBranchArg)
     )
       failJson("direct", "Exact branch requires one valid branch name");
-    checkoutDirectBranch(exactBranchArg, { exact: true });
+    checkoutDirectBranch(exactBranchArg, { exact: true, stash: stashMode });
   } else if (flags["checkout"]) {
     checkoutBranch(flags);
   } else if (flags["delete"]) {
@@ -742,7 +862,7 @@ try {
   const mode =
     flags["auto-list"] || rawArgs[0] === "list"
       ? "auto-list"
-      : flags["default"] || directBranchArg || rawArgs[0] === "--exact-branch"
+      : flags["default"] || stashMode || directBranchArg || rawArgs[0] === "--exact-branch"
         ? "direct"
         : flags["checkout"]
           ? "checkout"
