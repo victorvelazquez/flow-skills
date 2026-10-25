@@ -24,14 +24,14 @@ Pi reads the package in place; nothing is copied. Register this folder as a pack
   "source": "<absolute path to this folder>",
   "prompts": [
     "hosts/pi/prompts/flow-avance.md",
-    "hosts/pi/prompts/flow-branch.md",
+    "hosts/pi/prompts/flow-base.md",
     "hosts/pi/prompts/flow-commit.md",
     "hosts/pi/prompts/flow-learn.md",
     "hosts/pi/prompts/flow-pr.md"
   ],
   "skills": [
     "skills/flow-avance",
-    "skills/flow-branch",
+    "skills/flow-base",
     "skills/flow-commit",
     "skills/flow-learn",
     "skills/flow-pr"
@@ -39,14 +39,14 @@ Pi reads the package in place; nothing is copied. Register this folder as a pack
 }
 ```
 
-The `prompts` and `skills` lists are filters: only what you list is loaded. Omit them to load everything `package.json` declares. A skill gets a `/flow-*` slash command only if it has a prompt in `hosts/pi/prompts/`; today that is `flow-avance`, `flow-branch`, `flow-commit`, `flow-learn` and `flow-pr`.
+The `prompts` and `skills` lists are filters: only what you list is loaded. Omit them to load everything `package.json` declares. A skill gets a `/flow-*` slash command only if it has a prompt in `hosts/pi/prompts/`; today that is `flow-avance`, `flow-base`, `flow-commit`, `flow-learn` and `flow-pr`.
 
 ### Agents (manual step)
 
-`/flow-branch`, `/flow-commit` and `/flow-pr` run through named agents, which Pi does not install from the package. Copy them into the local Pi agent directory (Gentle Shell: `~/.gentle-shell/agent/agents/`; plain Pi: `$PI_CODING_AGENT_DIR/agents/` or `~/.pi/agent/agents/`):
+`/flow-base`, `/flow-commit` and `/flow-pr` run through named agents, which Pi does not install from the package. Copy them into the local Pi agent directory (Gentle Shell: `~/.gentle-shell/agent/agents/`; plain Pi: `$PI_CODING_AGENT_DIR/agents/` or `~/.pi/agent/agents/`):
 
 ```bash
-cp hosts/pi/agents/flow-branch.md hosts/pi/agents/flow-commit.md hosts/pi/agents/flow-pr.md <pi-agent-dir>/agents/
+cp hosts/pi/agents/flow-base.md hosts/pi/agents/flow-commit.md hosts/pi/agents/flow-pr.md <pi-agent-dir>/agents/
 ```
 
 Model routing (`model:` and `thinking:` lines) is local configuration added to the installed copies; it is not part of the repository definitions.
@@ -62,7 +62,7 @@ Model routing (`model:` and `thinking:` lines) is local configuration added to t
 | `flow-audit` | Read-only code-quality evidence with separate advisory recommendations |
 | `flow-audit-fix` | Separately invoked, host-approved configured audit fixes |
 | `flow-avance` | Progress report for the whole project with an optional confirmed next step; no parameters |
-| `flow-branch` | Safe existing-branch selection, updates, and guarded cleanup |
+| `flow-base` | Return to the updated, clean base branch to start a new cycle; also safe branch selection and guarded cleanup |
 | `flow-build` | Guided project documentation generation |
 | `flow-commit` | Prepared, sealed, and verified semantic commits |
 | `flow-debt` | Project-local technical-debt lifecycle guidance |

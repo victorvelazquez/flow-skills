@@ -1,6 +1,6 @@
 ---
-name: flow-branch
-description: "Run deterministic interactive or direct branch workflows without direct Git mutation."
+name: flow-base
+description: "Volver a la rama base, actualizada y limpia, para empezar un ciclo nuevo; también listar, elegir o borrar ramas existentes."
 license: MIT
 metadata:
   author: gentleman-programming
@@ -9,7 +9,7 @@ metadata:
 
 ## Activation Contract
 
-Use this workflow to select, update, or delete an existing branch. Resolve the packaged `../../scripts/flow-branch.mjs` runtime relative to this skill; it is the only branch-policy and mutation authority.
+Use this workflow to return to the base branch (updated and clean) or to select, update, or delete an existing branch. Resolve the packaged `../../scripts/flow-base.mjs` runtime relative to this skill; it is the only branch-policy and mutation authority.
 
 ## Hard Rules
 
@@ -26,7 +26,7 @@ Use this workflow to select, update, or delete an existing branch. Resolve the p
 | Input or result | Action |
 | --- | --- |
 | No input | Run the runtime with `--default`. It infers the first existing branch in the order `dev`, `develop`, `development`, `main`, `master` (local or remote) and switches with the same safe direct route. If the result has `mode: "auto-list"` (no candidate exists), present `display` and `instructions` verbatim, then request a selection through the host. |
-| `--stash` alone, or `--stash` plus one valid branch token | Run the runtime with `--stash` (and that token). It stashes local changes including untracked files, switches, fast-forwards, then restores them. It only proceeds when the current branch's cycle is finished (no commits of its own, already merged into the target, or its remote branch deleted); otherwise it refuses with `stashRefused` and changes nothing. Never bypass a refusal. Treat `--stash` as a reserved flag, never as a branch name. Report `stashed`/`stashRestored`. On `nextAction: "stash-conflict"` report that the switch happened, the changes remain in the stash (`stashRef`) and the conflicted files need manual resolution; do not drop, reset or retry. |
+| `--stash` alone, or `--stash` plus one valid branch token | Run the runtime with `--stash` (and that token). It stashes local changes including untracked files, switches, fast-forwards, then restores them. It only proceeds when the current branch's cycle is finished (no commits of its own, already merged into the target, its remote branch deleted, or a merged PR whose final commit equals the local `HEAD`); otherwise it refuses with `stashRefused` and changes nothing. Never bypass a refusal. Treat `--stash` as a reserved flag, never as a branch name. Report `stashed`/`stashRestored`. On `nextAction: "stash-conflict"` report that the switch happened, the changes remain in the stash (`stashRef`) and the conflicted files need manual resolution; do not drop, reset or retry. |
 | Single token `list` | Run the runtime with `--auto-list`; present `display` and `instructions` verbatim, then request a selection through the host. |
 | One valid branch token | Run the runtime with that single argument and present its structured result. |
 | Number selected from bare listing | Map the number only through the current listing's displayed `branches` entry with matching `index` to its exact `name`. `allBranches` may validate name membership, not translate displayed numbers. Reject missing, stale, or ambiguous choices; validate the name as data, then invoke `--exact-branch <name>` once. The runtime fetches fresh inventory and rejects an absent exact identity without alias or prefix fallback. Never treat a number as a branch name. |
