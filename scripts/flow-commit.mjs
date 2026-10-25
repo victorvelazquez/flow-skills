@@ -41,10 +41,11 @@ const RECOVERABLE_AUTHOR_ERRORS = new Set([
 ]);
 
 class FlowError extends Error {
-  constructor(message, status = "blocked", code = "blocked") {
+  constructor(message, status = "blocked", code = "blocked", hint = null) {
     super(message);
     this.status = status;
     this.code = code;
+    if (hint) this.hint = hint;
   }
 }
 
@@ -332,7 +333,7 @@ function currentState(
   };
 }
 
-function ensureReady(state) {
+function ensureReady(state, { hint = null } = {}) {
   if (state.operations.length)
     throw new FlowError(
       `Repository operation in progress: ${state.operations.join(", ")}.`,
@@ -344,7 +345,52 @@ function ensureReady(state) {
       `The index must be empty before prepare: ${state.stagedPaths.join(", ")}.`,
       "blocked",
       "index-not-empty",
+      hint,
     );
+}
+
+const UNSTAGE_HINT = "/flow-commit --unstage";
+const CONFLICT_STATUSES = new Set(["DD", "AU", "UD", "UA", "DU", "AA", "UU"]);
+
+// Explicit, runtime-owned `git reset --mixed`: touches only the index, never
+// the working tree. Refused during operations, with unresolved conflicts, or
+// while another execution holds the repository lock.
+function unstageIndex(context) {
+  const lock = repositoryLockPath(context.commonDir);
+  if (fs.existsSync(lock))
+    throw new FlowError(
+      `Repository execution lock exists at ${lock}; refusing to unstage while another execution may be running.`,
+      "blocked",
+      "repository-locked",
+    );
+  const before = currentState(context);
+  if (before.operations.length)
+    throw new FlowError(
+      `Repository operation in progress: ${before.operations.join(", ")}.`,
+      "blocked",
+      "operation-in-progress",
+    );
+  if (!before.stagedPaths.length) return { state: before, unstaged: [] };
+  const conflicts = before.observedChanges.filter((change) =>
+    CONFLICT_STATUSES.has(`${change.indexStatus}${change.worktreeStatus}`),
+  );
+  if (conflicts.length)
+    throw new FlowError(
+      `Unresolved conflicts block --unstage: ${conflicts.map((change) => change.path).join(", ")}.`,
+      "blocked",
+      "unmerged-paths",
+    );
+  const unstaged = sorted([
+    ...new Set([...stagedPaths(context.root), ...before.stagedPaths]),
+  ]);
+  const reset = git(["reset", "-q", "--mixed"], { cwd: context.root });
+  if (!reset.ok)
+    throw new FlowError(
+      `Could not unstage the index: ${reset.stderr || reset.stdout}`,
+      "blocked",
+      "unstage-failed",
+    );
+  return { state: currentState(context), unstaged };
 }
 
 function tempRoot() {
@@ -974,6 +1020,7 @@ export function prepareRepository({
   cwd = process.cwd(),
   now = Date.now(),
   ttlMs = TTL_MS,
+  unstage = false,
 } = {}) {
   if (!Number.isFinite(ttlMs) || ttlMs <= 0 || ttlMs > TTL_MS)
     throw new FlowError(
@@ -981,8 +1028,13 @@ export function prepareRepository({
       "blocked",
       "invalid-ttl",
     );
-  const state = currentState(repositoryContext(cwd));
-  ensureReady(state);
+  const context = repositoryContext(cwd);
+  let state;
+  let unstaged = null;
+  if (unstage) ({ state, unstaged } = unstageIndex(context));
+  else state = currentState(context);
+  ensureReady(state, { hint: UNSTAGE_HINT });
+  const unstagedField = unstaged ? { unstaged } : {};
   if (state.changes.length === 0)
     return {
       schema: PREPARE_SCHEMA,
@@ -991,6 +1043,7 @@ export function prepareRepository({
       head: state.head.slice(0, 12),
       protected: state.protected,
       changes: [],
+      ...unstagedField,
     };
   const handleId = crypto.randomBytes(32).toString("hex");
   const prepared = {
@@ -1025,6 +1078,7 @@ export function prepareRepository({
     protected: state.protected,
     changes: state.changes,
     handle,
+    ...unstagedField,
   };
 }
 
@@ -2161,7 +2215,13 @@ function parseArgs(argv) {
   }
   const flags = {};
   const valued = new Set(["handle", "payload-b64url"]);
-  const boolean = new Set(["prepare", "author-intent", "seal", "execute"]);
+  const boolean = new Set([
+    "prepare",
+    "author-intent",
+    "seal",
+    "execute",
+    "unstage",
+  ]);
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index];
     if (!value.startsWith("--"))
@@ -2204,6 +2264,12 @@ function parseArgs(argv) {
   if (operations !== 1)
     throw new FlowError(
       "Choose exactly one operation: --prepare, --author-intent, --seal, or --execute.",
+      "blocked",
+      "invalid-cli",
+    );
+  if (flags.unstage && !flags.prepare)
+    throw new FlowError(
+      "--unstage is valid only with --prepare.",
       "blocked",
       "invalid-cli",
     );
@@ -2280,7 +2346,11 @@ function safeValidationMessage(error) {
 
 function main() {
   const flags = parseArgs(process.argv.slice(2));
-  if (flags.prepare) return { document: prepareRepository(), exitCode: 0 };
+  if (flags.prepare)
+    return {
+      document: prepareRepository({ unstage: Boolean(flags.unstage) }),
+      exitCode: 0,
+    };
   if (flags["encode-author-intent"])
     return {
       document: encodeAuthorIntent(flags.handle, flags.document),
@@ -2328,6 +2398,7 @@ if (
           error: {
             code: error.code || "runtime-failure",
             message: error.message,
+            ...(error.hint ? { hint: error.hint } : {}),
           },
           recovery: "Prepare a fresh handle after resolving the blocker.",
         });

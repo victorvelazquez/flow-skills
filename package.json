@@ -3,7 +3,9 @@
   "version": "0.3.1",
   "description": "Flow skills for Pi — portable git workflows, documentation, and release management",
   "type": "module",
-  "scripts": {},
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
   "keywords": [
     "pi-package",
     "pi",
