@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * flow-branch.mjs — Branch listing / checkout / deletion helper
+ * flow-base.mjs — Branch listing / checkout / deletion helper
  * Node.js ESM, zero external dependencies, cross-platform (Windows + Linux/macOS)
  *
  * Modes:
@@ -562,7 +562,27 @@ function assessFinishedCycle(target) {
   ]);
   if (track.ok && track.output.trim() === "[gone]")
     return { ok: true, reason: "upstream-deleted", current };
+  const merged = mergedPrMatchesHead(current);
+  if (merged) return { ok: true, reason: "merged-pr", current };
   return { ok: false, reason: "unmerged-commits", current, commits };
+}
+
+// A squash-merged PR leaves non-equivalent commits; accept it only when the
+// PR's final commit is exactly the local HEAD, so unpublished commits are never lost.
+function mergedPrMatchesHead(branch) {
+  try {
+    const head = runGitSafe(["rev-parse", "HEAD"]);
+    if (!head.ok) return false;
+    const out = execFileSync(
+      "gh",
+      ["pr", "list", "--state", "merged", "--head", branch, "--json", "headRefOid", "--limit", "20"],
+      { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"], cwd: process.cwd(), timeout: 15000 },
+    );
+    const prs = JSON.parse(out);
+    return Array.isArray(prs) && prs.some((pr) => pr.headRefOid === head.output.trim());
+  } catch {
+    return false;
+  }
 }
 
 function stashRef() {
@@ -600,7 +620,7 @@ function checkoutDirectBranch(
       {
         requestedBranch: branchOrAlias,
         dirty: true,
-        hint: "/flow-branch --stash",
+        hint: "/flow-base --stash",
       },
     );
   }
@@ -692,7 +712,7 @@ function checkoutDirectBranch(
       "push",
       "--include-untracked",
       "-m",
-      `flow-branch --stash before switching to ${branch}`,
+      `flow-base --stash before switching to ${branch}`,
     ]);
     if (!saved.ok)
       failJson("direct", `Could not stash local changes: ${saved.output}`, {
@@ -805,17 +825,17 @@ function checkoutDirectBranch(
 function printHelp() {
   process.stderr.write(
     [
-      "flow-branch.mjs — Branch listing / checkout / deletion helper",
+      "flow-base.mjs — Branch listing / checkout / deletion helper",
       "",
       "Usage:",
-      "  node flow-branch.mjs --default   (dev, develop, development, main, master; else list)",
-      "  node flow-branch.mjs list",
-      "  node flow-branch.mjs --auto-list",
-      "  node flow-branch.mjs <branch-or-alias>",
-      "  node flow-branch.mjs --exact-branch <name>",
-      "  node flow-branch.mjs --stash [<branch-or-alias>]   (carry local changes: stash -u, switch, update, pop; default branch when omitted)",
-      "  node flow-branch.mjs --checkout --branch <name> [--pull]",
-      "  node flow-branch.mjs --delete --branch <name> [--force]",
+      "  node flow-base.mjs --default   (dev, develop, development, main, master; else list)",
+      "  node flow-base.mjs list",
+      "  node flow-base.mjs --auto-list",
+      "  node flow-base.mjs <branch-or-alias>",
+      "  node flow-base.mjs --exact-branch <name>",
+      "  node flow-base.mjs --stash [<branch-or-alias>]   (carry local changes: stash -u, switch, update, pop; default branch when omitted)",
+      "  node flow-base.mjs --checkout --branch <name> [--pull]",
+      "  node flow-base.mjs --delete --branch <name> [--force]",
     ].join("\n") + "\n",
   );
 }
