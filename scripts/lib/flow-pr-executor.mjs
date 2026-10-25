@@ -277,6 +277,12 @@ function immutableAuthority(snapshot) {
     delete value.upstream;
     delete value.relation;
     delete value.push.remoteHeadOid;
+    // Pushing to an open PR's branch always moves the PR head. That change is
+    // expected; `pr.head.oid !== current.headOid` still blocks a PR that does
+    // not point at the pushed commit.
+    if (value.pr?.exact) delete value.pr.exact.head.oid;
+    if (value.pr?.candidates)
+        for (const candidate of value.pr.candidates) delete candidate.head.oid;
     return value;
 }
 function postconditions(pr, request, snapshot) {
