@@ -4,7 +4,7 @@
 **Qué sigue:** nada planificado todavía; la persona define la próxima unidad y se agrega como fila `Pendiente`.
 **Qué lo bloquea:** nada.
 
-| ID | Unidad | Dependencias | Estado | Notas |
+| ID | Entrega | Depende de | Estado | Notas |
 | --- | --- | --- | --- | --- |
 | FS1 | Skill `flow-learn`: cola de estudio, lecciones y notas en Obsidian | - | Completada | PR #66 |
 | FS2 | Renombrar `flow-branch` a `flow-base` y aceptar PR fusionado en `--stash` | - | Completada | PR #68 |
