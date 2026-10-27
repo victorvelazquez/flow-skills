@@ -1,6 +1,6 @@
 # flow-skills
 
-Flow Skills is a collection of portable `flow-*` AI workflows for **Pi** (and Gentle Shell, which is built on Pi). Each skill is a `SKILL.md` that drives a deterministic Node runtime under `scripts/`, except `flow-avance` and `flow-learn`, which are instruction-only.
+Flow Skills is a collection of portable `flow-*` AI workflows for **Pi** (and Gentle Shell, which is built on Pi). Each skill is a `SKILL.md` that drives a deterministic Node runtime under `scripts/`, except `flow-avance`, `flow-learn` and `flow-next`, which are instruction-only.
 
 ## Layout
 
@@ -27,6 +27,7 @@ Pi reads the package in place; nothing is copied. Register this folder as a pack
     "hosts/pi/prompts/flow-base.md",
     "hosts/pi/prompts/flow-commit.md",
     "hosts/pi/prompts/flow-learn.md",
+    "hosts/pi/prompts/flow-next.md",
     "hosts/pi/prompts/flow-pr.md"
   ],
   "skills": [
@@ -34,12 +35,13 @@ Pi reads the package in place; nothing is copied. Register this folder as a pack
     "skills/flow-base",
     "skills/flow-commit",
     "skills/flow-learn",
+    "skills/flow-next",
     "skills/flow-pr"
   ]
 }
 ```
 
-The `prompts` and `skills` lists are filters: only what you list is loaded. Omit them to load everything `package.json` declares. A skill gets a `/flow-*` slash command only if it has a prompt in `hosts/pi/prompts/`; today that is `flow-avance`, `flow-base`, `flow-commit`, `flow-learn` and `flow-pr`.
+The `prompts` and `skills` lists are filters: only what you list is loaded. Omit them to load everything `package.json` declares. A skill gets a `/flow-*` slash command only if it has a prompt in `hosts/pi/prompts/`; today that is `flow-avance`, `flow-base`, `flow-commit`, `flow-learn`, `flow-next` and `flow-pr`.
 
 ### Agents (manual step)
 
@@ -68,6 +70,7 @@ Model routing (`model:` and `thinking:` lines) is local configuration added to t
 | `flow-debt` | Project-local technical-debt lifecycle guidance |
 | `flow-docs-sync` | Previewed incremental documentation updates |
 | `flow-learn` | Study queue, concise lessons, Obsidian notes and glossary; slash command only |
+| `flow-next` | Take the next task of `docs/ROADMAP.md`: start it when it is ready, or show a summary and wait for confirmation; never commits or opens PRs |
 | `flow-playbook-compare` | Read-only neutral playbook replacement candidates |
 | `flow-playbook-sync` | Previewed project/playbook comparison |
 | `flow-pr` | Prepared and verified pull-request workflow |
@@ -75,6 +78,19 @@ Model routing (`model:` and `thinking:` lines) is local configuration added to t
 | `flow-request` | Single-target local contract-request preview and host-approved execution |
 | `flow-ui` | Read-only UI compliance audit |
 | `ui-design-system` | Support resource used by `flow-ui` and `flow-refactor`; not an end-user workflow |
+
+## flow-next
+
+Instruction-only: no runtime script. It starts ONE task of the repo's own `docs/ROADMAP.md` and never delivers it: you run `/flow-commit` and `/flow-pr`. Typing `siguiente` in a repo that carries the Orquestación `registro` block is the same command.
+
+| Command | What it does |
+| --- | --- |
+| `/flow-next` | Take the first `Pendiente` row whose dependencies are `Completada` |
+| `/flow-next <ID>` | Take that row |
+| `/flow-next ?` | Only report which row is next and why |
+| `/flow-next --confirm` | Always show the summary and wait for your confirmation |
+
+Before anything it checks the gate of the `ciclo` block (base branch, clean tree, no stash, local base equal to the remote); if it fails it writes nothing and tells you what is missing, normally `/flow-base`. It then reads the row and its ficha and starts without asking only when EVERY condition holds: the row says what it delivers, its ficha exists, no product or design decision is open, it fits one reviewable PR (about 400 changed lines), it has no high-risk item (data, security, contracts others consume, concurrency, delivery or environment) and it does not conflict with `AGENTS.md`. Otherwise it shows a summary (what it understood, files, tests, risks, which condition failed) and starts only after your explicit `start_task`. A row whose `Notas` start with «Migrada; sin verificar» is verified (evidence and your OK), never implemented directly.
 
 ## flow-learn
 
