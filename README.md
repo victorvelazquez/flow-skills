@@ -1,6 +1,6 @@
 # flow-skills
 
-Flow Skills is a collection of portable `flow-*` AI workflows for **Pi** (and Gentle Shell, which is built on Pi). Each skill is a `SKILL.md` that drives a deterministic Node runtime under `scripts/`, except `flow-avance`, `flow-learn` and `flow-next`, which are instruction-only.
+Flow Skills is a collection of portable `flow-*` AI workflows for **Pi** (and Gentle Shell, which is built on Pi). Each skill is a `SKILL.md` that drives a deterministic Node runtime under `scripts/`, except `flow-avance`, `flow-learn`, `flow-next` and `flow-ship`, which are instruction-only.
 
 ## Layout
 
@@ -41,7 +41,7 @@ Pi reads the package in place; nothing is copied. Register this folder as a pack
 }
 ```
 
-The `prompts` and `skills` lists are filters: only what you list is loaded. Omit them to load everything `package.json` declares. A skill gets a `/flow-*` slash command only if it has a prompt in `hosts/pi/prompts/`; today that is `flow-avance`, `flow-base`, `flow-commit`, `flow-learn`, `flow-next` and `flow-pr`.
+The `prompts` and `skills` lists are filters: only what you list is loaded. Omit them to load everything `package.json` declares. A skill gets a `/flow-*` slash command only if it has a prompt in `hosts/pi/prompts/`; today that is `flow-avance`, `flow-base`, `flow-commit`, `flow-learn`, `flow-next`, `flow-pr` and `flow-ship`.
 
 ### Agents (manual step)
 
@@ -76,6 +76,7 @@ Model routing (`model:` and `thinking:` lines) is local configuration added to t
 | `flow-pr` | Prepared and verified pull-request workflow |
 | `flow-refactor` | Read-only scoped refactoring audit |
 | `flow-request` | Single-target local contract-request preview and host-approved execution |
+| `flow-ship` | Commit and publish the PR in one run: `flow-commit`, a Git check, then `flow-pr`; never merges |
 | `flow-ui` | Read-only UI compliance audit |
 | `ui-design-system` | Support resource used by `flow-ui` and `flow-refactor`; not an end-user workflow |
 
@@ -91,6 +92,17 @@ Instruction-only: no runtime script. It starts ONE task of the repo's own `docs/
 | `/flow-next --confirm` | Always show the summary and wait for your confirmation |
 
 Before anything it checks the gate of the `ciclo` block (base branch, clean tree, no stash, local base equal to the remote); if it fails it writes nothing and tells you what is missing, normally `/flow-base`. It then reads the row and its ficha and starts without asking only when EVERY condition holds: the row says what it delivers, its ficha exists, no product or design decision is open, it fits one reviewable PR (about 400 changed lines), it has no high-risk item (data, security, contracts others consume, concurrency, delivery or environment) and it does not conflict with `AGENTS.md`. Otherwise it shows a summary (what it understood, files, tests, risks, which condition failed) and starts only after your explicit `start_task`. A row whose `Notas` start with «Migrada; sin verificar» is verified (evidence and your OK), never implemented directly.
+
+## flow-ship
+
+Instruction-only: no runtime script. It chains the two verified transactions that already exist, `/flow-commit` and then `/flow-pr`, each through its own named agent (the agents of the manual step below must be installed). Running it is the confirmation: it asks nothing in between. It stops at the pull request: you review it, wait for a green CI, merge it yourself and then run `/flow-base`.
+
+| Command | What it does |
+| --- | --- |
+| `/flow-ship` | Commit the working tree, check it with Git, then publish the PR |
+| `/flow-ship --unstage` | The same, clearing the index first (the option of `/flow-commit`) |
+
+It reads the state of Git, so it can be run again after a failure: a dirty tree commits and publishes, a clean branch only publishes, and a clean default branch has nothing to ship. If a stage fails it shows the blocker, names the command that continues (`/flow-commit` or `/flow-pr`) and never retries on its own. It never merges, never runs `/flow-base` and never waits for the CI.
 
 ## flow-learn
 

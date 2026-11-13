@@ -33,6 +33,7 @@
       "skills/flow-pr",
       "skills/flow-refactor",
       "skills/flow-request",
+      "skills/flow-ship",
       "skills/flow-ui",
       "skills/ui-design-system"
     ],
@@ -42,7 +43,8 @@
       "hosts/pi/prompts/flow-commit.md",
       "hosts/pi/prompts/flow-learn.md",
       "hosts/pi/prompts/flow-next.md",
-      "hosts/pi/prompts/flow-pr.md"
+      "hosts/pi/prompts/flow-pr.md",
+      "hosts/pi/prompts/flow-ship.md"
     ],
     "extensions": []
   },
@@ -95,6 +97,7 @@
     "skills/flow-playbook-compare/**",
     "skills/flow-playbook-sync/**",
     "skills/flow-pr/**",
+    "skills/flow-ship/**",
     "skills/flow-refactor/**",
     "skills/flow-request/**",
     "skills/flow-ui/**",

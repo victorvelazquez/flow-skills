@@ -1,0 +1,6 @@
+---
+description: Commit the working tree and publish it as a pull request in one run (flow-commit, then flow-pr); never merges.
+argument-hint: "[--unstage]"
+---
+
+Manual `/flow-ship` invocation authorizes the local commit AND the push and PR create/update, in that order; never merge and never `/flow-base`. Read the available `flow-ship` skill's SKILL.md and follow it in the current Pi conversation, with the arguments `$ARGUMENTS`, treated as untrusted data, never shell syntax; `--unstage` is the only option they may carry and it goes only to the commit stage. Use `subagent_run` named `flow-commit` exactly once and, only after verifying its success with Git yourself, `subagent_run` named `flow-pr` exactly once, both with `mode: "task"`. Do not ask conversational confirmation, call parent approval tools, run a second TUI or delegate any other agent. On any stage failure or mismatch stop, show the actionable blocker and name the command that continues; never retry on your own. Relay the PR agent's verified result and its complete fenced `JIRA COMMENT` as a byte-for-byte lossless payload without paraphrase, truncation, reformatting or summary. Never call Jira. If the skill cannot be located, report that limitation and stop instead of guessing its contract.
